@@ -127,6 +127,65 @@ Arrows`,
     ])
   })
 
+  it('parses numbered pull lines and keeps only the item names', () => {
+    const preview = parseManualWarpNote(
+      `Warp Kolaborasi Karakter
+2025-07-11 11:20:01
+1. Pela
+2. Darting Arrow
+3. Adversarial
+4. Data Bank
+5. Data Bank
+6. Dream’s Montage
+7. Amber
+8. Arrows
+9. Hidden Shadow
+10. Multiplication
+2025-07-11 11:20:25
+11. Mediation
+12. A Secret Vow
+13. Amber
+14. Reminiscence
+15. Darting Arrow
+16. Meshing Cogs
+17. Multiplication
+18. Fine Fruit
+19. Data Bank
+20. Dan Heng`,
+      itemCatalog,
+    )
+
+    expect(preview.sections[0]?.bannerType).toBe('collaboration_character')
+    expect(preview.groups).toHaveLength(2)
+    expect(preview.totalPulls).toBe(20)
+    expect(preview.recognizedPulls).toBe(20)
+    expect(preview.issues).toEqual([])
+    expect(preview.groups[0].pulls.map((pull) => pull.rawName)).toEqual([
+      'Pela',
+      'Darting Arrow',
+      'Adversarial',
+      'Data Bank',
+      'Data Bank',
+      'Dream’s Montage',
+      'Amber',
+      'Arrows',
+      'Hidden Shadow',
+      'Multiplication',
+    ])
+    expect(preview.groups[1].pulls.map((pull) => pull.rawName)).toEqual([
+      'Mediation',
+      'A Secret Vow',
+      'Amber',
+      'Reminiscence',
+      'Darting Arrow',
+      'Meshing Cogs',
+      'Multiplication',
+      'Fine Fruit',
+      'Data Bank',
+      'Dan Heng',
+    ])
+  })
+
   it('matches known typo aliases without changing the raw note line', () => {
     const preview = parseManualWarpNote(
       `2025-07-11 11:20:01
