@@ -10,30 +10,99 @@ import {
 } from 'lucide-react'
 import { BackupPanel } from '../features/backup/components/BackupPanel'
 import { ImportPanel } from '../features/import/components/ImportPanel'
-import { ManualImportDialog } from '../features/import/components/ManualImportDialog'
+import {
+  ManualImportDialog,
+  type ManualImportSaveNotice,
+} from '../features/import/components/ManualImportDialog'
 import { manualNoteSample } from '../features/import/data/manual-note-sample'
+import { buildManualImportDraft } from '../features/import/domain/manual-import-draft'
 import { parseManualWarpNote } from '../features/import/domain/manual-note-parser'
+import {
+  saveManualImportDraft,
+  toSaveManualImportDraftPayload,
+  type ManualImportAccountInput,
+} from '../features/persistence/data/manual-import-save'
+import { syncWarpItemCatalog } from '../features/persistence/data/warp-item-catalog-sync'
 import { BannerTabs } from '../features/warp-history/components/BannerTabs'
 import { PityOverview } from '../features/warp-history/components/PityOverview'
 import { WarpTimeline } from '../features/warp-history/components/WarpTimeline'
 import { itemCatalog } from '../features/warp-history/data/item-catalog'
-import { getBannerLabel } from '../features/warp-history/domain/banner'
+import { getBannerLabel, type BannerType } from '../features/warp-history/domain/banner'
 import { calculatePitySummary } from '../features/warp-history/domain/pity'
 import { demoPulls } from '../features/warp-history/data/demo-pulls'
 import { AppButton } from '../shared/ui/AppButton'
 import './App.css'
 
-const activeBannerType = 'character_event'
+const activeBannerType = 'character_event' satisfies BannerType
+const activeAccount: ManualImportAccountInput = {
+  id: 'account-800000000',
+  uid: '800000000',
+  region: 'asia',
+  nickname: 'Trailblazer',
+}
 const activePulls = demoPulls.filter((pull) => pull.bannerType === activeBannerType)
 const pitySummary = calculatePitySummary(activePulls)
 
 export function App() {
   const [manualImportOpen, setManualImportOpen] = useState(false)
+  const [manualImportSaving, setManualImportSaving] = useState(false)
+  const [manualImportSaveNotice, setManualImportSaveNotice] =
+    useState<ManualImportSaveNotice>()
   const [manualNoteDraft, setManualNoteDraft] = useState(manualNoteSample)
   const manualImportPreview = useMemo(
     () => parseManualWarpNote(manualNoteDraft, itemCatalog),
     [manualNoteDraft],
   )
+
+  const handleManualNoteChange = (value: string) => {
+    setManualNoteDraft(value)
+    setManualImportSaveNotice(undefined)
+  }
+
+  const handleSaveManualImport = async () => {
+    if (manualImportSaving) {
+      return
+    }
+
+    const draft = buildManualImportDraft(manualImportPreview, {
+      accountId: activeAccount.id,
+      fallbackBannerType: activeBannerType,
+      timezone: 'Asia/Jakarta',
+    })
+
+    if (draft.status !== 'ready') {
+      setManualImportSaveNotice({
+        tone: 'error',
+        title: 'Needs review',
+        detail: 'Resolve import issues before saving.',
+      })
+      return
+    }
+
+    setManualImportSaving(true)
+    setManualImportSaveNotice(undefined)
+
+    try {
+      const catalogResult = await syncWarpItemCatalog(itemCatalog)
+      const result = await saveManualImportDraft(
+        toSaveManualImportDraftPayload(activeAccount, draft),
+      )
+
+      setManualImportSaveNotice({
+        tone: 'success',
+        title: 'Saved',
+        detail: `${result.recordsInserted} inserted, ${result.recordsSkipped} skipped, ${result.duplicateRecords} duplicates. Catalog ${catalogResult.totalInDatabase} items.`,
+      })
+    } catch (error) {
+      setManualImportSaveNotice({
+        tone: 'error',
+        title: 'Save failed',
+        detail: getErrorMessage(error),
+      })
+    } finally {
+      setManualImportSaving(false)
+    }
+  }
 
   return (
     <>
@@ -66,7 +135,7 @@ export function App() {
 
           <section className="account-panel" aria-label="Selected account">
             <span className="eyebrow">Active UID</span>
-            <strong>800000000</strong>
+            <strong>{activeAccount.uid}</strong>
             <span>Asia server</span>
           </section>
         </aside>
@@ -116,13 +185,28 @@ export function App() {
 
       <ManualImportDialog
         isOpen={manualImportOpen}
+        isSaving={manualImportSaving}
         note={manualNoteDraft}
+        onSave={handleSaveManualImport}
         onClose={() => setManualImportOpen(false)}
-        onNoteChange={setManualNoteDraft}
+        onNoteChange={handleManualNoteChange}
         preview={manualImportPreview}
+        saveNotice={manualImportSaveNotice}
       />
     </>
   )
 }
 
 export default App
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  if (typeof error === 'string') {
+    return error
+  }
+
+  return 'Unexpected import error.'
+}

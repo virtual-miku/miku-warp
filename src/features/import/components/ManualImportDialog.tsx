@@ -1,4 +1,4 @@
-import { Clipboard, Eraser, X } from 'lucide-react'
+import { Clipboard, Eraser, Save, X } from 'lucide-react'
 import { itemCatalogMetadata } from '../../warp-history/data/item-catalog'
 import type { ManualImportPreview } from '../domain/manual-note-parser'
 import {
@@ -10,20 +10,32 @@ import {
 import { manualNoteSample } from '../data/manual-note-sample'
 import { AppButton } from '../../../shared/ui/AppButton'
 
+export type ManualImportSaveNotice = {
+  tone: 'success' | 'error'
+  title: string
+  detail: string
+}
+
 type ManualImportDialogProps = {
   isOpen: boolean
+  isSaving: boolean
   note: string
+  onSave: () => void
   onClose: () => void
   onNoteChange: (value: string) => void
   preview: ManualImportPreview
+  saveNotice?: ManualImportSaveNotice
 }
 
 export function ManualImportDialog({
   isOpen,
+  isSaving,
   note,
+  onSave,
   onClose,
   onNoteChange,
   preview,
+  saveNotice,
 }: ManualImportDialogProps) {
   if (!isOpen) {
     return null
@@ -34,6 +46,7 @@ export function ManualImportDialog({
   const rarityCounts = getManualImportRarityCounts(preview)
   const previewRows = getManualImportPreviewRows(preview, 14)
   const hasMoreRows = preview.totalPulls > previewRows.length
+  const canSave = status === 'ready' && preview.totalPulls > 0 && !isSaving
 
   return (
     <div className="modal-backdrop">
@@ -112,6 +125,16 @@ export function ManualImportDialog({
               </div>
             ) : null}
 
+            {saveNotice ? (
+              <div
+                className={`manual-save-status manual-save-status-${saveNotice.tone}`}
+                aria-live="polite"
+              >
+                <strong>{saveNotice.title}</strong>
+                <p>{saveNotice.detail}</p>
+              </div>
+            ) : null}
+
             <div className="manual-preview-table" aria-label="Recognized pull rows">
               {previewRows.length > 0 ? (
                 previewRows.map((pull) => (
@@ -132,8 +155,13 @@ export function ManualImportDialog({
             </div>
 
             <footer className="manual-import-footer">
-              <span>{itemCatalogMetadata.source.version ?? 'Catalog'} catalog</span>
-              {hasMoreRows ? <span>{preview.totalPulls - previewRows.length} more</span> : null}
+              <div>
+                <span>{itemCatalogMetadata.source.version ?? 'Catalog'} catalog</span>
+                {hasMoreRows ? <span>{preview.totalPulls - previewRows.length} more</span> : null}
+              </div>
+              <AppButton icon={Save} disabled={!canSave} onClick={onSave}>
+                {isSaving ? 'Saving' : 'Import'}
+              </AppButton>
             </footer>
           </section>
         </div>
