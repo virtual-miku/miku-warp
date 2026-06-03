@@ -4,12 +4,14 @@ import { manualNoteSample } from '../data/manual-note-sample'
 import {
   normalizeWarpItemName,
   parseManualWarpNote,
+  toLogicalManualNoteLines,
 } from './manual-note-parser'
 
 describe('parseManualWarpNote', () => {
   it('parses timestamp groups and matches known items', () => {
     const preview = parseManualWarpNote(manualNoteSample, itemCatalog)
 
+    expect(preview.sections).toEqual([])
     expect(preview.groups).toHaveLength(2)
     expect(preview.totalPulls).toBe(20)
     expect(preview.recognizedPulls).toBe(20)
@@ -63,6 +65,134 @@ Unknown Light Cone`,
     expect(preview.issues.filter((issue) => issue.code === 'item_not_found')).toHaveLength(2)
   })
 
+  it('maps supported section headings to banner types', () => {
+    const preview = parseManualWarpNote(
+      `Warp Kolaborasi Karakter
+2025-07-11 11:20:01
+Pela
+Event Warp Light Cone
+2025-07-12 11:20:01
+Data Bank
+Warp Bintang-Bintang
+2025-07-13 11:20:01
+Arrows`,
+      itemCatalog,
+    )
+
+    expect(preview.sections).toEqual([
+      expect.objectContaining({
+        lineNumber: 1,
+        rawHeading: 'Warp Kolaborasi Karakter',
+        bannerType: 'collaboration_character',
+      }),
+      expect.objectContaining({
+        lineNumber: 4,
+        rawHeading: 'Event Warp Light Cone',
+        bannerType: 'light_cone_event',
+      }),
+      expect.objectContaining({
+        lineNumber: 7,
+        rawHeading: 'Warp Bintang-Bintang',
+        bannerType: 'standard',
+      }),
+    ])
+    expect(preview.groups.map((group) => group.bannerType)).toEqual([
+      'collaboration_character',
+      'light_cone_event',
+      'standard',
+    ])
+  })
+
+  it('parses PDF-style inline numbered pulls', () => {
+    const preview = parseManualWarpNote(
+      `Warp  Kolaborasi  Karakter
+2025-07-11  11:20:01  1.  Pela  2.  Darting  Arrow
+3.  Data  Bank`,
+      itemCatalog,
+    )
+
+    expect(preview.sections[0]).toMatchObject({
+      rawHeading: 'Warp Kolaborasi Karakter',
+      bannerType: 'collaboration_character',
+    })
+    expect(preview.groups[0]).toMatchObject({
+      rawTimestamp: '2025-07-11 11:20:01',
+      pulledAt: '2025-07-11T11:20:01',
+      bannerType: 'collaboration_character',
+    })
+    expect(preview.groups[0].pulls.map((pull) => pull.rawName)).toEqual([
+      'Pela',
+      'Darting Arrow',
+      'Data Bank',
+    ])
+  })
+
+  it('matches known typo aliases without changing the raw note line', () => {
+    const preview = parseManualWarpNote(
+      `2025-07-11 11:20:01
+Lingering Tears
+Collapsed Sky
+Darting Aroow
+Night of the Milky Way
+Day One of My Life
+Reminscence`,
+      itemCatalog,
+    )
+
+    expect(preview.issues).toEqual([])
+    expect(preview.recognizedPulls).toBe(6)
+    expect(preview.groups[0].pulls.map((pull) => pull.rawName)).toEqual([
+      'Lingering Tears',
+      'Collapsed Sky',
+      'Darting Aroow',
+      'Night of the Milky Way',
+      'Day One of My Life',
+      'Reminscence',
+    ])
+    expect(preview.groups[0].pulls.map((pull) => pull.matchedName)).toEqual([
+      'Lingering Tear',
+      'Collapsing Sky',
+      'Darting Arrow',
+      'Night on the Milky Way',
+      'Day One of My New Life',
+      'Reminiscence',
+    ])
+    expect(preview.groups[0].pulls.every((pull) => pull.matchedBy === 'alias')).toBe(true)
+  })
+
+  it('accepts timestamps with one digit hour and normalizes the stored value', () => {
+    const preview = parseManualWarpNote(
+      `2024-05-08 9:32:25
+Arrows`,
+      itemCatalog,
+    )
+
+    expect(preview.groups[0]).toMatchObject({
+      rawTimestamp: '2024-05-08 9:32:25',
+      pulledAt: '2024-05-08T09:32:25',
+    })
+    expect(preview.totalPulls).toBe(1)
+  })
+
+  it('reports time-only lines without counting them as pulls', () => {
+    const preview = parseManualWarpNote(
+      `2025-07-11 11:20:01
+Pela
+5:57:04
+Data Bank`,
+      itemCatalog,
+    )
+
+    expect(preview.totalPulls).toBe(2)
+    expect(preview.issues).toEqual([
+      expect.objectContaining({
+        code: 'time_without_date',
+        lineNumber: 3,
+        value: '5:57:04',
+      }),
+    ])
+  })
+
   it('keeps items before the first timestamp out of import groups', () => {
     const preview = parseManualWarpNote(
       `Pela
@@ -97,5 +227,19 @@ Data Bank`,
 describe('normalizeWarpItemName', () => {
   it('normalizes spacing, case, and quote variants', () => {
     expect(normalizeWarpItemName('  DREAM\u2019S   MONTAGE  ')).toBe("dream's montage")
+  })
+})
+
+describe('toLogicalManualNoteLines', () => {
+  it('splits timestamp and numbered pull chunks from PDF text extraction', () => {
+    expect(
+      toLogicalManualNoteLines(
+        '2025-07-11  11:20:01  1.  Pela  2.  Darting  Arrow',
+      ),
+    ).toEqual([
+      { lineNumber: 1, value: '2025-07-11 11:20:01' },
+      { lineNumber: 1, value: 'Pela' },
+      { lineNumber: 1, value: 'Darting Arrow' },
+    ])
   })
 })

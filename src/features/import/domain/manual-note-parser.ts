@@ -1,11 +1,17 @@
 import type { WarpItem } from '../../warp-history/domain/warp-item'
+import type { BannerType } from '../../warp-history/domain/banner'
 
-const timestampPattern = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/
+const timestampPattern = /^(\d{4})-(\d{2})-(\d{2}) (\d{1,2}):(\d{2}):(\d{2})$/
+const inlineTimestampPattern = /(\d{4}-\d{2}-\d{2} \d{1,2}:\d{2}:\d{2})/g
+const numberedPullPattern = /(^|\s)(\d{1,4})\.\s+/g
+const timeOnlyPattern = /^\d{1,2}:\d{2}:\d{2}$/
 
 export type ManualImportIssueCode =
   | 'empty_input'
   | 'item_before_timestamp'
   | 'item_not_found'
+  | 'time_without_date'
+  | 'unknown_section_heading'
 
 export type ManualImportIssue = {
   code: ManualImportIssueCode
@@ -20,6 +26,9 @@ export type ManualImportPull = {
   rawName: string
   normalizedName: string
   pulledAt: string
+  bannerType?: BannerType
+  matchedBy: 'exact' | 'alias' | 'unmatched'
+  matchedName?: string
   item?: WarpItem
 }
 
@@ -27,10 +36,19 @@ export type ManualImportGroup = {
   lineNumber: number
   rawTimestamp: string
   pulledAt: string
+  bannerType?: BannerType
+  rawSectionHeading?: string
   pulls: ManualImportPull[]
 }
 
+export type ManualImportSection = {
+  lineNumber: number
+  rawHeading: string
+  bannerType: BannerType
+}
+
 export type ManualImportPreview = {
+  sections: ManualImportSection[]
   groups: ManualImportGroup[]
   issues: ManualImportIssue[]
   totalLines: number
@@ -39,22 +57,67 @@ export type ManualImportPreview = {
   unresolvedNames: string[]
 }
 
+export type ManualWarpNoteParserOptions = {
+  itemAliases?: Record<string, string>
+  sectionHeadings?: Record<string, BannerType>
+}
+
+export const defaultManualItemAliases: Record<string, string> = {
+  arrow: 'Arrows',
+  'collapsed sky': 'Collapsing Sky',
+  collapsing: 'Collapsing Sky',
+  'colalpsing sky': 'Collapsing Sky',
+  'darting aroow': 'Darting Arrow',
+  'day one of my life': 'Day One of My New Life',
+  'lingering tears': 'Lingering Tear',
+  'night of the milky way': 'Night on the Milky Way',
+  reminscence: 'Reminiscence',
+}
+
+export const defaultManualSectionHeadings: Record<string, BannerType> = {
+  'event warp karakter': 'character_event',
+  'event warp light cone': 'light_cone_event',
+  'warp bintang-bintang': 'standard',
+  'warp kolaborasi karakter': 'collaboration_character',
+  'warp kolaborasi light cone': 'collaboration_light_cone',
+}
+
 export function parseManualWarpNote(
   text: string,
   catalog: WarpItem[],
+  options: ManualWarpNoteParserOptions = {},
 ): ManualImportPreview {
   const itemIndex = buildItemIndex(catalog)
+  const aliasIndex = buildAliasIndex(options.itemAliases ?? defaultManualItemAliases)
+  const sectionHeadingIndex = buildSectionHeadingIndex(
+    options.sectionHeadings ?? defaultManualSectionHeadings,
+  )
+  const sections: ManualImportSection[] = []
   const groups: ManualImportGroup[] = []
   const issues: ManualImportIssue[] = []
-  const lines = text.split(/\r?\n/)
+  const lines = toLogicalManualNoteLines(text)
 
   let currentGroup: ManualImportGroup | undefined
+  let currentSection: ManualImportSection | undefined
 
-  lines.forEach((line, index) => {
-    const lineNumber = index + 1
-    const value = line.trim()
+  lines.forEach((line) => {
+    const lineNumber = line.lineNumber
+    const value = line.value
 
     if (!value) {
+      return
+    }
+
+    const sectionBannerType = sectionHeadingIndex.get(normalizeWarpItemName(value))
+
+    if (sectionBannerType) {
+      currentSection = {
+        lineNumber,
+        rawHeading: value,
+        bannerType: sectionBannerType,
+      }
+      sections.push(currentSection)
+      currentGroup = undefined
       return
     }
 
@@ -65,9 +128,31 @@ export function parseManualWarpNote(
         lineNumber,
         rawTimestamp: value,
         pulledAt: timestamp,
+        bannerType: currentSection?.bannerType,
+        rawSectionHeading: currentSection?.rawHeading,
         pulls: [],
       }
       groups.push(currentGroup)
+      return
+    }
+
+    if (timeOnlyPattern.test(value)) {
+      issues.push({
+        code: 'time_without_date',
+        lineNumber,
+        value,
+        message: 'Time appears without a date.',
+      })
+      return
+    }
+
+    if (looksLikeSectionHeading(value)) {
+      issues.push({
+        code: 'unknown_section_heading',
+        lineNumber,
+        value,
+        message: 'Section heading is not mapped to a banner type.',
+      })
       return
     }
 
@@ -82,7 +167,8 @@ export function parseManualWarpNote(
     }
 
     const normalizedName = normalizeWarpItemName(value)
-    const item = itemIndex.get(normalizedName)
+    const aliasTarget = aliasIndex.get(normalizedName)
+    const item = itemIndex.get(aliasTarget ?? normalizedName)
 
     if (!item) {
       issues.push({
@@ -99,6 +185,9 @@ export function parseManualWarpNote(
       rawName: value,
       normalizedName,
       pulledAt: currentGroup.pulledAt,
+      bannerType: currentGroup.bannerType,
+      matchedBy: item ? (aliasTarget ? 'alias' : 'exact') : 'unmatched',
+      matchedName: item?.name,
       item,
     })
   })
@@ -118,6 +207,7 @@ export function parseManualWarpNote(
   )
 
   return {
+    sections,
     groups,
     issues,
     totalLines: lines.length,
@@ -137,9 +227,33 @@ export function normalizeWarpItemName(value: string) {
     .toLocaleLowerCase('en-US')
 }
 
+export function toLogicalManualNoteLines(text: string) {
+  return text
+    .split(/\r?\n/)
+    .flatMap((line, index) => splitPhysicalLine(line, index + 1))
+}
+
 function buildItemIndex(catalog: WarpItem[]) {
   return new Map(
     catalog.map((item) => [normalizeWarpItemName(item.name), item]),
+  )
+}
+
+function buildAliasIndex(aliases: Record<string, string>) {
+  return new Map(
+    Object.entries(aliases).map(([source, target]) => [
+      normalizeWarpItemName(source),
+      normalizeWarpItemName(target),
+    ]),
+  )
+}
+
+function buildSectionHeadingIndex(sectionHeadings: Record<string, BannerType>) {
+  return new Map(
+    Object.entries(sectionHeadings).map(([heading, bannerType]) => [
+      normalizeWarpItemName(heading),
+      bannerType,
+    ]),
   )
 }
 
@@ -151,5 +265,36 @@ function parseManualTimestamp(value: string) {
   }
 
   const [, year, month, day, hour, minute, second] = match
-  return `${year}-${month}-${day}T${hour}:${minute}:${second}`
+  return `${year}-${month}-${day}T${hour.padStart(2, '0')}:${minute}:${second}`
+}
+
+function looksLikeSectionHeading(value: string) {
+  return /\b(warp|event)\b/i.test(value)
+}
+
+function splitPhysicalLine(line: string, lineNumber: number) {
+  const normalizedLine = line
+    .normalize('NFKC')
+    .replace(/[\u2018\u2019]/g, '\u2019')
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!normalizedLine) {
+    return []
+  }
+
+  const expandedLine = normalizedLine
+    .replace(inlineTimestampPattern, '\n$1\n')
+    .replace(numberedPullPattern, '\n$2. ')
+
+  return expandedLine
+    .split(/\n+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => ({
+      lineNumber,
+      value: part.replace(/^\d{1,4}\.\s+/, '').trim(),
+    }))
+    .filter((part) => part.value)
 }
