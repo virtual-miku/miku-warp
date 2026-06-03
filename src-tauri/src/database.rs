@@ -1,6 +1,11 @@
-use rusqlite::{params, Connection, OptionalExtension};
+use rusqlite::{params, Connection, OptionalExtension, Transaction};
 use serde::{Deserialize, Serialize};
-use std::{fs, path::PathBuf};
+use std::{
+    collections::HashSet,
+    fs,
+    path::PathBuf,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tauri::{AppHandle, Manager};
 
 const DATABASE_FILE_NAME: &str = "warp-tracker.sqlite";
@@ -40,6 +45,50 @@ pub struct SyncWarpItemCatalogResult {
     pub updated: usize,
     pub unchanged: usize,
     pub total_in_database: i64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualImportAccountInput {
+    pub id: String,
+    pub uid: String,
+    pub region: Option<String>,
+    pub nickname: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveManualImportDraftInput {
+    pub account: ManualImportAccountInput,
+    pub status: String,
+    pub records_found: usize,
+    pub records_ready: usize,
+    pub records_skipped: usize,
+    pub issues_count: usize,
+    pub pulls: Vec<SaveManualImportDraftPullInput>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveManualImportDraftPullInput {
+    pub banner_type: String,
+    pub warp_item_id: String,
+    pub pulled_at: String,
+    pub pulled_at_timezone: Option<String>,
+    pub source_line_number: i64,
+    pub sequence_in_timestamp_group: i64,
+    pub raw_item_name: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveManualImportDraftResult {
+    pub import_batch_id: String,
+    pub records_found: usize,
+    pub records_inserted: usize,
+    pub records_skipped: usize,
+    pub duplicate_records: usize,
+    pub banner_count: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -96,6 +145,16 @@ pub fn sync_warp_item_catalog(
     let mut connection = open_database(&database_path)?;
 
     upsert_warp_item_catalog(&mut connection, &items)
+}
+
+pub fn save_manual_import_draft(
+    app: &AppHandle,
+    draft: SaveManualImportDraftInput,
+) -> Result<SaveManualImportDraftResult, String> {
+    let database_path = resolve_database_path(app)?;
+    let mut connection = open_database(&database_path)?;
+
+    save_manual_import_draft_to_database(&mut connection, &draft)
 }
 
 fn resolve_database_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -232,6 +291,115 @@ fn upsert_warp_item_catalog(
     })
 }
 
+fn save_manual_import_draft_to_database(
+    connection: &mut Connection,
+    draft: &SaveManualImportDraftInput,
+) -> Result<SaveManualImportDraftResult, String> {
+    validate_manual_import_draft(draft)?;
+
+    let import_batch_id = create_import_batch_id()?;
+    let banner_types = draft
+        .pulls
+        .iter()
+        .map(|pull| pull.banner_type.as_str())
+        .collect::<HashSet<_>>();
+    let batch_banner_type = if banner_types.len() == 1 {
+        banner_types.iter().next().copied()
+    } else {
+        None
+    };
+    let transaction = connection
+        .transaction()
+        .map_err(|error| format!("Failed to start manual import transaction: {error}"))?;
+
+    upsert_account(&transaction, &draft.account)?;
+
+    for banner_type in &banner_types {
+        ensure_banner(&transaction, banner_type)?;
+    }
+
+    insert_import_batch(
+        &transaction,
+        &import_batch_id,
+        &draft.account.id,
+        batch_banner_type,
+        draft.records_found,
+    )?;
+
+    let mut records_inserted = 0;
+    let mut duplicate_records = 0;
+
+    {
+        let mut insert_pull_statement = transaction
+            .prepare(
+                "INSERT OR IGNORE INTO warp_pulls (
+                   id, account_id, banner_id, warp_item_id, pulled_at, pulled_at_timezone,
+                   source, source_import_id, source_line_number, sequence_in_timestamp_group,
+                   raw_item_name
+                 )
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'manual', ?7, ?8, ?9, ?10)",
+            )
+            .map_err(|error| format!("Failed to prepare manual pull insert statement: {error}"))?;
+
+        for pull in &draft.pulls {
+            let banner_id = banner_id_for_type(&pull.banner_type);
+            let pull_id = manual_pull_id(
+                &draft.account.id,
+                &banner_id,
+                &pull.pulled_at,
+                &pull.warp_item_id,
+                pull.sequence_in_timestamp_group,
+            );
+            let affected_rows = insert_pull_statement
+                .execute(params![
+                    pull_id,
+                    &draft.account.id,
+                    banner_id,
+                    &pull.warp_item_id,
+                    &pull.pulled_at,
+                    pull.pulled_at_timezone.as_deref(),
+                    &import_batch_id,
+                    pull.source_line_number,
+                    pull.sequence_in_timestamp_group,
+                    &pull.raw_item_name,
+                ])
+                .map_err(|error| {
+                    format!(
+                        "Failed to insert manual pull {} at {}: {error}",
+                        pull.raw_item_name, pull.pulled_at
+                    )
+                })?;
+
+            if affected_rows == 1 {
+                records_inserted += 1;
+            } else {
+                duplicate_records += 1;
+            }
+        }
+    }
+
+    let records_skipped = draft.records_skipped + duplicate_records;
+    update_import_batch_result(
+        &transaction,
+        &import_batch_id,
+        records_inserted,
+        records_skipped,
+    )?;
+
+    transaction
+        .commit()
+        .map_err(|error| format!("Failed to commit manual import transaction: {error}"))?;
+
+    Ok(SaveManualImportDraftResult {
+        import_batch_id,
+        records_found: draft.records_found,
+        records_inserted,
+        records_skipped,
+        duplicate_records,
+        banner_count: banner_types.len(),
+    })
+}
+
 fn validate_warp_item(item: &WarpItemCatalogInput) -> Result<(), String> {
     if item.id.trim().is_empty() {
         return Err("Warp item id cannot be empty.".to_string());
@@ -256,6 +424,219 @@ fn validate_warp_item(item: &WarpItemCatalogInput) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+fn validate_manual_import_draft(draft: &SaveManualImportDraftInput) -> Result<(), String> {
+    if draft.status != "ready" {
+        return Err("Manual import draft must be ready before saving.".to_string());
+    }
+
+    if draft.issues_count > 0 {
+        return Err("Manual import draft still has review issues.".to_string());
+    }
+
+    if draft.records_skipped > 0 {
+        return Err("Manual import draft has skipped records before database dedupe.".to_string());
+    }
+
+    if draft.records_ready != draft.pulls.len() {
+        return Err(format!(
+            "Manual import draft expected {} ready records but received {} pulls.",
+            draft.records_ready,
+            draft.pulls.len()
+        ));
+    }
+
+    if draft.records_found < draft.records_ready {
+        return Err(
+            "Manual import draft recordsFound cannot be smaller than recordsReady.".to_string(),
+        );
+    }
+
+    if draft.account.id.trim().is_empty() {
+        return Err("Manual import account id cannot be empty.".to_string());
+    }
+
+    if draft.account.uid.trim().is_empty() {
+        return Err("Manual import account UID cannot be empty.".to_string());
+    }
+
+    if draft.pulls.is_empty() {
+        return Err("Manual import draft does not contain any pull.".to_string());
+    }
+
+    for pull in &draft.pulls {
+        validate_manual_import_pull(pull)?;
+    }
+
+    Ok(())
+}
+
+fn validate_manual_import_pull(pull: &SaveManualImportDraftPullInput) -> Result<(), String> {
+    banner_label(&pull.banner_type)?;
+
+    if pull.warp_item_id.trim().is_empty() {
+        return Err("Manual import pull warp item id cannot be empty.".to_string());
+    }
+
+    if pull.pulled_at.trim().is_empty() {
+        return Err(format!(
+            "Manual import pull {} does not have a timestamp.",
+            pull.raw_item_name
+        ));
+    }
+
+    if pull.source_line_number < 1 {
+        return Err(format!(
+            "Manual import pull {} has invalid source line number.",
+            pull.raw_item_name
+        ));
+    }
+
+    if pull.sequence_in_timestamp_group < 1 {
+        return Err(format!(
+            "Manual import pull {} has invalid timestamp group sequence.",
+            pull.raw_item_name
+        ));
+    }
+
+    if pull.raw_item_name.trim().is_empty() {
+        return Err("Manual import pull raw item name cannot be empty.".to_string());
+    }
+
+    Ok(())
+}
+
+fn upsert_account(
+    transaction: &Transaction<'_>,
+    account: &ManualImportAccountInput,
+) -> Result<(), String> {
+    transaction
+        .execute(
+            "INSERT INTO accounts (id, uid, region, nickname, updated_at)
+             VALUES (?1, ?2, ?3, ?4, CURRENT_TIMESTAMP)
+             ON CONFLICT(id) DO UPDATE SET
+               uid = excluded.uid,
+               region = excluded.region,
+               nickname = excluded.nickname,
+               updated_at = CURRENT_TIMESTAMP",
+            params![
+                &account.id,
+                &account.uid,
+                account.region.as_deref(),
+                account.nickname.as_deref(),
+            ],
+        )
+        .map_err(|error| format!("Failed to upsert account {}: {error}", account.id))?;
+
+    Ok(())
+}
+
+fn ensure_banner(transaction: &Transaction<'_>, banner_type: &str) -> Result<String, String> {
+    let banner_id = banner_id_for_type(banner_type);
+    let banner_name = banner_label(banner_type)?;
+
+    transaction
+        .execute(
+            "INSERT INTO banners (id, banner_type, name, updated_at)
+             VALUES (?1, ?2, ?3, CURRENT_TIMESTAMP)
+             ON CONFLICT(id) DO UPDATE SET
+               banner_type = excluded.banner_type,
+               name = excluded.name,
+               updated_at = CURRENT_TIMESTAMP",
+            params![&banner_id, banner_type, banner_name],
+        )
+        .map_err(|error| format!("Failed to ensure banner {banner_type}: {error}"))?;
+
+    Ok(banner_id)
+}
+
+fn insert_import_batch(
+    transaction: &Transaction<'_>,
+    import_batch_id: &str,
+    account_id: &str,
+    banner_type: Option<&str>,
+    records_found: usize,
+) -> Result<(), String> {
+    transaction
+        .execute(
+            "INSERT INTO import_batches (
+               id, account_id, source, banner_type, records_found, records_inserted,
+               records_skipped, status
+             )
+             VALUES (?1, ?2, 'manual', ?3, ?4, 0, 0, 'pending')",
+            params![
+                import_batch_id,
+                account_id,
+                banner_type,
+                records_found as i64
+            ],
+        )
+        .map_err(|error| format!("Failed to insert manual import batch: {error}"))?;
+
+    Ok(())
+}
+
+fn update_import_batch_result(
+    transaction: &Transaction<'_>,
+    import_batch_id: &str,
+    records_inserted: usize,
+    records_skipped: usize,
+) -> Result<(), String> {
+    transaction
+        .execute(
+            "UPDATE import_batches
+             SET finished_at = CURRENT_TIMESTAMP,
+                 records_inserted = ?2,
+                 records_skipped = ?3,
+                 status = 'completed'
+             WHERE id = ?1",
+            params![
+                import_batch_id,
+                records_inserted as i64,
+                records_skipped as i64,
+            ],
+        )
+        .map_err(|error| format!("Failed to update manual import batch result: {error}"))?;
+
+    Ok(())
+}
+
+fn banner_id_for_type(banner_type: &str) -> String {
+    format!("banner-{banner_type}")
+}
+
+fn banner_label(banner_type: &str) -> Result<&'static str, String> {
+    match banner_type {
+        "departure" => Ok("Departure"),
+        "standard" => Ok("Standard"),
+        "character_event" => Ok("Character Event"),
+        "light_cone_event" => Ok("Light Cone Event"),
+        "collaboration_character" => Ok("Collab Character"),
+        "collaboration_light_cone" => Ok("Collab Light Cone"),
+        _ => Err(format!("Unsupported banner type {banner_type}.")),
+    }
+}
+
+fn create_import_batch_id() -> Result<String, String> {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| format!("System clock is before UNIX epoch: {error}"))?
+        .as_nanos();
+
+    Ok(format!("manual-import-{timestamp}"))
+}
+
+fn manual_pull_id(
+    account_id: &str,
+    banner_id: &str,
+    pulled_at: &str,
+    warp_item_id: &str,
+    sequence_in_timestamp_group: i64,
+) -> String {
+    format!(
+        "manual:{account_id}:{banner_id}:{pulled_at}:{warp_item_id}:{sequence_in_timestamp_group}"
+    )
 }
 
 fn list_applied_migrations(connection: &Connection) -> Result<Vec<String>, String> {
@@ -384,6 +765,54 @@ mod tests {
         );
     }
 
+    #[test]
+    fn saves_manual_import_draft_and_deduplicates_pulls() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+        upsert_warp_item_catalog(
+            &mut connection,
+            &[
+                catalog_item("character-1001", "1001", "Pela", "character", 4),
+                catalog_item("light-cone-2001", "2001", "Data Bank", "light_cone", 3),
+            ],
+        )
+        .expect("catalog sync");
+
+        let first = save_manual_import_draft_to_database(&mut connection, &manual_import_draft())
+            .expect("first manual import");
+        let second = save_manual_import_draft_to_database(&mut connection, &manual_import_draft())
+            .expect("second manual import");
+
+        assert_eq!(first.records_found, 2);
+        assert_eq!(first.records_inserted, 2);
+        assert_eq!(first.records_skipped, 0);
+        assert_eq!(first.duplicate_records, 0);
+        assert_eq!(first.banner_count, 1);
+        assert_eq!(second.records_inserted, 0);
+        assert_eq!(second.records_skipped, 2);
+        assert_eq!(second.duplicate_records, 2);
+        assert_eq!(count_table(&connection, "accounts"), 1);
+        assert_eq!(count_table(&connection, "banners"), 1);
+        assert_eq!(count_table(&connection, "import_batches"), 2);
+        assert_eq!(count_table(&connection, "warp_pulls"), 2);
+    }
+
+    #[test]
+    fn rejects_manual_import_draft_that_still_needs_review() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+
+        let mut draft = manual_import_draft();
+        draft.status = "needs_review".to_string();
+        draft.issues_count = 1;
+
+        let result = save_manual_import_draft_to_database(&mut connection, &draft);
+
+        assert!(result.is_err());
+        assert_eq!(count_table(&connection, "import_batches"), 0);
+        assert_eq!(count_table(&connection, "warp_pulls"), 0);
+    }
+
     fn catalog_item(
         id: &str,
         source_id: &str,
@@ -401,5 +830,50 @@ mod tests {
             preview_path: None,
             portrait_path: None,
         }
+    }
+
+    fn manual_import_draft() -> SaveManualImportDraftInput {
+        SaveManualImportDraftInput {
+            account: ManualImportAccountInput {
+                id: "account-1".to_string(),
+                uid: "800000001".to_string(),
+                region: Some("asia".to_string()),
+                nickname: Some("Saki".to_string()),
+            },
+            status: "ready".to_string(),
+            records_found: 2,
+            records_ready: 2,
+            records_skipped: 0,
+            issues_count: 0,
+            pulls: vec![
+                manual_import_pull("character_event", "character-1001", "Pela", 1),
+                manual_import_pull("character_event", "light-cone-2001", "Data Bank", 2),
+            ],
+        }
+    }
+
+    fn manual_import_pull(
+        banner_type: &str,
+        warp_item_id: &str,
+        raw_item_name: &str,
+        sequence_in_timestamp_group: i64,
+    ) -> SaveManualImportDraftPullInput {
+        SaveManualImportDraftPullInput {
+            banner_type: banner_type.to_string(),
+            warp_item_id: warp_item_id.to_string(),
+            pulled_at: "2025-07-11T11:20:01".to_string(),
+            pulled_at_timezone: Some("Asia/Jakarta".to_string()),
+            source_line_number: sequence_in_timestamp_group + 2,
+            sequence_in_timestamp_group,
+            raw_item_name: raw_item_name.to_string(),
+        }
+    }
+
+    fn count_table(connection: &Connection, table_name: &str) -> i64 {
+        connection
+            .query_row(&format!("SELECT COUNT(*) FROM {table_name}"), [], |row| {
+                row.get(0)
+            })
+            .expect("table count")
     }
 }

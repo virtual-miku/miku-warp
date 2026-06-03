@@ -13,6 +13,14 @@ fn sync_warp_item_catalog(
     database::sync_warp_item_catalog(&app, items)
 }
 
+#[tauri::command]
+fn save_manual_import_draft(
+    app: tauri::AppHandle,
+    draft: database::SaveManualImportDraftInput,
+) -> Result<database::SaveManualImportDraftResult, String> {
+    database::save_manual_import_draft(&app, draft)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -28,6 +36,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_database_status,
+            save_manual_import_draft,
             sync_warp_item_catalog
         ])
         .run(tauri::generate_context!())
