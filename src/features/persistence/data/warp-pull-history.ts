@@ -1,6 +1,6 @@
-import { invoke } from '@tauri-apps/api/core'
 import type { BannerType } from '../../warp-history/domain/banner'
 import type { WarpPull } from '../../warp-history/domain/warp-pull'
+import { invokeTauri } from './tauri-invoke'
 
 export type ListWarpPullsInput = {
   accountId: string
@@ -11,5 +11,5 @@ export type ListWarpPullsInput = {
 export type PersistedWarpPull = WarpPull
 
 export function listWarpPulls(query: ListWarpPullsInput) {
-  return invoke<PersistedWarpPull[]>('list_warp_pulls', { query })
+  return invokeTauri<PersistedWarpPull[]>('list_warp_pulls', { query })
 }

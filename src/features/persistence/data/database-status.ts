@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core'
+import { invokeTauri } from './tauri-invoke'
 
 export type DatabaseDriverStatus = 'ready'
 
@@ -13,5 +13,5 @@ export type DatabaseStatus = {
 }
 
 export function getDatabaseStatus() {
-  return invoke<DatabaseStatus>('get_database_status')
+  return invokeTauri<DatabaseStatus>('get_database_status')
 }

@@ -44,7 +44,7 @@ export function ManualImportDialog({
   const status = getManualImportStatus(preview)
   const statusLabel = getManualImportStatusLabel(status)
   const rarityCounts = getManualImportRarityCounts(preview)
-  const previewRows = getManualImportPreviewRows(preview, 14)
+  const previewRows = getManualImportPreviewRows(preview, 200)
   const hasMoreRows = preview.totalPulls > previewRows.length
   const canSave = status === 'ready' && preview.totalPulls > 0 && !isSaving
 
@@ -146,7 +146,9 @@ export function ManualImportDialog({
                       <strong>{pull.item?.name ?? pull.rawName}</strong>
                       <span>{pull.groupTimestamp}</span>
                     </div>
-                    <span>{formatItemType(pull.item?.itemType)}</span>
+                    <span className="manual-preview-type">
+                      {formatItemType(pull.item?.itemType)}
+                    </span>
                   </div>
                 ))
               ) : (

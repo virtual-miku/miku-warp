@@ -1,8 +1,8 @@
-import { invoke } from '@tauri-apps/api/core'
 import type {
   ManualImportDraft,
   ManualImportDraftPull,
 } from '../../import/domain/manual-import-draft'
+import { invokeTauri } from './tauri-invoke'
 
 export type ManualImportAccountInput = {
   id: string
@@ -57,7 +57,7 @@ export function toSaveManualImportDraftPayload(
 }
 
 export function saveManualImportDraft(payload: SaveManualImportDraftPayload) {
-  return invoke<SaveManualImportDraftResult>('save_manual_import_draft', {
+  return invokeTauri<SaveManualImportDraftResult>('save_manual_import_draft', {
     draft: payload,
   })
 }

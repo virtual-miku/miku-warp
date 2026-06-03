@@ -478,8 +478,8 @@
 .manual-import-editor,
 .manual-import-preview {
   min-width: 0;
+  min-height: 0;
   padding: 16px;
-  overflow: auto;
 }
 
 .manual-import-editor {
@@ -488,6 +488,7 @@
   gap: 10px;
   border-right: 1px solid var(--border);
   background: var(--panel-bg);
+  overflow: hidden;
 }
 
 .field-label {
@@ -498,7 +499,9 @@
 
 .manual-note-input {
   width: 100%;
-  min-height: 420px;
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
   resize: none;
   padding: 14px;
   border: 1px solid var(--border);
@@ -517,9 +520,10 @@
 }
 
 .manual-import-preview {
-  display: grid;
-  align-content: start;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
+  overflow: hidden;
 }
 
 .manual-summary-grid {
@@ -592,6 +596,20 @@
   overflow: hidden;
 }
 
+.manual-issue-list {
+  flex: 0 1 auto;
+  max-height: 128px;
+  overflow-y: auto;
+}
+
+.manual-preview-table {
+  align-content: start;
+  flex: 1 1 auto;
+  min-height: 164px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
 .manual-issue-row,
 .manual-preview-row {
   min-height: 46px;
@@ -643,8 +661,13 @@
 }
 
 .manual-preview-row {
-  grid-template-columns: 36px minmax(0, 1fr) 82px;
+  grid-template-columns: 36px minmax(0, 1fr) minmax(84px, max-content);
   background: var(--surface);
+}
+
+.manual-preview-row .warp-rarity {
+  align-self: start;
+  margin-top: 2px;
 }
 
 .manual-preview-row:last-child,
@@ -661,6 +684,12 @@
   white-space: nowrap;
 }
 
+.manual-preview-type {
+  align-self: center;
+  text-align: right;
+  white-space: nowrap;
+}
+
 .manual-preview-empty {
   min-height: 52px;
   display: grid;
@@ -670,6 +699,7 @@
 }
 
 .manual-import-footer {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -712,6 +742,7 @@
 
   .manual-import-grid {
     grid-template-columns: 1fr;
+    grid-template-rows: minmax(260px, 1fr) minmax(320px, 1fr);
   }
 
   .manual-import-editor {
