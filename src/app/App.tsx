@@ -38,16 +38,17 @@ import { demoPulls } from '../features/warp-history/data/demo-pulls'
 import { AppButton } from '../shared/ui/AppButton'
 import './App.css'
 
-const activeBannerType = 'character_event' satisfies BannerType
+const defaultBannerType = 'character_event' satisfies BannerType
 const activeAccount: ManualImportAccountInput = {
   id: 'account-800000000',
   uid: '800000000',
   region: 'asia',
   nickname: 'Trailblazer',
 }
-const demoActivePulls = demoPulls.filter((pull) => pull.bannerType === activeBannerType)
 
 export function App() {
+  const [activeBannerType, setActiveBannerType] =
+    useState<BannerType>(defaultBannerType)
   const [manualImportOpen, setManualImportOpen] = useState(false)
   const [manualImportSaving, setManualImportSaving] = useState(false)
   const [manualImportSaveNotice, setManualImportSaveNotice] =
@@ -58,12 +59,16 @@ export function App() {
     () => parseManualWarpNote(manualNoteDraft, itemCatalog),
     [manualNoteDraft],
   )
+  const demoActivePulls = useMemo(
+    () => demoPulls.filter((pull) => pull.bannerType === activeBannerType),
+    [activeBannerType],
+  )
   const timelinePulls = useMemo(
     () =>
       annotatePityAtPull(
         persistedPulls.length > 0 ? persistedPulls : demoActivePulls,
       ),
-    [persistedPulls],
+    [demoActivePulls, persistedPulls],
   )
   const pitySummary = useMemo(
     () => calculatePitySummary(timelinePulls),
@@ -76,7 +81,7 @@ export function App() {
       bannerType: activeBannerType,
       limit: 100,
     })
-  }, [])
+  }, [activeBannerType])
 
   const refreshPersistedPulls = useCallback(async () => {
     try {
@@ -96,7 +101,11 @@ export function App() {
           setPersistedPulls(pulls)
         }
       })
-      .catch(() => undefined)
+      .catch(() => {
+        if (isActive) {
+          setPersistedPulls([])
+        }
+      })
 
     return () => {
       isActive = false
@@ -105,6 +114,16 @@ export function App() {
 
   const handleManualNoteChange = (value: string) => {
     setManualNoteDraft(value)
+    setManualImportSaveNotice(undefined)
+  }
+
+  const handleBannerTypeChange = (bannerType: BannerType) => {
+    if (bannerType === activeBannerType) {
+      return
+    }
+
+    setActiveBannerType(bannerType)
+    setPersistedPulls([])
     setManualImportSaveNotice(undefined)
   }
 
@@ -205,7 +224,10 @@ export function App() {
             </div>
           </header>
 
-          <BannerTabs activeBannerType={activeBannerType} />
+          <BannerTabs
+            activeBannerType={activeBannerType}
+            onBannerTypeChange={handleBannerTypeChange}
+          />
 
           <section className="content-grid">
             <div className="primary-column" id="history">

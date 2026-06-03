@@ -5,9 +5,13 @@ import {
 
 type BannerTabsProps = {
   activeBannerType: BannerType
+  onBannerTypeChange: (bannerType: BannerType) => void
 }
 
-export function BannerTabs({ activeBannerType }: BannerTabsProps) {
+export function BannerTabs({
+  activeBannerType,
+  onBannerTypeChange,
+}: BannerTabsProps) {
   return (
     <div className="banner-tabs" role="tablist" aria-label="Warp banners">
       {bannerDefinitions.map((banner) => (
@@ -21,6 +25,7 @@ export function BannerTabs({ activeBannerType }: BannerTabsProps) {
           type="button"
           role="tab"
           aria-selected={banner.type === activeBannerType}
+          onClick={() => onBannerTypeChange(banner.type)}
         >
           {banner.label}
         </button>
@@ -28,4 +33,3 @@ export function BannerTabs({ activeBannerType }: BannerTabsProps) {
     </div>
   )
 }
-
