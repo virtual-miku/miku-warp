@@ -130,8 +130,8 @@ export function parseManualWarpNote(
 export function normalizeWarpItemName(value: string) {
   return value
     .normalize('NFKC')
-    .replace(/[‘’]/g, "'")
-    .replace(/[“”]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
     .replace(/\s+/g, ' ')
     .trim()
     .toLocaleLowerCase('en-US')

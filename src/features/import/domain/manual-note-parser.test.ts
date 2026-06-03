@@ -29,13 +29,17 @@ describe('parseManualWarpNote', () => {
   })
 
   it('normalizes curly apostrophes when matching catalog items', () => {
-    const preview = parseManualWarpNote(manualNoteSample, itemCatalog)
-    const dreamMontage = preview.groups[0].pulls[5]
+    const preview = parseManualWarpNote(
+      `2025-07-11 11:20:01
+Dream\u2019s Montage`,
+      itemCatalog,
+    )
+    const dreamMontage = preview.groups[0].pulls[0]
 
     expect(dreamMontage).toMatchObject({
-      lineNumber: 7,
-      sequenceInGroup: 6,
-      rawName: 'Dream’s Montage',
+      lineNumber: 2,
+      sequenceInGroup: 1,
+      rawName: 'Dream\u2019s Montage',
     })
     expect(dreamMontage.item).toMatchObject({
       name: "Dream's Montage",
@@ -92,7 +96,6 @@ Data Bank`,
 
 describe('normalizeWarpItemName', () => {
   it('normalizes spacing, case, and quote variants', () => {
-    expect(normalizeWarpItemName('  DREAM’S   MONTAGE  ')).toBe("dream's montage")
+    expect(normalizeWarpItemName('  DREAM\u2019S   MONTAGE  ')).toBe("dream's montage")
   })
 })
-

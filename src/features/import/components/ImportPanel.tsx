@@ -1,34 +1,44 @@
 import { FileInput, History, RotateCcw } from 'lucide-react'
 import { AppButton } from '../../../shared/ui/AppButton'
-import { itemCatalog } from '../../warp-history/data/item-catalog'
-import { manualNoteSample } from '../data/manual-note-sample'
-import { parseManualWarpNote } from '../domain/manual-note-parser'
+import type { ManualImportPreview } from '../domain/manual-note-parser'
+import {
+  getManualImportStatus,
+  getManualImportStatusLabel,
+} from '../domain/manual-import-preview'
 
-const samplePreview = parseManualWarpNote(manualNoteSample, itemCatalog)
+type ImportPanelProps = {
+  manualImportPreview: ManualImportPreview
+  onOpenManualImport: () => void
+}
 
-export function ImportPanel() {
+export function ImportPanel({
+  manualImportPreview,
+  onOpenManualImport,
+}: ImportPanelProps) {
+  const status = getManualImportStatus(manualImportPreview)
+
   return (
     <section className="tool-panel" id="import" aria-label="Import sources">
       <header className="panel-header">
         <h2>Import</h2>
-        <span className="status-pill">{samplePreview.totalPulls} detected</span>
+        <span className="status-pill">{manualImportPreview.totalPulls} detected</span>
       </header>
       <div className="tool-panel-body">
         <div className="tool-row">
           <div>
             <strong>Manual note</strong>
-            <span>{samplePreview.groups.length} sessions parsed</span>
+            <span>{manualImportPreview.groups.length} sessions parsed</span>
           </div>
-          <AppButton icon={FileInput}>Open</AppButton>
+          <AppButton icon={FileInput} onClick={onOpenManualImport}>
+            Open
+          </AppButton>
         </div>
         <div className="tool-row">
           <div>
             <strong>Catalog match</strong>
-            <span>{samplePreview.recognizedPulls} items recognized</span>
+            <span>{manualImportPreview.recognizedPulls} items recognized</span>
           </div>
-          <span className="status-pill">
-            {samplePreview.unresolvedNames.length === 0 ? 'Clean' : 'Needs review'}
-          </span>
+          <span className="status-pill">{getManualImportStatusLabel(status)}</span>
         </div>
         <div className="tool-row">
           <div>
