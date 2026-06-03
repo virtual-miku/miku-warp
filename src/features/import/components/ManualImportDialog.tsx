@@ -1,14 +1,33 @@
-import { Clipboard, Eraser, Save, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  Clipboard,
+  Eraser,
+  Save,
+  X,
+} from 'lucide-react'
 import { itemCatalogMetadata } from '../../warp-history/data/item-catalog'
 import type { ManualImportPreview } from '../domain/manual-note-parser'
 import {
+  getManualImportPreviewCategories,
   getManualImportPreviewRows,
   getManualImportRarityCounts,
   getManualImportStatus,
   getManualImportStatusLabel,
+  type ManualImportPreviewCategoryKey,
+  type ManualImportPreviewRow,
 } from '../domain/manual-import-preview'
 import { manualNoteSample } from '../data/manual-note-sample'
 import { AppButton } from '../../../shared/ui/AppButton'
+import {
+  getBannerLabel,
+  type BannerType,
+} from '../../warp-history/domain/banner'
+import type { Rarity } from '../../warp-history/domain/warp-pull'
+
+const previewPageSize = 25
+type RarityFilter = Rarity | 'all'
 
 export type ManualImportSaveNotice = {
   tone: 'success' | 'error'
@@ -23,6 +42,7 @@ type ManualImportDialogProps = {
   onSave: () => void
   onClose: () => void
   onNoteChange: (value: string) => void
+  fallbackBannerType: BannerType
   preview: ManualImportPreview
   saveNotice?: ManualImportSaveNotice
 }
@@ -34,19 +54,71 @@ export function ManualImportDialog({
   onSave,
   onClose,
   onNoteChange,
+  fallbackBannerType,
   preview,
   saveNotice,
 }: ManualImportDialogProps) {
+  const [activeCategoryKey, setActiveCategoryKey] =
+    useState<ManualImportPreviewCategoryKey | 'all'>('all')
+  const [activeRarityFilter, setActiveRarityFilter] =
+    useState<RarityFilter>('all')
+  const [previewPage, setPreviewPage] = useState(1)
+  const categories = useMemo(
+    () => getManualImportPreviewCategories(preview, fallbackBannerType),
+    [fallbackBannerType, preview],
+  )
+
   if (!isOpen) {
     return null
   }
 
+  const hasActiveCategory =
+    activeCategoryKey === 'all' ||
+    categories.some((category) => category.key === activeCategoryKey)
+  const selectedCategoryKey = hasActiveCategory ? activeCategoryKey : 'all'
+  const categoryFilter =
+    selectedCategoryKey === 'all'
+      ? { fallbackBannerType }
+      : { categoryKey: selectedCategoryKey, fallbackBannerType }
   const status = getManualImportStatus(preview)
   const statusLabel = getManualImportStatusLabel(status)
-  const rarityCounts = getManualImportRarityCounts(preview)
-  const previewRows = getManualImportPreviewRows(preview, 200)
-  const hasMoreRows = preview.totalPulls > previewRows.length
+  const rarityCounts = getManualImportRarityCounts(preview, categoryFilter)
+  const categoryRows = getManualImportPreviewRows(
+    preview,
+    Number.MAX_SAFE_INTEGER,
+    categoryFilter,
+  )
+  const filteredPreviewRows = filterRowsByRarity(
+    categoryRows,
+    activeRarityFilter,
+  )
+  const selectedTotalPulls = filteredPreviewRows.length
+  const selectedRecognizedPulls = filteredPreviewRows.filter(
+    (pull) => pull.item,
+  ).length
+  const selectedGroupCount = countPreviewGroups(filteredPreviewRows)
+  const pageCount = Math.max(1, Math.ceil(selectedTotalPulls / previewPageSize))
+  const activePage = Math.min(previewPage, pageCount)
+  const previewRows = filteredPreviewRows.slice(
+    (activePage - 1) * previewPageSize,
+    activePage * previewPageSize,
+  )
+  const firstVisibleRow =
+    selectedTotalPulls === 0 ? 0 : (activePage - 1) * previewPageSize + 1
+  const lastVisibleRow = Math.min(activePage * previewPageSize, selectedTotalPulls)
   const canSave = status === 'ready' && preview.totalPulls > 0 && !isSaving
+  const handleCategoryChange = (
+    nextCategoryKey: ManualImportPreviewCategoryKey | 'all',
+  ) => {
+    setActiveCategoryKey(nextCategoryKey)
+    setPreviewPage(1)
+  }
+  const handleRarityFilterChange = (nextRarityFilter: RarityFilter) => {
+    setActiveRarityFilter((currentRarityFilter) =>
+      currentRarityFilter === nextRarityFilter ? 'all' : nextRarityFilter,
+    )
+    setPreviewPage(1)
+  }
 
   return (
     <div className="modal-backdrop">
@@ -96,22 +168,75 @@ export function ManualImportDialog({
               </article>
               <article className="manual-summary-card">
                 <span>Pulls</span>
-                <strong>{preview.totalPulls}</strong>
+                <strong>{selectedTotalPulls}</strong>
               </article>
               <article className="manual-summary-card">
                 <span>Groups</span>
-                <strong>{preview.groups.length}</strong>
+                <strong>{selectedGroupCount}</strong>
               </article>
               <article className="manual-summary-card">
                 <span>Matched</span>
-                <strong>{preview.recognizedPulls}</strong>
+                <strong>{selectedRecognizedPulls}</strong>
               </article>
             </div>
 
-            <div className="manual-rarity-strip" aria-label="Rarity counts">
-              <span className="rarity-chip rarity-chip-5">5-star {rarityCounts.rarity5}</span>
-              <span className="rarity-chip rarity-chip-4">4-star {rarityCounts.rarity4}</span>
-              <span className="rarity-chip rarity-chip-3">3-star {rarityCounts.rarity3}</span>
+            <div className="manual-category-tabs" role="tablist" aria-label="Preview categories">
+              <button
+                className={
+                  selectedCategoryKey === 'all'
+                    ? 'manual-category-tab manual-category-tab-active'
+                    : 'manual-category-tab'
+                }
+                type="button"
+                role="tab"
+                aria-selected={selectedCategoryKey === 'all'}
+                onClick={() => handleCategoryChange('all')}
+              >
+                All {preview.totalPulls}
+              </button>
+              {categories.map((category) => (
+                <button
+                  className={
+                    selectedCategoryKey === category.key
+                      ? 'manual-category-tab manual-category-tab-active'
+                      : 'manual-category-tab'
+                  }
+                  key={category.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={selectedCategoryKey === category.key}
+                  onClick={() => handleCategoryChange(category.key)}
+                >
+                  {formatPreviewCategory(category.bannerType)} {category.totalPulls}
+                </button>
+              ))}
+            </div>
+
+            <div className="manual-rarity-strip" aria-label="Rarity filters">
+              <button
+                className={getRarityChipClass(5, activeRarityFilter)}
+                type="button"
+                aria-pressed={activeRarityFilter === 5}
+                onClick={() => handleRarityFilterChange(5)}
+              >
+                5-star {rarityCounts.rarity5}
+              </button>
+              <button
+                className={getRarityChipClass(4, activeRarityFilter)}
+                type="button"
+                aria-pressed={activeRarityFilter === 4}
+                onClick={() => handleRarityFilterChange(4)}
+              >
+                4-star {rarityCounts.rarity4}
+              </button>
+              <button
+                className={getRarityChipClass(3, activeRarityFilter)}
+                type="button"
+                aria-pressed={activeRarityFilter === 3}
+                onClick={() => handleRarityFilterChange(3)}
+              >
+                3-star {rarityCounts.rarity3}
+              </button>
             </div>
 
             {preview.issues.length > 0 ? (
@@ -139,16 +264,26 @@ export function ManualImportDialog({
               {previewRows.length > 0 ? (
                 previewRows.map((pull) => (
                   <div className="manual-preview-row" key={`${pull.lineNumber}-${pull.rawName}`}>
-                    <span className={`warp-rarity warp-rarity-${pull.item?.rarity ?? 3}`}>
-                      {pull.item?.rarity ?? '?'}
-                    </span>
+                    <ManualPreviewItemIcon pull={pull} />
                     <div>
-                      <strong>{pull.item?.name ?? pull.rawName}</strong>
-                      <span>{pull.groupTimestamp}</span>
+                      <div className="manual-preview-title">
+                        <span className="manual-preview-pity">
+                          {formatPreviewPity(pull)}
+                        </span>
+                        <strong
+                          className={`manual-preview-name manual-preview-name-${pull.item?.rarity ?? 3}`}
+                        >
+                          {pull.item?.name ?? pull.rawName}
+                        </strong>
+                      </div>
+                      <span>
+                        {pull.groupTimestamp} -{' '}
+                        {formatPreviewCategory(pull.effectiveBannerType)}
+                      </span>
                     </div>
-                    <span className="manual-preview-type">
-                      {formatItemType(pull.item?.itemType)}
-                    </span>
+                    <div className="manual-preview-side">
+                      <span>{formatItemType(pull.item?.itemType)}</span>
+                    </div>
                   </div>
                 ))
               ) : (
@@ -157,9 +292,34 @@ export function ManualImportDialog({
             </div>
 
             <footer className="manual-import-footer">
-              <div>
+              <div className="manual-import-meta">
                 <span>{itemCatalogMetadata.source.version ?? 'Catalog'} catalog</span>
-                {hasMoreRows ? <span>{preview.totalPulls - previewRows.length} more</span> : null}
+                <span>
+                  {firstVisibleRow}-{lastVisibleRow} of {selectedTotalPulls}
+                </span>
+              </div>
+              <div className="manual-pagination-controls" aria-label="Preview pagination">
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Previous preview page"
+                  disabled={activePage <= 1}
+                  onClick={() => setPreviewPage(activePage - 1)}
+                >
+                  <ChevronLeft size={16} aria-hidden="true" />
+                </button>
+                <span>
+                  {activePage}/{pageCount}
+                </span>
+                <button
+                  className="icon-button"
+                  type="button"
+                  aria-label="Next preview page"
+                  disabled={activePage >= pageCount}
+                  onClick={() => setPreviewPage(activePage + 1)}
+                >
+                  <ChevronRight size={16} aria-hidden="true" />
+                </button>
               </div>
               <AppButton icon={Save} disabled={!canSave} onClick={onSave}>
                 {isSaving ? 'Saving' : 'Import'}
@@ -172,6 +332,51 @@ export function ManualImportDialog({
   )
 }
 
+function formatPreviewCategory(bannerType?: BannerType) {
+  return bannerType ? getBannerLabel(bannerType) : 'Unassigned'
+}
+
+function ManualPreviewItemIcon({ pull }: { pull: ManualImportPreviewRow }) {
+  const [hasImageError, setHasImageError] = useState(false)
+  const iconUrl = getCatalogAssetUrl(pull.item?.iconPath)
+  const rarity = pull.item?.rarity ?? 3
+
+  return (
+    <div className={`manual-preview-icon manual-preview-icon-${rarity}`}>
+      {iconUrl && !hasImageError ? (
+        <img
+          alt=""
+          loading="lazy"
+          src={iconUrl}
+          onError={() => setHasImageError(true)}
+        />
+      ) : (
+        <span>{pull.item?.rarity ?? '?'}</span>
+      )}
+    </div>
+  )
+}
+
+function getCatalogAssetUrl(path?: string) {
+  if (!path) {
+    return undefined
+  }
+
+  if (/^https?:\/\//.test(path)) {
+    return path
+  }
+
+  return `/${path.replace(/^\/+/, '')}`
+}
+
+function formatPreviewPity(pull: ManualImportPreviewRow) {
+  if (pull.pityFiveAtPull) {
+    return `Pity ${pull.pityFiveAtPull}`
+  }
+
+  return '-'
+}
+
 function formatItemType(itemType?: 'character' | 'light_cone') {
   if (itemType === 'light_cone') {
     return 'Light Cone'
@@ -182,4 +387,38 @@ function formatItemType(itemType?: 'character' | 'light_cone') {
   }
 
   return 'Unknown'
+}
+
+function getRarityChipClass(rarity: Rarity, activeRarityFilter: RarityFilter) {
+  return [
+    'rarity-chip',
+    'rarity-chip-button',
+    `rarity-chip-${rarity}`,
+    activeRarityFilter === rarity ? 'rarity-chip-active' : undefined,
+  ]
+    .filter(Boolean)
+    .join(' ')
+}
+
+function filterRowsByRarity(
+  rows: ManualImportPreviewRow[],
+  rarityFilter: RarityFilter,
+) {
+  if (rarityFilter === 'all') {
+    return rows
+  }
+
+  return rows.filter((row) => row.item?.rarity === rarityFilter)
+}
+
+function countPreviewGroups(rows: ManualImportPreviewRow[]) {
+  return new Set(
+    rows.map((row) =>
+      JSON.stringify([
+        row.effectiveBannerType ?? 'unassigned',
+        row.groupLineNumber,
+        row.groupTimestamp,
+      ]),
+    ),
+  ).size
 }

@@ -103,6 +103,31 @@ Arrows`,
     ])
   })
 
+  it('maps common heading aliases to banner types', () => {
+    const preview = parseManualWarpNote(
+      `Character Event Warp
+2025-07-11 11:20:01
+Pela
+Light Cone Event Warp
+2025-07-12 11:20:01
+Data Bank
+Warp Bintang Bintang
+2025-07-13 11:20:01
+Arrows
+Departure Warp
+2025-07-14 11:20:01
+Amber`,
+      itemCatalog,
+    )
+
+    expect(preview.groups.map((group) => group.bannerType)).toEqual([
+      'character_event',
+      'light_cone_event',
+      'standard',
+      'departure',
+    ])
+  })
+
   it('parses PDF-style inline numbered pulls', () => {
     const preview = parseManualWarpNote(
       `Warp  Kolaborasi  Karakter

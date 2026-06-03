@@ -262,6 +262,7 @@ export function App() {
         onSave={handleSaveManualImport}
         onClose={() => setManualImportOpen(false)}
         onNoteChange={handleManualNoteChange}
+        fallbackBannerType={activeBannerType}
         preview={manualImportPreview}
         saveNotice={manualImportSaveNotice}
       />

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "assets:update": "node scripts/sync-star-rail-assets.mjs",
     "catalog:update": "node scripts/update-star-rail-catalog.mjs",
     "lint": "eslint .",
     "test": "vitest run",

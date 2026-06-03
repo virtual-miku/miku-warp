@@ -75,11 +75,22 @@ export const defaultManualItemAliases: Record<string, string> = {
 }
 
 export const defaultManualSectionHeadings: Record<string, BannerType> = {
+  'character event warp': 'character_event',
+  'collaboration character warp': 'collaboration_character',
+  'collaboration light cone warp': 'collaboration_light_cone',
+  'departure warp': 'departure',
   'event warp karakter': 'character_event',
   'event warp light cone': 'light_cone_event',
+  'light cone event warp': 'light_cone_event',
+  'stellar warp': 'standard',
+  'warp bintang bintang': 'standard',
   'warp bintang-bintang': 'standard',
+  'warp event karakter': 'character_event',
+  'warp event light cone': 'light_cone_event',
+  'warp kolaborasi character': 'collaboration_character',
   'warp kolaborasi karakter': 'collaboration_character',
   'warp kolaborasi light cone': 'collaboration_light_cone',
+  'warp pemula': 'departure',
 }
 
 export function parseManualWarpNote(
