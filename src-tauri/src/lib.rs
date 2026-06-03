@@ -21,6 +21,14 @@ fn save_manual_import_draft(
     database::save_manual_import_draft(&app, draft)
 }
 
+#[tauri::command]
+fn list_warp_pulls(
+    app: tauri::AppHandle,
+    query: database::ListWarpPullsInput,
+) -> Result<Vec<database::WarpPullRow>, String> {
+    database::list_warp_pulls(&app, query)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -36,6 +44,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_database_status,
+            list_warp_pulls,
             save_manual_import_draft,
             sync_warp_item_catalog
         ])

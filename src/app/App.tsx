@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Bell,
   Cloud,
@@ -23,12 +23,14 @@ import {
   type ManualImportAccountInput,
 } from '../features/persistence/data/manual-import-save'
 import { syncWarpItemCatalog } from '../features/persistence/data/warp-item-catalog-sync'
+import { listWarpPulls } from '../features/persistence/data/warp-pull-history'
 import { BannerTabs } from '../features/warp-history/components/BannerTabs'
 import { PityOverview } from '../features/warp-history/components/PityOverview'
 import { WarpTimeline } from '../features/warp-history/components/WarpTimeline'
 import { itemCatalog } from '../features/warp-history/data/item-catalog'
 import { getBannerLabel, type BannerType } from '../features/warp-history/domain/banner'
 import { calculatePitySummary } from '../features/warp-history/domain/pity'
+import type { WarpPull } from '../features/warp-history/domain/warp-pull'
 import { demoPulls } from '../features/warp-history/data/demo-pulls'
 import { AppButton } from '../shared/ui/AppButton'
 import './App.css'
@@ -40,8 +42,7 @@ const activeAccount: ManualImportAccountInput = {
   region: 'asia',
   nickname: 'Trailblazer',
 }
-const activePulls = demoPulls.filter((pull) => pull.bannerType === activeBannerType)
-const pitySummary = calculatePitySummary(activePulls)
+const demoActivePulls = demoPulls.filter((pull) => pull.bannerType === activeBannerType)
 
 export function App() {
   const [manualImportOpen, setManualImportOpen] = useState(false)
@@ -49,10 +50,49 @@ export function App() {
   const [manualImportSaveNotice, setManualImportSaveNotice] =
     useState<ManualImportSaveNotice>()
   const [manualNoteDraft, setManualNoteDraft] = useState(manualNoteSample)
+  const [persistedPulls, setPersistedPulls] = useState<WarpPull[]>([])
   const manualImportPreview = useMemo(
     () => parseManualWarpNote(manualNoteDraft, itemCatalog),
     [manualNoteDraft],
   )
+  const timelinePulls = persistedPulls.length > 0 ? persistedPulls : demoActivePulls
+  const pitySummary = useMemo(
+    () => calculatePitySummary(timelinePulls),
+    [timelinePulls],
+  )
+
+  const fetchPersistedPulls = useCallback(() => {
+    return listWarpPulls({
+      accountId: activeAccount.id,
+      bannerType: activeBannerType,
+      limit: 100,
+    })
+  }, [])
+
+  const refreshPersistedPulls = useCallback(async () => {
+    try {
+      const pulls = await fetchPersistedPulls()
+      setPersistedPulls(pulls)
+    } catch {
+      setPersistedPulls([])
+    }
+  }, [fetchPersistedPulls])
+
+  useEffect(() => {
+    let isActive = true
+
+    fetchPersistedPulls()
+      .then((pulls) => {
+        if (isActive) {
+          setPersistedPulls(pulls)
+        }
+      })
+      .catch(() => undefined)
+
+    return () => {
+      isActive = false
+    }
+  }, [fetchPersistedPulls])
 
   const handleManualNoteChange = (value: string) => {
     setManualNoteDraft(value)
@@ -87,6 +127,7 @@ export function App() {
       const result = await saveManualImportDraft(
         toSaveManualImportDraftPayload(activeAccount, draft),
       )
+      await refreshPersistedPulls()
 
       setManualImportSaveNotice({
         tone: 'success',
@@ -160,7 +201,7 @@ export function App() {
           <section className="content-grid">
             <div className="primary-column" id="history">
               <PityOverview summary={pitySummary} />
-              <WarpTimeline pulls={activePulls} />
+              <WarpTimeline pulls={timelinePulls} />
             </div>
 
             <aside className="side-column" aria-label="Import and backup">

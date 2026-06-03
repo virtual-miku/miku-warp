@@ -1,4 +1,4 @@
-use rusqlite::{params, Connection, OptionalExtension, Transaction};
+use rusqlite::{params, Connection, OptionalExtension, Row, Transaction};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
@@ -91,6 +91,28 @@ pub struct SaveManualImportDraftResult {
     pub banner_count: usize,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListWarpPullsInput {
+    pub account_id: String,
+    pub banner_type: Option<String>,
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WarpPullRow {
+    pub id: String,
+    pub banner_type: String,
+    pub item_name: String,
+    pub item_type: String,
+    pub rarity: i64,
+    pub pulled_at: String,
+    pub source: String,
+    pub pity_four_at_pull: Option<i64>,
+    pub pity_five_at_pull: Option<i64>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DatabaseDriverStatus {
@@ -155,6 +177,16 @@ pub fn save_manual_import_draft(
     let mut connection = open_database(&database_path)?;
 
     save_manual_import_draft_to_database(&mut connection, &draft)
+}
+
+pub fn list_warp_pulls(
+    app: &AppHandle,
+    query: ListWarpPullsInput,
+) -> Result<Vec<WarpPullRow>, String> {
+    let database_path = resolve_database_path(app)?;
+    let connection = open_database(&database_path)?;
+
+    list_warp_pulls_from_database(&connection, &query)
 }
 
 fn resolve_database_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -397,6 +429,124 @@ fn save_manual_import_draft_to_database(
         records_skipped,
         duplicate_records,
         banner_count: banner_types.len(),
+    })
+}
+
+fn list_warp_pulls_from_database(
+    connection: &Connection,
+    query: &ListWarpPullsInput,
+) -> Result<Vec<WarpPullRow>, String> {
+    validate_list_warp_pulls_query(query)?;
+
+    if let Some(banner_type) = &query.banner_type {
+        banner_label(banner_type)?;
+
+        let mut statement = connection
+            .prepare(
+                "SELECT id, banner_type, item_name, item_type, rarity, pulled_at, source,
+                        pity_4, pity_5
+                 FROM (
+                   SELECT
+                     wp.id,
+                     b.banner_type,
+                     wi.name AS item_name,
+                     wi.item_type,
+                     wi.rarity,
+                     wp.pulled_at,
+                     wp.source,
+                     wp.pity_4,
+                     wp.pity_5
+                   FROM warp_pulls wp
+                   INNER JOIN banners b ON b.id = wp.banner_id
+                   INNER JOIN warp_items wi ON wi.id = wp.warp_item_id
+                   WHERE wp.account_id = ?1 AND b.banner_type = ?2
+                   ORDER BY wp.pulled_at DESC, wp.id DESC
+                   LIMIT ?3
+                 )
+                 ORDER BY pulled_at ASC, id ASC",
+            )
+            .map_err(|error| format!("Failed to prepare warp pull query: {error}"))?;
+
+        let rows = statement
+            .query_map(
+                params![&query.account_id, banner_type, query_limit(query) as i64],
+                map_warp_pull_row,
+            )
+            .map_err(|error| format!("Failed to query warp pulls: {error}"))?;
+
+        return rows
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("Failed to decode warp pull rows: {error}"));
+    }
+
+    let mut statement = connection
+        .prepare(
+            "SELECT id, banner_type, item_name, item_type, rarity, pulled_at, source,
+                    pity_4, pity_5
+             FROM (
+               SELECT
+                 wp.id,
+                 b.banner_type,
+                 wi.name AS item_name,
+                 wi.item_type,
+                 wi.rarity,
+                 wp.pulled_at,
+                 wp.source,
+                 wp.pity_4,
+                 wp.pity_5
+               FROM warp_pulls wp
+               INNER JOIN banners b ON b.id = wp.banner_id
+               INNER JOIN warp_items wi ON wi.id = wp.warp_item_id
+               WHERE wp.account_id = ?1
+               ORDER BY wp.pulled_at DESC, wp.id DESC
+               LIMIT ?2
+             )
+             ORDER BY pulled_at ASC, id ASC",
+        )
+        .map_err(|error| format!("Failed to prepare warp pull query: {error}"))?;
+
+    let rows = statement
+        .query_map(
+            params![&query.account_id, query_limit(query) as i64],
+            map_warp_pull_row,
+        )
+        .map_err(|error| format!("Failed to query warp pulls: {error}"))?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Failed to decode warp pull rows: {error}"))
+}
+
+fn validate_list_warp_pulls_query(query: &ListWarpPullsInput) -> Result<(), String> {
+    if query.account_id.trim().is_empty() {
+        return Err("Warp pull query account id cannot be empty.".to_string());
+    }
+
+    if let Some(banner_type) = &query.banner_type {
+        banner_label(banner_type)?;
+    }
+
+    if matches!(query.limit, Some(0)) {
+        return Err("Warp pull query limit must be greater than zero.".to_string());
+    }
+
+    Ok(())
+}
+
+fn query_limit(query: &ListWarpPullsInput) -> usize {
+    query.limit.unwrap_or(100).clamp(1, 500)
+}
+
+fn map_warp_pull_row(row: &Row<'_>) -> rusqlite::Result<WarpPullRow> {
+    Ok(WarpPullRow {
+        id: row.get(0)?,
+        banner_type: row.get(1)?,
+        item_name: row.get(2)?,
+        item_type: row.get(3)?,
+        rarity: row.get(4)?,
+        pulled_at: row.get(5)?,
+        source: row.get(6)?,
+        pity_four_at_pull: row.get(7)?,
+        pity_five_at_pull: row.get(8)?,
     })
 }
 
@@ -795,6 +945,77 @@ mod tests {
         assert_eq!(count_table(&connection, "banners"), 1);
         assert_eq!(count_table(&connection, "import_batches"), 2);
         assert_eq!(count_table(&connection, "warp_pulls"), 2);
+    }
+
+    #[test]
+    fn lists_saved_manual_warp_pulls_for_account_and_banner() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+        upsert_warp_item_catalog(
+            &mut connection,
+            &[
+                catalog_item("character-1001", "1001", "Pela", "character", 4),
+                catalog_item("light-cone-2001", "2001", "Data Bank", "light_cone", 3),
+            ],
+        )
+        .expect("catalog sync");
+        save_manual_import_draft_to_database(&mut connection, &manual_import_draft())
+            .expect("manual import");
+
+        let pulls = list_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: "account-1".to_string(),
+                banner_type: Some("character_event".to_string()),
+                limit: Some(10),
+            },
+        )
+        .expect("saved pulls can be listed");
+
+        assert_eq!(pulls.len(), 2);
+        assert_eq!(pulls[0].banner_type, "character_event");
+        assert_eq!(pulls[0].item_name, "Pela");
+        assert_eq!(pulls[0].item_type, "character");
+        assert_eq!(pulls[0].rarity, 4);
+        assert_eq!(pulls[0].source, "manual");
+        assert_eq!(pulls[1].item_name, "Data Bank");
+        assert_eq!(pulls[1].item_type, "light_cone");
+        assert_eq!(pulls[1].rarity, 3);
+    }
+
+    #[test]
+    fn rejects_invalid_warp_pull_list_query() {
+        let connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+
+        let empty_account_result = list_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: " ".to_string(),
+                banner_type: None,
+                limit: Some(10),
+            },
+        );
+        let zero_limit_result = list_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: "account-1".to_string(),
+                banner_type: None,
+                limit: Some(0),
+            },
+        );
+        let unsupported_banner_result = list_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: "account-1".to_string(),
+                banner_type: Some("unknown".to_string()),
+                limit: Some(10),
+            },
+        );
+
+        assert!(empty_account_result.is_err());
+        assert!(zero_limit_result.is_err());
+        assert!(unsupported_banner_result.is_err());
     }
 
     #[test]
