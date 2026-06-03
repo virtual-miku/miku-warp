@@ -1,6 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 
-export type DatabaseDriverStatus = 'preflight_only'
+export type DatabaseDriverStatus = 'ready'
 
 export type DatabaseStatus = {
   databasePath: string
