@@ -11,6 +11,9 @@ use tauri::{AppHandle, Manager};
 const DATABASE_FILE_NAME: &str = "warp-tracker.sqlite";
 const INIT_MIGRATION_VERSION: &str = "0001_init";
 const INIT_MIGRATION_SQL: &str = include_str!("../migrations/0001_init.sql");
+const ALLOW_DUPLICATE_WARP_ITEM_NAMES_VERSION: &str = "0002_allow_duplicate_warp_item_names";
+const ALLOW_DUPLICATE_WARP_ITEM_NAMES_SQL: &str =
+    include_str!("../migrations/0002_allow_duplicate_warp_item_names.sql");
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -139,10 +142,16 @@ struct WarpPullPityCandidate {
     rarity: i64,
 }
 
-const MIGRATIONS: &[Migration] = &[Migration {
-    version: INIT_MIGRATION_VERSION,
-    sql: INIT_MIGRATION_SQL,
-}];
+const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: INIT_MIGRATION_VERSION,
+        sql: INIT_MIGRATION_SQL,
+    },
+    Migration {
+        version: ALLOW_DUPLICATE_WARP_ITEM_NAMES_VERSION,
+        sql: ALLOW_DUPLICATE_WARP_ITEM_NAMES_SQL,
+    },
+];
 
 pub fn get_database_status(app: &AppHandle) -> Result<DatabaseStatus, String> {
     let database_path = resolve_database_path(app)?;
@@ -908,7 +917,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn applies_initial_migration() {
+    fn applies_migrations() {
         let connection = Connection::open_in_memory().expect("in-memory database");
 
         apply_migrations(&connection).expect("migration applies");
@@ -922,9 +931,25 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("warp_pulls table count");
+        let unique_name_index_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'ux_warp_items_name'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("unique warp item name index count");
+        let name_index_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'ix_warp_items_name'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("warp item name index count");
 
-        assert_eq!(applied_migrations, vec![INIT_MIGRATION_VERSION]);
+        assert_eq!(applied_migrations, planned_migrations());
         assert_eq!(table_count, 1);
+        assert_eq!(unique_name_index_count, 0);
+        assert_eq!(name_index_count, 1);
     }
 
     #[test]
@@ -972,6 +997,24 @@ mod tests {
         assert_eq!(third.updated, 1);
         assert_eq!(third.unchanged, 0);
         assert_eq!(third.total_in_database, 2);
+    }
+
+    #[test]
+    fn allows_catalog_items_with_duplicate_names() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+
+        let result = upsert_warp_item_catalog(
+            &mut connection,
+            &[
+                catalog_item("character-1001", "1001", "March 7th", "character", 4),
+                catalog_item("character-1224", "1224", "March 7th", "character", 4),
+            ],
+        )
+        .expect("catalog sync with duplicate names");
+
+        assert_eq!(result.inserted, 2);
+        assert_eq!(result.total_in_database, 2);
     }
 
     #[test]

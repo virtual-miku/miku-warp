@@ -42,6 +42,7 @@ type ManualImportDialogProps = {
   onSave: () => void
   onClose: () => void
   onNoteChange: (value: string) => void
+  onSaveNoticeClose: () => void
   fallbackBannerType: BannerType
   preview: ManualImportPreview
   saveNotice?: ManualImportSaveNotice
@@ -54,6 +55,7 @@ export function ManualImportDialog({
   onSave,
   onClose,
   onNoteChange,
+  onSaveNoticeClose,
   fallbackBannerType,
   preview,
   saveNotice,
@@ -250,16 +252,6 @@ export function ManualImportDialog({
               </div>
             ) : null}
 
-            {saveNotice ? (
-              <div
-                className={`manual-save-status manual-save-status-${saveNotice.tone}`}
-                aria-live="polite"
-              >
-                <strong>{saveNotice.title}</strong>
-                <p>{saveNotice.detail}</p>
-              </div>
-            ) : null}
-
             <div className="manual-preview-table" aria-label="Recognized pull rows">
               {previewRows.length > 0 ? (
                 previewRows.map((pull) => (
@@ -276,7 +268,7 @@ export function ManualImportDialog({
                           {pull.item?.name ?? pull.rawName}
                         </strong>
                       </div>
-                      <span>
+                      <span className="manual-preview-meta">
                         {pull.groupTimestamp} -{' '}
                         {formatPreviewCategory(pull.effectiveBannerType)}
                       </span>
@@ -328,7 +320,43 @@ export function ManualImportDialog({
           </section>
         </div>
       </section>
+
+      {saveNotice ? (
+        <ManualImportSavePopup
+          notice={saveNotice}
+          onClose={onSaveNoticeClose}
+        />
+      ) : null}
     </div>
+  )
+}
+
+function ManualImportSavePopup({
+  notice,
+  onClose,
+}: {
+  notice: ManualImportSaveNotice
+  onClose: () => void
+}) {
+  return (
+    <aside
+      className={`manual-save-popup manual-save-popup-${notice.tone}`}
+      role={notice.tone === 'error' ? 'alert' : 'status'}
+      aria-live={notice.tone === 'error' ? 'assertive' : 'polite'}
+    >
+      <div>
+        <strong>{notice.title}</strong>
+        <p>{notice.detail}</p>
+      </div>
+      <button
+        className="icon-button"
+        type="button"
+        aria-label="Close save message"
+        onClick={onClose}
+      >
+        <X size={16} aria-hidden="true" />
+      </button>
+    </aside>
   )
 }
 
