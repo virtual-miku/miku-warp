@@ -134,6 +134,11 @@ struct ExistingWarpItem {
     portrait_path: Option<String>,
 }
 
+struct WarpPullPityCandidate {
+    id: String,
+    rarity: i64,
+}
+
 const MIGRATIONS: &[Migration] = &[Migration {
     version: INIT_MIGRATION_VERSION,
     sql: INIT_MIGRATION_SQL,
@@ -411,6 +416,11 @@ fn save_manual_import_draft_to_database(
     }
 
     let records_skipped = draft.records_skipped + duplicate_records;
+    for banner_type in &banner_types {
+        let banner_id = banner_id_for_type(banner_type);
+        recompute_pity_for_account_banner(&transaction, &draft.account.id, &banner_id)?;
+    }
+
     update_import_batch_result(
         &transaction,
         &import_batch_id,
@@ -444,7 +454,7 @@ fn list_warp_pulls_from_database(
         let mut statement = connection
             .prepare(
                 "SELECT id, banner_type, item_name, item_type, rarity, pulled_at, source,
-                        pity_4, pity_5
+                        pity_4, pity_5, sequence_in_timestamp_group
                  FROM (
                    SELECT
                      wp.id,
@@ -455,15 +465,16 @@ fn list_warp_pulls_from_database(
                      wp.pulled_at,
                      wp.source,
                      wp.pity_4,
-                     wp.pity_5
+                     wp.pity_5,
+                     wp.sequence_in_timestamp_group
                    FROM warp_pulls wp
                    INNER JOIN banners b ON b.id = wp.banner_id
                    INNER JOIN warp_items wi ON wi.id = wp.warp_item_id
                    WHERE wp.account_id = ?1 AND b.banner_type = ?2
-                   ORDER BY wp.pulled_at DESC, wp.id DESC
+                   ORDER BY wp.pulled_at DESC, wp.sequence_in_timestamp_group DESC, wp.id DESC
                    LIMIT ?3
                  )
-                 ORDER BY pulled_at ASC, id ASC",
+                 ORDER BY pulled_at ASC, sequence_in_timestamp_group ASC, id ASC",
             )
             .map_err(|error| format!("Failed to prepare warp pull query: {error}"))?;
 
@@ -482,7 +493,7 @@ fn list_warp_pulls_from_database(
     let mut statement = connection
         .prepare(
             "SELECT id, banner_type, item_name, item_type, rarity, pulled_at, source,
-                    pity_4, pity_5
+                    pity_4, pity_5, sequence_in_timestamp_group
              FROM (
                SELECT
                  wp.id,
@@ -493,15 +504,16 @@ fn list_warp_pulls_from_database(
                  wp.pulled_at,
                  wp.source,
                  wp.pity_4,
-                 wp.pity_5
+                 wp.pity_5,
+                 wp.sequence_in_timestamp_group
                FROM warp_pulls wp
                INNER JOIN banners b ON b.id = wp.banner_id
                INNER JOIN warp_items wi ON wi.id = wp.warp_item_id
                WHERE wp.account_id = ?1
-               ORDER BY wp.pulled_at DESC, wp.id DESC
+               ORDER BY wp.pulled_at DESC, wp.sequence_in_timestamp_group DESC, wp.id DESC
                LIMIT ?2
              )
-             ORDER BY pulled_at ASC, id ASC",
+             ORDER BY pulled_at ASC, sequence_in_timestamp_group ASC, id ASC",
         )
         .map_err(|error| format!("Failed to prepare warp pull query: {error}"))?;
 
@@ -548,6 +560,70 @@ fn map_warp_pull_row(row: &Row<'_>) -> rusqlite::Result<WarpPullRow> {
         pity_four_at_pull: row.get(7)?,
         pity_five_at_pull: row.get(8)?,
     })
+}
+
+fn recompute_pity_for_account_banner(
+    transaction: &Transaction<'_>,
+    account_id: &str,
+    banner_id: &str,
+) -> Result<(), String> {
+    let pull_rows = {
+        let mut statement = transaction
+            .prepare(
+                "SELECT wp.id, wi.rarity
+                 FROM warp_pulls wp
+                 INNER JOIN warp_items wi ON wi.id = wp.warp_item_id
+                 WHERE wp.account_id = ?1 AND wp.banner_id = ?2
+                 ORDER BY wp.pulled_at ASC, wp.sequence_in_timestamp_group ASC, wp.id ASC",
+            )
+            .map_err(|error| format!("Failed to prepare pity recompute query: {error}"))?;
+        let rows = statement
+            .query_map(params![account_id, banner_id], |row| {
+                Ok(WarpPullPityCandidate {
+                    id: row.get(0)?,
+                    rarity: row.get(1)?,
+                })
+            })
+            .map_err(|error| format!("Failed to query pulls for pity recompute: {error}"))?;
+
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("Failed to decode pulls for pity recompute: {error}"))?
+    };
+
+    let mut update_statement = transaction
+        .prepare("UPDATE warp_pulls SET pity_4 = ?2, pity_5 = ?3 WHERE id = ?1")
+        .map_err(|error| format!("Failed to prepare pity update statement: {error}"))?;
+    let mut four_star_pity = 0;
+    let mut five_star_pity = 0;
+
+    for pull in pull_rows {
+        four_star_pity += 1;
+        five_star_pity += 1;
+
+        let pity_four_at_pull = if pull.rarity >= 4 {
+            Some(four_star_pity)
+        } else {
+            None
+        };
+        let pity_five_at_pull = if pull.rarity == 5 {
+            Some(five_star_pity)
+        } else {
+            None
+        };
+
+        update_statement
+            .execute(params![&pull.id, pity_four_at_pull, pity_five_at_pull,])
+            .map_err(|error| format!("Failed to update pity for pull {}: {error}", pull.id))?;
+
+        if pull.rarity == 5 {
+            four_star_pity = 0;
+            five_star_pity = 0;
+        } else if pull.rarity == 4 {
+            four_star_pity = 0;
+        }
+    }
+
+    Ok(())
 }
 
 fn validate_warp_item(item: &WarpItemCatalogInput) -> Result<(), String> {
@@ -978,9 +1054,54 @@ mod tests {
         assert_eq!(pulls[0].item_type, "character");
         assert_eq!(pulls[0].rarity, 4);
         assert_eq!(pulls[0].source, "manual");
+        assert_eq!(pulls[0].pity_four_at_pull, Some(1));
+        assert_eq!(pulls[0].pity_five_at_pull, None);
         assert_eq!(pulls[1].item_name, "Data Bank");
         assert_eq!(pulls[1].item_type, "light_cone");
         assert_eq!(pulls[1].rarity, 3);
+        assert_eq!(pulls[1].pity_four_at_pull, None);
+        assert_eq!(pulls[1].pity_five_at_pull, None);
+    }
+
+    #[test]
+    fn recomputes_pity_after_manual_import() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+        upsert_warp_item_catalog(
+            &mut connection,
+            &[
+                catalog_item("light-cone-2001", "2001", "Data Bank", "light_cone", 3),
+                catalog_item("character-1001", "1001", "Pela", "character", 4),
+                catalog_item("character-1002", "1002", "Sparkle", "character", 5),
+            ],
+        )
+        .expect("catalog sync");
+        let draft = manual_import_draft_with_pulls(vec![
+            manual_import_pull("character_event", "light-cone-2001", "Data Bank", 1),
+            manual_import_pull("character_event", "character-1001", "Pela", 2),
+            manual_import_pull("character_event", "character-1002", "Sparkle", 3),
+        ]);
+
+        save_manual_import_draft_to_database(&mut connection, &draft).expect("manual import");
+        let pulls = list_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: "account-1".to_string(),
+                banner_type: Some("character_event".to_string()),
+                limit: Some(10),
+            },
+        )
+        .expect("saved pulls can be listed");
+
+        assert_eq!(pulls[0].item_name, "Data Bank");
+        assert_eq!(pulls[0].pity_four_at_pull, None);
+        assert_eq!(pulls[0].pity_five_at_pull, None);
+        assert_eq!(pulls[1].item_name, "Pela");
+        assert_eq!(pulls[1].pity_four_at_pull, Some(2));
+        assert_eq!(pulls[1].pity_five_at_pull, None);
+        assert_eq!(pulls[2].item_name, "Sparkle");
+        assert_eq!(pulls[2].pity_four_at_pull, Some(1));
+        assert_eq!(pulls[2].pity_five_at_pull, Some(3));
     }
 
     #[test]
@@ -1054,6 +1175,17 @@ mod tests {
     }
 
     fn manual_import_draft() -> SaveManualImportDraftInput {
+        manual_import_draft_with_pulls(vec![
+            manual_import_pull("character_event", "character-1001", "Pela", 1),
+            manual_import_pull("character_event", "light-cone-2001", "Data Bank", 2),
+        ])
+    }
+
+    fn manual_import_draft_with_pulls(
+        pulls: Vec<SaveManualImportDraftPullInput>,
+    ) -> SaveManualImportDraftInput {
+        let records_count = pulls.len();
+
         SaveManualImportDraftInput {
             account: ManualImportAccountInput {
                 id: "account-1".to_string(),
@@ -1062,14 +1194,11 @@ mod tests {
                 nickname: Some("Saki".to_string()),
             },
             status: "ready".to_string(),
-            records_found: 2,
-            records_ready: 2,
+            records_found: records_count,
+            records_ready: records_count,
             records_skipped: 0,
             issues_count: 0,
-            pulls: vec![
-                manual_import_pull("character_event", "character-1001", "Pela", 1),
-                manual_import_pull("character_event", "light-cone-2001", "Data Bank", 2),
-            ],
+            pulls,
         }
     }
 

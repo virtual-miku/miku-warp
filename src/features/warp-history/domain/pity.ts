@@ -10,6 +10,38 @@ export type PitySummary = {
   lastFiveStarName?: string
 }
 
+export function annotatePityAtPull(pulls: WarpPull[]): WarpPull[] {
+  const annotatedPulls = pulls.map((pull) => ({ ...pull }))
+  const chronologicalPulls = annotatedPulls
+    .map((pull, index) => ({ pull, index }))
+    .sort((left, right) => {
+      const timeDifference =
+        new Date(left.pull.pulledAt).getTime() -
+        new Date(right.pull.pulledAt).getTime()
+
+      return timeDifference === 0 ? left.index - right.index : timeDifference
+    })
+  let fourStarPity = 0
+  let fiveStarPity = 0
+
+  for (const { pull } of chronologicalPulls) {
+    fourStarPity += 1
+    fiveStarPity += 1
+
+    if (pull.rarity === 5) {
+      pull.pityFourAtPull ??= fourStarPity
+      pull.pityFiveAtPull ??= fiveStarPity
+      fourStarPity = 0
+      fiveStarPity = 0
+    } else if (pull.rarity === 4) {
+      pull.pityFourAtPull ??= fourStarPity
+      fourStarPity = 0
+    }
+  }
+
+  return annotatedPulls
+}
+
 export function calculatePitySummary(pulls: WarpPull[]): PitySummary {
   const sortedPulls = [...pulls].sort(
     (left, right) =>
@@ -49,4 +81,3 @@ export function calculatePitySummary(pulls: WarpPull[]): PitySummary {
     },
   )
 }
-

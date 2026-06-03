@@ -28,7 +28,7 @@ export function WarpTimeline({ pulls }: WarpTimelineProps) {
                 {formatPullTime(pull.pulledAt)}
               </time>
               <div className="warp-pity">
-                <strong>{pull.pityFiveAtPull ? `Pity ${pull.pityFiveAtPull}` : '-'}</strong>
+                <strong>{formatPityAtPull(pull)}</strong>
                 <span>{formatSource(pull.source)}</span>
               </div>
             </article>
@@ -47,6 +47,18 @@ function formatPullTime(value: string) {
 
 function formatItemType(value: WarpPull['itemType']) {
   return value === 'light_cone' ? 'Light Cone' : 'Character'
+}
+
+function formatPityAtPull(pull: WarpPull) {
+  if (pull.rarity === 5 && pull.pityFiveAtPull) {
+    return `5-star pity ${pull.pityFiveAtPull}`
+  }
+
+  if (pull.rarity >= 4 && pull.pityFourAtPull) {
+    return `4-star pity ${pull.pityFourAtPull}`
+  }
+
+  return '-'
 }
 
 function formatSource(value: WarpPull['source']) {

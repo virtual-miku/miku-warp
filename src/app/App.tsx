@@ -29,7 +29,10 @@ import { PityOverview } from '../features/warp-history/components/PityOverview'
 import { WarpTimeline } from '../features/warp-history/components/WarpTimeline'
 import { itemCatalog } from '../features/warp-history/data/item-catalog'
 import { getBannerLabel, type BannerType } from '../features/warp-history/domain/banner'
-import { calculatePitySummary } from '../features/warp-history/domain/pity'
+import {
+  annotatePityAtPull,
+  calculatePitySummary,
+} from '../features/warp-history/domain/pity'
 import type { WarpPull } from '../features/warp-history/domain/warp-pull'
 import { demoPulls } from '../features/warp-history/data/demo-pulls'
 import { AppButton } from '../shared/ui/AppButton'
@@ -55,7 +58,13 @@ export function App() {
     () => parseManualWarpNote(manualNoteDraft, itemCatalog),
     [manualNoteDraft],
   )
-  const timelinePulls = persistedPulls.length > 0 ? persistedPulls : demoActivePulls
+  const timelinePulls = useMemo(
+    () =>
+      annotatePityAtPull(
+        persistedPulls.length > 0 ? persistedPulls : demoActivePulls,
+      ),
+    [persistedPulls],
+  )
   const pitySummary = useMemo(
     () => calculatePitySummary(timelinePulls),
     [timelinePulls],
