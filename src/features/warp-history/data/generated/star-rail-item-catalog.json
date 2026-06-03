@@ -1,0 +1,2454 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "name": "Mar-7th/StarRailRes",
+    "repository": "https://github.com/Mar-7th/StarRailRes",
+    "branch": "master",
+    "license": "AGPL-3.0",
+    "version": "4.3.0",
+    "timestamp": 1780275330
+  },
+  "generatedAt": "2026-06-03T08:55:59.436Z",
+  "items": [
+    {
+      "id": "character-1308",
+      "sourceId": "1308",
+      "name": "Acheron",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1308.png",
+      "previewPath": "image/character_preview/1308.png",
+      "portraitPath": "image/character_portrait/1308.png"
+    },
+    {
+      "id": "character-1402",
+      "sourceId": "1402",
+      "name": "Aglaea",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1402.png",
+      "previewPath": "image/character_preview/1402.png",
+      "portraitPath": "image/character_portrait/1402.png"
+    },
+    {
+      "id": "character-1405",
+      "sourceId": "1405",
+      "name": "Anaxa",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1405.png",
+      "previewPath": "image/character_preview/1405.png",
+      "portraitPath": "image/character_portrait/1405.png"
+    },
+    {
+      "id": "character-1015",
+      "sourceId": "1015",
+      "name": "Archer",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1015.png",
+      "previewPath": "image/character_preview/1015.png",
+      "portraitPath": "image/character_portrait/1015.png"
+    },
+    {
+      "id": "character-1302",
+      "sourceId": "1302",
+      "name": "Argenti",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1302.png",
+      "previewPath": "image/character_preview/1302.png",
+      "portraitPath": "image/character_portrait/1302.png"
+    },
+    {
+      "id": "character-1008",
+      "sourceId": "1008",
+      "name": "Arlan",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1008.png",
+      "previewPath": "image/character_preview/1008.png",
+      "portraitPath": "image/character_portrait/1008.png"
+    },
+    {
+      "id": "character-1504",
+      "sourceId": "1504",
+      "name": "Ashveil",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1504.png",
+      "previewPath": "image/character_preview/1504.png",
+      "portraitPath": "image/character_portrait/1504.png"
+    },
+    {
+      "id": "character-1009",
+      "sourceId": "1009",
+      "name": "Asta",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1009.png",
+      "previewPath": "image/character_preview/1009.png",
+      "portraitPath": "image/character_portrait/1009.png"
+    },
+    {
+      "id": "character-1304",
+      "sourceId": "1304",
+      "name": "Aventurine",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1304.png",
+      "previewPath": "image/character_preview/1304.png",
+      "portraitPath": "image/character_portrait/1304.png"
+    },
+    {
+      "id": "character-1211",
+      "sourceId": "1211",
+      "name": "Bailu",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1211.png",
+      "previewPath": "image/character_preview/1211.png",
+      "portraitPath": "image/character_portrait/1211.png"
+    },
+    {
+      "id": "character-1307",
+      "sourceId": "1307",
+      "name": "Black Swan",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1307.png",
+      "previewPath": "image/character_preview/1307.png",
+      "portraitPath": "image/character_portrait/1307.png"
+    },
+    {
+      "id": "character-1205",
+      "sourceId": "1205",
+      "name": "Blade",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1205.png",
+      "previewPath": "image/character_preview/1205.png",
+      "portraitPath": "image/character_portrait/1205.png"
+    },
+    {
+      "id": "character-1315",
+      "sourceId": "1315",
+      "name": "Boothill",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1315.png",
+      "previewPath": "image/character_preview/1315.png",
+      "portraitPath": "image/character_portrait/1315.png"
+    },
+    {
+      "id": "character-1101",
+      "sourceId": "1101",
+      "name": "Bronya",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1101.png",
+      "previewPath": "image/character_preview/1101.png",
+      "portraitPath": "image/character_portrait/1101.png"
+    },
+    {
+      "id": "character-1407",
+      "sourceId": "1407",
+      "name": "Castorice",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1407.png",
+      "previewPath": "image/character_preview/1407.png",
+      "portraitPath": "image/character_portrait/1407.png"
+    },
+    {
+      "id": "character-1412",
+      "sourceId": "1412",
+      "name": "Cerydra",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1412.png",
+      "previewPath": "image/character_preview/1412.png",
+      "portraitPath": "image/character_portrait/1412.png"
+    },
+    {
+      "id": "character-1406",
+      "sourceId": "1406",
+      "name": "Cipher",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1406.png",
+      "previewPath": "image/character_preview/1406.png",
+      "portraitPath": "image/character_portrait/1406.png"
+    },
+    {
+      "id": "character-1107",
+      "sourceId": "1107",
+      "name": "Clara",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1107.png",
+      "previewPath": "image/character_preview/1107.png",
+      "portraitPath": "image/character_portrait/1107.png"
+    },
+    {
+      "id": "character-1415",
+      "sourceId": "1415",
+      "name": "Cyrene",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1415.png",
+      "previewPath": "image/character_preview/1415.png",
+      "portraitPath": "image/character_portrait/1415.png"
+    },
+    {
+      "id": "character-1002",
+      "sourceId": "1002",
+      "name": "Dan Heng",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1002.png",
+      "previewPath": "image/character_preview/1002.png",
+      "portraitPath": "image/character_portrait/1002.png"
+    },
+    {
+      "id": "character-1213",
+      "sourceId": "1213",
+      "name": "Dan Heng • Imbibitor Lunae",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1213.png",
+      "previewPath": "image/character_preview/1213.png",
+      "portraitPath": "image/character_portrait/1213.png"
+    },
+    {
+      "id": "character-1414",
+      "sourceId": "1414",
+      "name": "Dan Heng • Permansor Terrae",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1414.png",
+      "previewPath": "image/character_preview/1414.png",
+      "portraitPath": "image/character_portrait/1414.png"
+    },
+    {
+      "id": "character-1305",
+      "sourceId": "1305",
+      "name": "Dr. Ratio",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1305.png",
+      "previewPath": "image/character_preview/1305.png",
+      "portraitPath": "image/character_portrait/1305.png"
+    },
+    {
+      "id": "character-1505",
+      "sourceId": "1505",
+      "name": "Evanescia",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1505.png",
+      "previewPath": "image/character_preview/1505.png",
+      "portraitPath": "image/character_portrait/1505.png"
+    },
+    {
+      "id": "character-1413",
+      "sourceId": "1413",
+      "name": "Evernight",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1413.png",
+      "previewPath": "image/character_preview/1413.png",
+      "portraitPath": "image/character_portrait/1413.png"
+    },
+    {
+      "id": "character-1220",
+      "sourceId": "1220",
+      "name": "Feixiao",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1220.png",
+      "previewPath": "image/character_preview/1220.png",
+      "portraitPath": "image/character_portrait/1220.png"
+    },
+    {
+      "id": "character-1310",
+      "sourceId": "1310",
+      "name": "Firefly",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1310.png",
+      "previewPath": "image/character_preview/1310.png",
+      "portraitPath": "image/character_portrait/1310.png"
+    },
+    {
+      "id": "character-1208",
+      "sourceId": "1208",
+      "name": "Fu Xuan",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1208.png",
+      "previewPath": "image/character_preview/1208.png",
+      "portraitPath": "image/character_portrait/1208.png"
+    },
+    {
+      "id": "character-1225",
+      "sourceId": "1225",
+      "name": "Fugue",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1225.png",
+      "previewPath": "image/character_preview/1225.png",
+      "portraitPath": "image/character_portrait/1225.png"
+    },
+    {
+      "id": "character-1301",
+      "sourceId": "1301",
+      "name": "Gallagher",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1301.png",
+      "previewPath": "image/character_preview/1301.png",
+      "portraitPath": "image/character_portrait/1301.png"
+    },
+    {
+      "id": "character-1104",
+      "sourceId": "1104",
+      "name": "Gepard",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1104.png",
+      "previewPath": "image/character_preview/1104.png",
+      "portraitPath": "image/character_portrait/1104.png"
+    },
+    {
+      "id": "character-1210",
+      "sourceId": "1210",
+      "name": "Guinaifen",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1210.png",
+      "previewPath": "image/character_preview/1210.png",
+      "portraitPath": "image/character_portrait/1210.png"
+    },
+    {
+      "id": "character-1215",
+      "sourceId": "1215",
+      "name": "Hanya",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1215.png",
+      "previewPath": "image/character_preview/1215.png",
+      "portraitPath": "image/character_portrait/1215.png"
+    },
+    {
+      "id": "character-1013",
+      "sourceId": "1013",
+      "name": "Herta",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1013.png",
+      "previewPath": "image/character_preview/1013.png",
+      "portraitPath": "image/character_portrait/1013.png"
+    },
+    {
+      "id": "character-1003",
+      "sourceId": "1003",
+      "name": "Himeko",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1003.png",
+      "previewPath": "image/character_preview/1003.png",
+      "portraitPath": "image/character_portrait/1003.png"
+    },
+    {
+      "id": "character-1109",
+      "sourceId": "1109",
+      "name": "Hook",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1109.png",
+      "previewPath": "image/character_preview/1109.png",
+      "portraitPath": "image/character_portrait/1109.png"
+    },
+    {
+      "id": "character-1217",
+      "sourceId": "1217",
+      "name": "Huohuo",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1217.png",
+      "previewPath": "image/character_preview/1217.png",
+      "portraitPath": "image/character_portrait/1217.png"
+    },
+    {
+      "id": "character-1409",
+      "sourceId": "1409",
+      "name": "Hyacine",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1409.png",
+      "previewPath": "image/character_preview/1409.png",
+      "portraitPath": "image/character_portrait/1409.png"
+    },
+    {
+      "id": "character-1410",
+      "sourceId": "1410",
+      "name": "Hysilens",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1410.png",
+      "previewPath": "image/character_preview/1410.png",
+      "portraitPath": "image/character_portrait/1410.png"
+    },
+    {
+      "id": "character-1314",
+      "sourceId": "1314",
+      "name": "Jade",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1314.png",
+      "previewPath": "image/character_preview/1314.png",
+      "portraitPath": "image/character_portrait/1314.png"
+    },
+    {
+      "id": "character-1218",
+      "sourceId": "1218",
+      "name": "Jiaoqiu",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1218.png",
+      "previewPath": "image/character_preview/1218.png",
+      "portraitPath": "image/character_portrait/1218.png"
+    },
+    {
+      "id": "character-1204",
+      "sourceId": "1204",
+      "name": "Jing Yuan",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1204.png",
+      "previewPath": "image/character_preview/1204.png",
+      "portraitPath": "image/character_portrait/1204.png"
+    },
+    {
+      "id": "character-1212",
+      "sourceId": "1212",
+      "name": "Jingliu",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1212.png",
+      "previewPath": "image/character_preview/1212.png",
+      "portraitPath": "image/character_portrait/1212.png"
+    },
+    {
+      "id": "character-1005",
+      "sourceId": "1005",
+      "name": "Kafka",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1005.png",
+      "previewPath": "image/character_preview/1005.png",
+      "portraitPath": "image/character_portrait/1005.png"
+    },
+    {
+      "id": "character-1222",
+      "sourceId": "1222",
+      "name": "Lingsha",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1222.png",
+      "previewPath": "image/character_preview/1222.png",
+      "portraitPath": "image/character_portrait/1222.png"
+    },
+    {
+      "id": "character-1111",
+      "sourceId": "1111",
+      "name": "Luka",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1111.png",
+      "previewPath": "image/character_preview/1111.png",
+      "portraitPath": "image/character_portrait/1111.png"
+    },
+    {
+      "id": "character-1203",
+      "sourceId": "1203",
+      "name": "Luocha",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1203.png",
+      "previewPath": "image/character_preview/1203.png",
+      "portraitPath": "image/character_portrait/1203.png"
+    },
+    {
+      "id": "character-1110",
+      "sourceId": "1110",
+      "name": "Lynx",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1110.png",
+      "previewPath": "image/character_preview/1110.png",
+      "portraitPath": "image/character_portrait/1110.png"
+    },
+    {
+      "id": "character-1001",
+      "sourceId": "1001",
+      "name": "March 7th",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1001.png",
+      "previewPath": "image/character_preview/1001.png",
+      "portraitPath": "image/character_portrait/1001.png"
+    },
+    {
+      "id": "character-1224",
+      "sourceId": "1224",
+      "name": "March 7th",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1224.png",
+      "previewPath": "image/character_preview/1224.png",
+      "portraitPath": "image/character_portrait/1224.png"
+    },
+    {
+      "id": "character-1312",
+      "sourceId": "1312",
+      "name": "Misha",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1312.png",
+      "previewPath": "image/character_preview/1312.png",
+      "portraitPath": "image/character_portrait/1312.png"
+    },
+    {
+      "id": "character-1507",
+      "sourceId": "1507",
+      "name": "Mortenax Blade",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1507.png",
+      "previewPath": "image/character_preview/1507.png",
+      "portraitPath": "image/character_portrait/1507.png"
+    },
+    {
+      "id": "character-1223",
+      "sourceId": "1223",
+      "name": "Moze",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1223.png",
+      "previewPath": "image/character_preview/1223.png",
+      "portraitPath": "image/character_portrait/1223.png"
+    },
+    {
+      "id": "character-1404",
+      "sourceId": "1404",
+      "name": "Mydei",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1404.png",
+      "previewPath": "image/character_preview/1404.png",
+      "portraitPath": "image/character_portrait/1404.png"
+    },
+    {
+      "id": "character-1105",
+      "sourceId": "1105",
+      "name": "Natasha",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1105.png",
+      "previewPath": "image/character_preview/1105.png",
+      "portraitPath": "image/character_portrait/1105.png"
+    },
+    {
+      "id": "character-1106",
+      "sourceId": "1106",
+      "name": "Pela",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1106.png",
+      "previewPath": "image/character_preview/1106.png",
+      "portraitPath": "image/character_portrait/1106.png"
+    },
+    {
+      "id": "character-1408",
+      "sourceId": "1408",
+      "name": "Phainon",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1408.png",
+      "previewPath": "image/character_preview/1408.png",
+      "portraitPath": "image/character_portrait/1408.png"
+    },
+    {
+      "id": "character-1201",
+      "sourceId": "1201",
+      "name": "Qingque",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1201.png",
+      "previewPath": "image/character_preview/1201.png",
+      "portraitPath": "image/character_portrait/1201.png"
+    },
+    {
+      "id": "character-1317",
+      "sourceId": "1317",
+      "name": "Rappa",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1317.png",
+      "previewPath": "image/character_preview/1317.png",
+      "portraitPath": "image/character_portrait/1317.png"
+    },
+    {
+      "id": "character-1309",
+      "sourceId": "1309",
+      "name": "Robin",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1309.png",
+      "previewPath": "image/character_preview/1309.png",
+      "portraitPath": "image/character_portrait/1309.png"
+    },
+    {
+      "id": "character-1303",
+      "sourceId": "1303",
+      "name": "Ruan Mei",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1303.png",
+      "previewPath": "image/character_preview/1303.png",
+      "portraitPath": "image/character_portrait/1303.png"
+    },
+    {
+      "id": "character-1014",
+      "sourceId": "1014",
+      "name": "Saber",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1014.png",
+      "previewPath": "image/character_preview/1014.png",
+      "portraitPath": "image/character_portrait/1014.png"
+    },
+    {
+      "id": "character-1108",
+      "sourceId": "1108",
+      "name": "Sampo",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1108.png",
+      "previewPath": "image/character_preview/1108.png",
+      "portraitPath": "image/character_portrait/1108.png"
+    },
+    {
+      "id": "character-1102",
+      "sourceId": "1102",
+      "name": "Seele",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1102.png",
+      "previewPath": "image/character_preview/1102.png",
+      "portraitPath": "image/character_portrait/1102.png"
+    },
+    {
+      "id": "character-1103",
+      "sourceId": "1103",
+      "name": "Serval",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1103.png",
+      "previewPath": "image/character_preview/1103.png",
+      "portraitPath": "image/character_portrait/1103.png"
+    },
+    {
+      "id": "character-1006",
+      "sourceId": "1006",
+      "name": "Silver Wolf",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1006.png",
+      "previewPath": "image/character_preview/1006.png",
+      "portraitPath": "image/character_portrait/1006.png"
+    },
+    {
+      "id": "character-1506",
+      "sourceId": "1506",
+      "name": "Silver Wolf LV.999",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1506.png",
+      "previewPath": "image/character_preview/1506.png",
+      "portraitPath": "image/character_portrait/1506.png"
+    },
+    {
+      "id": "character-1306",
+      "sourceId": "1306",
+      "name": "Sparkle",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1306.png",
+      "previewPath": "image/character_preview/1306.png",
+      "portraitPath": "image/character_portrait/1306.png"
+    },
+    {
+      "id": "character-1501",
+      "sourceId": "1501",
+      "name": "Sparxie",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1501.png",
+      "previewPath": "image/character_preview/1501.png",
+      "portraitPath": "image/character_portrait/1501.png"
+    },
+    {
+      "id": "character-1313",
+      "sourceId": "1313",
+      "name": "Sunday",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1313.png",
+      "previewPath": "image/character_preview/1313.png",
+      "portraitPath": "image/character_portrait/1313.png"
+    },
+    {
+      "id": "character-1206",
+      "sourceId": "1206",
+      "name": "Sushang",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1206.png",
+      "previewPath": "image/character_preview/1206.png",
+      "portraitPath": "image/character_portrait/1206.png"
+    },
+    {
+      "id": "character-1321",
+      "sourceId": "1321",
+      "name": "The Dahlia",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1321.png",
+      "previewPath": "image/character_preview/1321.png",
+      "portraitPath": "image/character_portrait/1321.png"
+    },
+    {
+      "id": "character-1401",
+      "sourceId": "1401",
+      "name": "The Herta",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1401.png",
+      "previewPath": "image/character_preview/1401.png",
+      "portraitPath": "image/character_portrait/1401.png"
+    },
+    {
+      "id": "character-1202",
+      "sourceId": "1202",
+      "name": "Tingyun",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1202.png",
+      "previewPath": "image/character_preview/1202.png",
+      "portraitPath": "image/character_portrait/1202.png"
+    },
+    {
+      "id": "character-1112",
+      "sourceId": "1112",
+      "name": "Topaz & Numby",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1112.png",
+      "previewPath": "image/character_preview/1112.png",
+      "portraitPath": "image/character_portrait/1112.png"
+    },
+    {
+      "id": "character-1403",
+      "sourceId": "1403",
+      "name": "Tribbie",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1403.png",
+      "previewPath": "image/character_preview/1403.png",
+      "portraitPath": "image/character_portrait/1403.png"
+    },
+    {
+      "id": "character-1004",
+      "sourceId": "1004",
+      "name": "Welt",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1004.png",
+      "previewPath": "image/character_preview/1004.png",
+      "portraitPath": "image/character_portrait/1004.png"
+    },
+    {
+      "id": "character-1214",
+      "sourceId": "1214",
+      "name": "Xueyi",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1214.png",
+      "previewPath": "image/character_preview/1214.png",
+      "portraitPath": "image/character_portrait/1214.png"
+    },
+    {
+      "id": "character-1209",
+      "sourceId": "1209",
+      "name": "Yanqing",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1209.png",
+      "previewPath": "image/character_preview/1209.png",
+      "portraitPath": "image/character_portrait/1209.png"
+    },
+    {
+      "id": "character-1502",
+      "sourceId": "1502",
+      "name": "Yao Guang",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1502.png",
+      "previewPath": "image/character_preview/1502.png",
+      "portraitPath": "image/character_portrait/1502.png"
+    },
+    {
+      "id": "character-1207",
+      "sourceId": "1207",
+      "name": "Yukong",
+      "itemType": "character",
+      "rarity": 4,
+      "iconPath": "icon/character/1207.png",
+      "previewPath": "image/character_preview/1207.png",
+      "portraitPath": "image/character_portrait/1207.png"
+    },
+    {
+      "id": "character-1221",
+      "sourceId": "1221",
+      "name": "Yunli",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1221.png",
+      "previewPath": "image/character_preview/1221.png",
+      "portraitPath": "image/character_portrait/1221.png"
+    },
+    {
+      "id": "light-cone-21060",
+      "sourceId": "21060",
+      "name": "A Dream Scented in Wheat",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21060.png",
+      "previewPath": "image/light_cone_preview/21060.png",
+      "portraitPath": "image/light_cone_portrait/21060.png"
+    },
+    {
+      "id": "light-cone-23034",
+      "sourceId": "23034",
+      "name": "A Grounded Ascent",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23034.png",
+      "previewPath": "image/light_cone_preview/23034.png",
+      "portraitPath": "image/light_cone_portrait/23034.png"
+    },
+    {
+      "id": "light-cone-21012",
+      "sourceId": "21012",
+      "name": "A Secret Vow",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21012.png",
+      "previewPath": "image/light_cone_preview/21012.png",
+      "portraitPath": "image/light_cone_portrait/21012.png"
+    },
+    {
+      "id": "light-cone-23045",
+      "sourceId": "23045",
+      "name": "A Thankless Coronation",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23045.png",
+      "previewPath": "image/light_cone_preview/23045.png",
+      "portraitPath": "image/light_cone_portrait/23045.png"
+    },
+    {
+      "id": "light-cone-21058",
+      "sourceId": "21058",
+      "name": "A Trail of Bygone Blood",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21058.png",
+      "previewPath": "image/light_cone_preview/21058.png",
+      "portraitPath": "image/light_cone_portrait/21058.png"
+    },
+    {
+      "id": "light-cone-20014",
+      "sourceId": "20014",
+      "name": "Adversarial",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20014.png",
+      "previewPath": "image/light_cone_preview/20014.png",
+      "portraitPath": "image/light_cone_portrait/20014.png"
+    },
+    {
+      "id": "light-cone-21045",
+      "sourceId": "21045",
+      "name": "After the Charmony Fall",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21045.png",
+      "previewPath": "image/light_cone_preview/21045.png",
+      "portraitPath": "image/light_cone_portrait/21045.png"
+    },
+    {
+      "id": "light-cone-23024",
+      "sourceId": "23024",
+      "name": "Along the Passing Shore",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23024.png",
+      "previewPath": "image/light_cone_preview/23024.png",
+      "portraitPath": "image/light_cone_portrait/23024.png"
+    },
+    {
+      "id": "light-cone-20003",
+      "sourceId": "20003",
+      "name": "Amber",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20003.png",
+      "previewPath": "image/light_cone_preview/20003.png",
+      "portraitPath": "image/light_cone_portrait/20003.png"
+    },
+    {
+      "id": "light-cone-23018",
+      "sourceId": "23018",
+      "name": "An Instant Before A Gaze",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23018.png",
+      "previewPath": "image/light_cone_preview/23018.png",
+      "portraitPath": "image/light_cone_portrait/23018.png"
+    },
+    {
+      "id": "light-cone-20000",
+      "sourceId": "20000",
+      "name": "Arrows",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20000.png",
+      "previewPath": "image/light_cone_preview/20000.png",
+      "portraitPath": "image/light_cone_portrait/20000.png"
+    },
+    {
+      "id": "light-cone-23020",
+      "sourceId": "23020",
+      "name": "Baptism of Pure Thought",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23020.png",
+      "previewPath": "image/light_cone_preview/23020.png",
+      "portraitPath": "image/light_cone_portrait/23020.png"
+    },
+    {
+      "id": "light-cone-23010",
+      "sourceId": "23010",
+      "name": "Before Dawn",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23010.png",
+      "previewPath": "image/light_cone_preview/23010.png",
+      "portraitPath": "image/light_cone_portrait/23010.png"
+    },
+    {
+      "id": "light-cone-22000",
+      "sourceId": "22000",
+      "name": "Before the Tutorial Mission Starts",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/22000.png",
+      "previewPath": "image/light_cone_preview/22000.png",
+      "portraitPath": "image/light_cone_portrait/22000.png"
+    },
+    {
+      "id": "light-cone-21044",
+      "sourceId": "21044",
+      "name": "Boundless Choreo",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21044.png",
+      "previewPath": "image/light_cone_preview/21044.png",
+      "portraitPath": "image/light_cone_portrait/21044.png"
+    },
+    {
+      "id": "light-cone-23015",
+      "sourceId": "23015",
+      "name": "Brighter Than the Sun",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23015.png",
+      "previewPath": "image/light_cone_preview/23015.png",
+      "portraitPath": "image/light_cone_portrait/23015.png"
+    },
+    {
+      "id": "light-cone-23003",
+      "sourceId": "23003",
+      "name": "But the Battle Isn't Over",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23003.png",
+      "previewPath": "image/light_cone_preview/23003.png",
+      "portraitPath": "image/light_cone_portrait/23003.png"
+    },
+    {
+      "id": "light-cone-21032",
+      "sourceId": "21032",
+      "name": "Carve the Moon, Weave the Clouds",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21032.png",
+      "previewPath": "image/light_cone_preview/21032.png",
+      "portraitPath": "image/light_cone_portrait/21032.png"
+    },
+    {
+      "id": "light-cone-20005",
+      "sourceId": "20005",
+      "name": "Chorus",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20005.png",
+      "previewPath": "image/light_cone_preview/20005.png",
+      "portraitPath": "image/light_cone_portrait/20005.png"
+    },
+    {
+      "id": "light-cone-20002",
+      "sourceId": "20002",
+      "name": "Collapsing Sky",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20002.png",
+      "previewPath": "image/light_cone_preview/20002.png",
+      "portraitPath": "image/light_cone_portrait/20002.png"
+    },
+    {
+      "id": "light-cone-21043",
+      "sourceId": "21043",
+      "name": "Concert for Two",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21043.png",
+      "previewPath": "image/light_cone_preview/21043.png",
+      "portraitPath": "image/light_cone_portrait/21043.png"
+    },
+    {
+      "id": "light-cone-20001",
+      "sourceId": "20001",
+      "name": "Cornucopia",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20001.png",
+      "previewPath": "image/light_cone_preview/20001.png",
+      "portraitPath": "image/light_cone_portrait/20001.png"
+    },
+    {
+      "id": "light-cone-24001",
+      "sourceId": "24001",
+      "name": "Cruising in the Stellar Sea",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/24001.png",
+      "previewPath": "image/light_cone_preview/24001.png",
+      "portraitPath": "image/light_cone_portrait/24001.png"
+    },
+    {
+      "id": "light-cone-23030",
+      "sourceId": "23030",
+      "name": "Dance at Sunset",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23030.png",
+      "previewPath": "image/light_cone_preview/23030.png",
+      "portraitPath": "image/light_cone_portrait/23030.png"
+    },
+    {
+      "id": "light-cone-21018",
+      "sourceId": "21018",
+      "name": "Dance! Dance! Dance!",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21018.png",
+      "previewPath": "image/light_cone_preview/21018.png",
+      "portraitPath": "image/light_cone_portrait/21018.png"
+    },
+    {
+      "id": "light-cone-20007",
+      "sourceId": "20007",
+      "name": "Darting Arrow",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20007.png",
+      "previewPath": "image/light_cone_preview/20007.png",
+      "portraitPath": "image/light_cone_portrait/20007.png"
+    },
+    {
+      "id": "light-cone-20006",
+      "sourceId": "20006",
+      "name": "Data Bank",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20006.png",
+      "previewPath": "image/light_cone_preview/20006.png",
+      "portraitPath": "image/light_cone_portrait/20006.png"
+    },
+    {
+      "id": "light-cone-21002",
+      "sourceId": "21002",
+      "name": "Day One of My New Life",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21002.png",
+      "previewPath": "image/light_cone_preview/21002.png",
+      "portraitPath": "image/light_cone_portrait/21002.png"
+    },
+    {
+      "id": "light-cone-23053",
+      "sourceId": "23053",
+      "name": "Dazzled by a Flowery World",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23053.png",
+      "previewPath": "image/light_cone_preview/23053.png",
+      "portraitPath": "image/light_cone_portrait/23053.png"
+    },
+    {
+      "id": "light-cone-20010",
+      "sourceId": "20010",
+      "name": "Defense",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20010.png",
+      "previewPath": "image/light_cone_preview/20010.png",
+      "portraitPath": "image/light_cone_portrait/20010.png"
+    },
+    {
+      "id": "light-cone-21039",
+      "sourceId": "21039",
+      "name": "Destiny's Threads Forewoven",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21039.png",
+      "previewPath": "image/light_cone_preview/21039.png",
+      "portraitPath": "image/light_cone_portrait/21039.png"
+    },
+    {
+      "id": "light-cone-21048",
+      "sourceId": "21048",
+      "name": "Dream's Montage",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21048.png",
+      "previewPath": "image/light_cone_preview/21048.png",
+      "portraitPath": "image/light_cone_portrait/21048.png"
+    },
+    {
+      "id": "light-cone-21036",
+      "sourceId": "21036",
+      "name": "Dreamville Adventure",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21036.png",
+      "previewPath": "image/light_cone_preview/21036.png",
+      "portraitPath": "image/light_cone_portrait/21036.png"
+    },
+    {
+      "id": "light-cone-23021",
+      "sourceId": "23021",
+      "name": "Earthly Escapade",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23021.png",
+      "previewPath": "image/light_cone_preview/23021.png",
+      "portraitPath": "image/light_cone_portrait/23021.png"
+    },
+    {
+      "id": "light-cone-23008",
+      "sourceId": "23008",
+      "name": "Echoes of the Coffin",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23008.png",
+      "previewPath": "image/light_cone_preview/23008.png",
+      "portraitPath": "image/light_cone_portrait/23008.png"
+    },
+    {
+      "id": "light-cone-24006",
+      "sourceId": "24006",
+      "name": "Elation Brimming With Blessings",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/24006.png",
+      "previewPath": "image/light_cone_preview/24006.png",
+      "portraitPath": "image/light_cone_portrait/24006.png"
+    },
+    {
+      "id": "light-cone-23048",
+      "sourceId": "23048",
+      "name": "Epoch Etched in Golden Blood",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23048.png",
+      "previewPath": "image/light_cone_preview/23048.png",
+      "portraitPath": "image/light_cone_portrait/23048.png"
+    },
+    {
+      "id": "light-cone-24004",
+      "sourceId": "24004",
+      "name": "Eternal Calculus",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/24004.png",
+      "previewPath": "image/light_cone_preview/24004.png",
+      "portraitPath": "image/light_cone_portrait/24004.png"
+    },
+    {
+      "id": "light-cone-21008",
+      "sourceId": "21008",
+      "name": "Eyes of the Prey",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21008.png",
+      "previewPath": "image/light_cone_preview/21008.png",
+      "portraitPath": "image/light_cone_portrait/21008.png"
+    },
+    {
+      "id": "light-cone-21022",
+      "sourceId": "21022",
+      "name": "Fermata",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21022.png",
+      "previewPath": "image/light_cone_preview/21022.png",
+      "portraitPath": "image/light_cone_portrait/21022.png"
+    },
+    {
+      "id": "light-cone-21037",
+      "sourceId": "21037",
+      "name": "Final Victor",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21037.png",
+      "previewPath": "image/light_cone_preview/21037.png",
+      "portraitPath": "image/light_cone_portrait/21037.png"
+    },
+    {
+      "id": "light-cone-20008",
+      "sourceId": "20008",
+      "name": "Fine Fruit",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20008.png",
+      "previewPath": "image/light_cone_preview/20008.png",
+      "portraitPath": "image/light_cone_portrait/20008.png"
+    },
+    {
+      "id": "light-cone-23039",
+      "sourceId": "23039",
+      "name": "Flame of Blood, Blaze My Path",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23039.png",
+      "previewPath": "image/light_cone_preview/23039.png",
+      "portraitPath": "image/light_cone_portrait/23039.png"
+    },
+    {
+      "id": "light-cone-21038",
+      "sourceId": "21038",
+      "name": "Flames Afar",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21038.png",
+      "previewPath": "image/light_cone_preview/21038.png",
+      "portraitPath": "image/light_cone_portrait/21038.png"
+    },
+    {
+      "id": "light-cone-23026",
+      "sourceId": "23026",
+      "name": "Flowing Nightglow",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23026.png",
+      "previewPath": "image/light_cone_preview/23026.png",
+      "portraitPath": "image/light_cone_portrait/23026.png"
+    },
+    {
+      "id": "light-cone-22006",
+      "sourceId": "22006",
+      "name": "Fly Into a Pink Tomorrow",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/22006.png",
+      "previewPath": "image/light_cone_preview/22006.png",
+      "portraitPath": "image/light_cone_portrait/22006.png"
+    },
+    {
+      "id": "light-cone-22002",
+      "sourceId": "22002",
+      "name": "For Tomorrow's Journey",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/22002.png",
+      "previewPath": "image/light_cone_preview/22002.png",
+      "portraitPath": "image/light_cone_portrait/22002.png"
+    },
+    {
+      "id": "light-cone-21051",
+      "sourceId": "21051",
+      "name": "Geniuses' Greetings",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21051.png",
+      "previewPath": "image/light_cone_preview/21051.png",
+      "portraitPath": "image/light_cone_portrait/21051.png"
+    },
+    {
+      "id": "light-cone-21020",
+      "sourceId": "21020",
+      "name": "Geniuses' Repose",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21020.png",
+      "previewPath": "image/light_cone_preview/21020.png",
+      "portraitPath": "image/light_cone_portrait/21020.png"
+    },
+    {
+      "id": "light-cone-21001",
+      "sourceId": "21001",
+      "name": "Good Night and Sleep Well",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21001.png",
+      "previewPath": "image/light_cone_preview/21001.png",
+      "portraitPath": "image/light_cone_portrait/21001.png"
+    },
+    {
+      "id": "light-cone-22001",
+      "sourceId": "22001",
+      "name": "Hey, Over Here",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/22001.png",
+      "previewPath": "image/light_cone_preview/22001.png",
+      "portraitPath": "image/light_cone_portrait/22001.png"
+    },
+    {
+      "id": "light-cone-20018",
+      "sourceId": "20018",
+      "name": "Hidden Shadow",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20018.png",
+      "previewPath": "image/light_cone_preview/20018.png",
+      "portraitPath": "image/light_cone_portrait/20018.png"
+    },
+    {
+      "id": "light-cone-21061",
+      "sourceId": "21061",
+      "name": "Holiday Thermae Escapade",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21061.png",
+      "previewPath": "image/light_cone_preview/21061.png",
+      "portraitPath": "image/light_cone_portrait/21061.png"
+    },
+    {
+      "id": "light-cone-23014",
+      "sourceId": "23014",
+      "name": "I Shall Be My Own Sword",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23014.png",
+      "previewPath": "image/light_cone_preview/23014.png",
+      "portraitPath": "image/light_cone_portrait/23014.png"
+    },
+    {
+      "id": "light-cone-23031",
+      "sourceId": "23031",
+      "name": "I Venture Forth to Hunt",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23031.png",
+      "previewPath": "image/light_cone_preview/23031.png",
+      "portraitPath": "image/light_cone_portrait/23031.png"
+    },
+    {
+      "id": "light-cone-23038",
+      "sourceId": "23038",
+      "name": "If Time Were a Flower",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23038.png",
+      "previewPath": "image/light_cone_preview/23038.png",
+      "portraitPath": "image/light_cone_portrait/23038.png"
+    },
+    {
+      "id": "light-cone-21056",
+      "sourceId": "21056",
+      "name": "In Pursuit of the Wind",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21056.png",
+      "previewPath": "image/light_cone_preview/21056.png",
+      "portraitPath": "image/light_cone_portrait/21056.png"
+    },
+    {
+      "id": "light-cone-23004",
+      "sourceId": "23004",
+      "name": "In the Name of the World",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23004.png",
+      "previewPath": "image/light_cone_preview/23004.png",
+      "portraitPath": "image/light_cone_portrait/23004.png"
+    },
+    {
+      "id": "light-cone-23001",
+      "sourceId": "23001",
+      "name": "In the Night",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23001.png",
+      "previewPath": "image/light_cone_preview/23001.png",
+      "portraitPath": "image/light_cone_portrait/23001.png"
+    },
+    {
+      "id": "light-cone-23007",
+      "sourceId": "23007",
+      "name": "Incessant Rain",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23007.png",
+      "previewPath": "image/light_cone_preview/23007.png",
+      "portraitPath": "image/light_cone_portrait/23007.png"
+    },
+    {
+      "id": "light-cone-21042",
+      "sourceId": "21042",
+      "name": "Indelible Promise",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21042.png",
+      "previewPath": "image/light_cone_preview/21042.png",
+      "portraitPath": "image/light_cone_portrait/21042.png"
+    },
+    {
+      "id": "light-cone-23023",
+      "sourceId": "23023",
+      "name": "Inherently Unjust Destiny",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23023.png",
+      "previewPath": "image/light_cone_preview/23023.png",
+      "portraitPath": "image/light_cone_portrait/23023.png"
+    },
+    {
+      "id": "light-cone-23037",
+      "sourceId": "23037",
+      "name": "Into the Unreachable Veil",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23037.png",
+      "previewPath": "image/light_cone_preview/23037.png",
+      "portraitPath": "image/light_cone_portrait/23037.png"
+    },
+    {
+      "id": "light-cone-21041",
+      "sourceId": "21041",
+      "name": "It's Showtime",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21041.png",
+      "previewPath": "image/light_cone_preview/21041.png",
+      "portraitPath": "image/light_cone_portrait/21041.png"
+    },
+    {
+      "id": "light-cone-21053",
+      "sourceId": "21053",
+      "name": "Journey, Forever Peaceful",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21053.png",
+      "previewPath": "image/light_cone_preview/21053.png",
+      "portraitPath": "image/light_cone_portrait/21053.png"
+    },
+    {
+      "id": "light-cone-21009",
+      "sourceId": "21009",
+      "name": "Landau's Choice",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21009.png",
+      "previewPath": "image/light_cone_preview/21009.png",
+      "portraitPath": "image/light_cone_portrait/21009.png"
+    },
+    {
+      "id": "light-cone-23043",
+      "sourceId": "23043",
+      "name": "Lies Dance on the Breeze",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23043.png",
+      "previewPath": "image/light_cone_preview/23043.png",
+      "portraitPath": "image/light_cone_portrait/23043.png"
+    },
+    {
+      "id": "light-cone-23041",
+      "sourceId": "23041",
+      "name": "Life Should Be Cast to Flames",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23041.png",
+      "previewPath": "image/light_cone_preview/23041.png",
+      "portraitPath": "image/light_cone_portrait/23041.png"
+    },
+    {
+      "id": "light-cone-20024",
+      "sourceId": "20024",
+      "name": "Lingering Tear",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20024.png",
+      "previewPath": "image/light_cone_preview/20024.png",
+      "portraitPath": "image/light_cone_portrait/20024.png"
+    },
+    {
+      "id": "light-cone-23042",
+      "sourceId": "23042",
+      "name": "Long May Rainbows Adorn the Sky",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23042.png",
+      "previewPath": "image/light_cone_preview/23042.png",
+      "portraitPath": "image/light_cone_portrait/23042.png"
+    },
+    {
+      "id": "light-cone-23035",
+      "sourceId": "23035",
+      "name": "Long Road Leads Home",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23035.png",
+      "previewPath": "image/light_cone_preview/23035.png",
+      "portraitPath": "image/light_cone_portrait/23035.png"
+    },
+    {
+      "id": "light-cone-20011",
+      "sourceId": "20011",
+      "name": "Loop",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20011.png",
+      "previewPath": "image/light_cone_preview/20011.png",
+      "portraitPath": "image/light_cone_portrait/20011.png"
+    },
+    {
+      "id": "light-cone-23040",
+      "sourceId": "23040",
+      "name": "Make Farewells More Beautiful",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23040.png",
+      "previewPath": "image/light_cone_preview/23040.png",
+      "portraitPath": "image/light_cone_portrait/23040.png"
+    },
+    {
+      "id": "light-cone-21013",
+      "sourceId": "21013",
+      "name": "Make the World Clamor",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21013.png",
+      "previewPath": "image/light_cone_preview/21013.png",
+      "portraitPath": "image/light_cone_portrait/21013.png"
+    },
+    {
+      "id": "light-cone-20019",
+      "sourceId": "20019",
+      "name": "Mediation",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20019.png",
+      "previewPath": "image/light_cone_preview/20019.png",
+      "portraitPath": "image/light_cone_portrait/20019.png"
+    },
+    {
+      "id": "light-cone-21004",
+      "sourceId": "21004",
+      "name": "Memories of the Past",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21004.png",
+      "previewPath": "image/light_cone_preview/21004.png",
+      "portraitPath": "image/light_cone_portrait/21004.png"
+    },
+    {
+      "id": "light-cone-24005",
+      "sourceId": "24005",
+      "name": "Memory's Curtain Never Falls",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/24005.png",
+      "previewPath": "image/light_cone_preview/24005.png",
+      "portraitPath": "image/light_cone_portrait/24005.png"
+    },
+    {
+      "id": "light-cone-20012",
+      "sourceId": "20012",
+      "name": "Meshing Cogs",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20012.png",
+      "previewPath": "image/light_cone_preview/20012.png",
+      "portraitPath": "image/light_cone_portrait/20012.png"
+    },
+    {
+      "id": "light-cone-23005",
+      "sourceId": "23005",
+      "name": "Moment of Victory",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23005.png",
+      "previewPath": "image/light_cone_preview/23005.png",
+      "portraitPath": "image/light_cone_portrait/23005.png"
+    },
+    {
+      "id": "light-cone-20015",
+      "sourceId": "20015",
+      "name": "Multiplication",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20015.png",
+      "previewPath": "image/light_cone_preview/20015.png",
+      "portraitPath": "image/light_cone_portrait/20015.png"
+    },
+    {
+      "id": "light-cone-21064",
+      "sourceId": "21064",
+      "name": "Mushy Shroomy's Adventures",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21064.png",
+      "previewPath": "image/light_cone_preview/21064.png",
+      "portraitPath": "image/light_cone_portrait/21064.png"
+    },
+    {
+      "id": "light-cone-20016",
+      "sourceId": "20016",
+      "name": "Mutual Demise",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20016.png",
+      "previewPath": "image/light_cone_preview/20016.png",
+      "portraitPath": "image/light_cone_portrait/20016.png"
+    },
+    {
+      "id": "light-cone-23050",
+      "sourceId": "23050",
+      "name": "Never Forget Her Flame",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23050.png",
+      "previewPath": "image/light_cone_preview/23050.png",
+      "portraitPath": "image/light_cone_portrait/23050.png"
+    },
+    {
+      "id": "light-cone-23017",
+      "sourceId": "23017",
+      "name": "Night of Fright",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23017.png",
+      "previewPath": "image/light_cone_preview/23017.png",
+      "portraitPath": "image/light_cone_portrait/23017.png"
+    },
+    {
+      "id": "light-cone-23000",
+      "sourceId": "23000",
+      "name": "Night on the Milky Way",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23000.png",
+      "previewPath": "image/light_cone_preview/23000.png",
+      "portraitPath": "image/light_cone_portrait/23000.png"
+    },
+    {
+      "id": "light-cone-22003",
+      "sourceId": "22003",
+      "name": "Ninja Record: Sound Hunt",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/22003.png",
+      "previewPath": "image/light_cone_preview/22003.png",
+      "portraitPath": "image/light_cone_portrait/22003.png"
+    },
+    {
+      "id": "light-cone-23033",
+      "sourceId": "23033",
+      "name": "Ninjutsu Inscription: Dazzling Evilbreaker",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23033.png",
+      "previewPath": "image/light_cone_preview/23033.png",
+      "portraitPath": "image/light_cone_portrait/23033.png"
+    },
+    {
+      "id": "light-cone-21033",
+      "sourceId": "21033",
+      "name": "Nowhere to Run",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21033.png",
+      "previewPath": "image/light_cone_preview/21033.png",
+      "portraitPath": "image/light_cone_portrait/21033.png"
+    },
+    {
+      "id": "light-cone-24000",
+      "sourceId": "24000",
+      "name": "On the Fall of an Aeon",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/24000.png",
+      "previewPath": "image/light_cone_preview/24000.png",
+      "portraitPath": "image/light_cone_portrait/24000.png"
+    },
+    {
+      "id": "light-cone-21003",
+      "sourceId": "21003",
+      "name": "Only Silence Remains",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21003.png",
+      "previewPath": "image/light_cone_preview/21003.png",
+      "portraitPath": "image/light_cone_portrait/21003.png"
+    },
+    {
+      "id": "light-cone-20013",
+      "sourceId": "20013",
+      "name": "Passkey",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20013.png",
+      "previewPath": "image/light_cone_preview/20013.png",
+      "portraitPath": "image/light_cone_portrait/20013.png"
+    },
+    {
+      "id": "light-cone-21025",
+      "sourceId": "21025",
+      "name": "Past and Future",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21025.png",
+      "previewPath": "image/light_cone_preview/21025.png",
+      "portraitPath": "image/light_cone_portrait/21025.png"
+    },
+    {
+      "id": "light-cone-23019",
+      "sourceId": "23019",
+      "name": "Past Self in Mirror",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23019.png",
+      "previewPath": "image/light_cone_preview/23019.png",
+      "portraitPath": "image/light_cone_portrait/23019.png"
+    },
+    {
+      "id": "light-cone-23006",
+      "sourceId": "23006",
+      "name": "Patience Is All You Need",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23006.png",
+      "previewPath": "image/light_cone_preview/23006.png",
+      "portraitPath": "image/light_cone_portrait/23006.png"
+    },
+    {
+      "id": "light-cone-21014",
+      "sourceId": "21014",
+      "name": "Perfect Timing",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21014.png",
+      "previewPath": "image/light_cone_preview/21014.png",
+      "portraitPath": "image/light_cone_portrait/21014.png"
+    },
+    {
+      "id": "light-cone-20017",
+      "sourceId": "20017",
+      "name": "Pioneering",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20017.png",
+      "previewPath": "image/light_cone_preview/20017.png",
+      "portraitPath": "image/light_cone_portrait/20017.png"
+    },
+    {
+      "id": "light-cone-21011",
+      "sourceId": "21011",
+      "name": "Planetary Rendezvous",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21011.png",
+      "previewPath": "image/light_cone_preview/21011.png",
+      "portraitPath": "image/light_cone_portrait/21011.png"
+    },
+    {
+      "id": "light-cone-21046",
+      "sourceId": "21046",
+      "name": "Poised to Bloom",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21046.png",
+      "previewPath": "image/light_cone_preview/21046.png",
+      "portraitPath": "image/light_cone_portrait/21046.png"
+    },
+    {
+      "id": "light-cone-21000",
+      "sourceId": "21000",
+      "name": "Post-Op Conversation",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21000.png",
+      "previewPath": "image/light_cone_preview/21000.png",
+      "portraitPath": "image/light_cone_portrait/21000.png"
+    },
+    {
+      "id": "light-cone-21021",
+      "sourceId": "21021",
+      "name": "Quid Pro Quo",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21021.png",
+      "previewPath": "image/light_cone_preview/21021.png",
+      "portraitPath": "image/light_cone_portrait/21021.png"
+    },
+    {
+      "id": "light-cone-23059",
+      "sourceId": "23059",
+      "name": "Reforged in Hellfire",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23059.png",
+      "previewPath": "image/light_cone_preview/23059.png",
+      "portraitPath": "image/light_cone_portrait/23059.png"
+    },
+    {
+      "id": "light-cone-23022",
+      "sourceId": "23022",
+      "name": "Reforged Remembrance",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23022.png",
+      "previewPath": "image/light_cone_preview/23022.png",
+      "portraitPath": "image/light_cone_portrait/23022.png"
+    },
+    {
+      "id": "light-cone-20022",
+      "sourceId": "20022",
+      "name": "Reminiscence",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20022.png",
+      "previewPath": "image/light_cone_preview/20022.png",
+      "portraitPath": "image/light_cone_portrait/20022.png"
+    },
+    {
+      "id": "light-cone-21015",
+      "sourceId": "21015",
+      "name": "Resolution Shines As Pearls of Sweat",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21015.png",
+      "previewPath": "image/light_cone_preview/21015.png",
+      "portraitPath": "image/light_cone_portrait/21015.png"
+    },
+    {
+      "id": "light-cone-21031",
+      "sourceId": "21031",
+      "name": "Return to Darkness",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21031.png",
+      "previewPath": "image/light_cone_preview/21031.png",
+      "portraitPath": "image/light_cone_portrait/21031.png"
+    },
+    {
+      "id": "light-cone-21024",
+      "sourceId": "21024",
+      "name": "River Flows in Spring",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21024.png",
+      "previewPath": "image/light_cone_preview/21024.png",
+      "portraitPath": "image/light_cone_portrait/21024.png"
+    },
+    {
+      "id": "light-cone-20020",
+      "sourceId": "20020",
+      "name": "Sagacity",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20020.png",
+      "previewPath": "image/light_cone_preview/20020.png",
+      "portraitPath": "image/light_cone_portrait/20020.png"
+    },
+    {
+      "id": "light-cone-23027",
+      "sourceId": "23027",
+      "name": "Sailing Towards a Second Life",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23027.png",
+      "previewPath": "image/light_cone_preview/23027.png",
+      "portraitPath": "image/light_cone_portrait/23027.png"
+    },
+    {
+      "id": "light-cone-23032",
+      "sourceId": "23032",
+      "name": "Scent Alone Stays True",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23032.png",
+      "previewPath": "image/light_cone_preview/23032.png",
+      "portraitPath": "image/light_cone_portrait/23032.png"
+    },
+    {
+      "id": "light-cone-21062",
+      "sourceId": "21062",
+      "name": "See You at the End",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21062.png",
+      "previewPath": "image/light_cone_preview/21062.png",
+      "portraitPath": "image/light_cone_portrait/21062.png"
+    },
+    {
+      "id": "light-cone-20021",
+      "sourceId": "20021",
+      "name": "Shadowburn",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20021.png",
+      "previewPath": "image/light_cone_preview/20021.png",
+      "portraitPath": "image/light_cone_portrait/20021.png"
+    },
+    {
+      "id": "light-cone-21047",
+      "sourceId": "21047",
+      "name": "Shadowed by Night",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21047.png",
+      "previewPath": "image/light_cone_preview/21047.png",
+      "portraitPath": "image/light_cone_portrait/21047.png"
+    },
+    {
+      "id": "light-cone-21007",
+      "sourceId": "21007",
+      "name": "Shared Feeling",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21007.png",
+      "previewPath": "image/light_cone_preview/21007.png",
+      "portraitPath": "image/light_cone_portrait/21007.png"
+    },
+    {
+      "id": "light-cone-20009",
+      "sourceId": "20009",
+      "name": "Shattered Home",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20009.png",
+      "previewPath": "image/light_cone_preview/20009.png",
+      "portraitPath": "image/light_cone_portrait/20009.png"
+    },
+    {
+      "id": "light-cone-23011",
+      "sourceId": "23011",
+      "name": "She Already Shut Her Eyes",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23011.png",
+      "previewPath": "image/light_cone_preview/23011.png",
+      "portraitPath": "image/light_cone_portrait/23011.png"
+    },
+    {
+      "id": "light-cone-23012",
+      "sourceId": "23012",
+      "name": "Sleep Like the Dead",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23012.png",
+      "previewPath": "image/light_cone_preview/23012.png",
+      "portraitPath": "image/light_cone_portrait/23012.png"
+    },
+    {
+      "id": "light-cone-20023",
+      "sourceId": "20023",
+      "name": "Sneering",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20023.png",
+      "previewPath": "image/light_cone_preview/20023.png",
+      "portraitPath": "image/light_cone_portrait/20023.png"
+    },
+    {
+      "id": "light-cone-24003",
+      "sourceId": "24003",
+      "name": "Solitary Healing",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/24003.png",
+      "previewPath": "image/light_cone_preview/24003.png",
+      "portraitPath": "image/light_cone_portrait/24003.png"
+    },
+    {
+      "id": "light-cone-23002",
+      "sourceId": "23002",
+      "name": "Something Irreplaceable",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23002.png",
+      "previewPath": "image/light_cone_preview/23002.png",
+      "portraitPath": "image/light_cone_portrait/23002.png"
+    },
+    {
+      "id": "light-cone-21017",
+      "sourceId": "21017",
+      "name": "Subscribe for More!",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21017.png",
+      "previewPath": "image/light_cone_preview/21017.png",
+      "portraitPath": "image/light_cone_portrait/21017.png"
+    },
+    {
+      "id": "light-cone-21052",
+      "sourceId": "21052",
+      "name": "Sweat Now, Cry Less",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21052.png",
+      "previewPath": "image/light_cone_preview/21052.png",
+      "portraitPath": "image/light_cone_portrait/21052.png"
+    },
+    {
+      "id": "light-cone-21010",
+      "sourceId": "21010",
+      "name": "Swordplay",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21010.png",
+      "previewPath": "image/light_cone_preview/21010.png",
+      "portraitPath": "image/light_cone_portrait/21010.png"
+    },
+    {
+      "id": "light-cone-24002",
+      "sourceId": "24002",
+      "name": "Texture of Memories",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/24002.png",
+      "previewPath": "image/light_cone_preview/24002.png",
+      "portraitPath": "image/light_cone_portrait/24002.png"
+    },
+    {
+      "id": "light-cone-21006",
+      "sourceId": "21006",
+      "name": "The Birth of the Self",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21006.png",
+      "previewPath": "image/light_cone_preview/21006.png",
+      "portraitPath": "image/light_cone_portrait/21006.png"
+    },
+    {
+      "id": "light-cone-21040",
+      "sourceId": "21040",
+      "name": "The Day The Cosmos Fell",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21040.png",
+      "previewPath": "image/light_cone_preview/21040.png",
+      "portraitPath": "image/light_cone_portrait/21040.png"
+    },
+    {
+      "id": "light-cone-23056",
+      "sourceId": "23056",
+      "name": "The Finale of a Lie",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23056.png",
+      "previewPath": "image/light_cone_preview/23056.png",
+      "portraitPath": "image/light_cone_portrait/23056.png"
+    },
+    {
+      "id": "light-cone-21057",
+      "sourceId": "21057",
+      "name": "The Flower Remembers",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21057.png",
+      "previewPath": "image/light_cone_preview/21057.png",
+      "portraitPath": "image/light_cone_portrait/21057.png"
+    },
+    {
+      "id": "light-cone-22005",
+      "sourceId": "22005",
+      "name": "The Forever Victual",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/22005.png",
+      "previewPath": "image/light_cone_preview/22005.png",
+      "portraitPath": "image/light_cone_portrait/22005.png"
+    },
+    {
+      "id": "light-cone-22004",
+      "sourceId": "22004",
+      "name": "The Great Cosmic Enterprise",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/22004.png",
+      "previewPath": "image/light_cone_preview/22004.png",
+      "portraitPath": "image/light_cone_portrait/22004.png"
+    },
+    {
+      "id": "light-cone-23046",
+      "sourceId": "23046",
+      "name": "The Hell Where Ideals Burn",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23046.png",
+      "previewPath": "image/light_cone_preview/23046.png",
+      "portraitPath": "image/light_cone_portrait/23046.png"
+    },
+    {
+      "id": "light-cone-21005",
+      "sourceId": "21005",
+      "name": "The Moles Welcome You",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21005.png",
+      "previewPath": "image/light_cone_preview/21005.png",
+      "portraitPath": "image/light_cone_portrait/21005.png"
+    },
+    {
+      "id": "light-cone-21027",
+      "sourceId": "21027",
+      "name": "The Seriousness of Breakfast",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21027.png",
+      "previewPath": "image/light_cone_preview/21027.png",
+      "portraitPath": "image/light_cone_portrait/21027.png"
+    },
+    {
+      "id": "light-cone-21054",
+      "sourceId": "21054",
+      "name": "The Story's Next Page",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21054.png",
+      "previewPath": "image/light_cone_preview/21054.png",
+      "portraitPath": "image/light_cone_portrait/21054.png"
+    },
+    {
+      "id": "light-cone-23009",
+      "sourceId": "23009",
+      "name": "The Unreachable Side",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23009.png",
+      "previewPath": "image/light_cone_preview/23009.png",
+      "portraitPath": "image/light_cone_portrait/23009.png"
+    },
+    {
+      "id": "light-cone-21030",
+      "sourceId": "21030",
+      "name": "This Is Me!",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21030.png",
+      "previewPath": "image/light_cone_preview/21030.png",
+      "portraitPath": "image/light_cone_portrait/21030.png"
+    },
+    {
+      "id": "light-cone-23052",
+      "sourceId": "23052",
+      "name": "This Love, Forever",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23052.png",
+      "previewPath": "image/light_cone_preview/23052.png",
+      "portraitPath": "image/light_cone_portrait/23052.png"
+    },
+    {
+      "id": "light-cone-23029",
+      "sourceId": "23029",
+      "name": "Those Many Springs",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23029.png",
+      "previewPath": "image/light_cone_preview/23029.png",
+      "portraitPath": "image/light_cone_portrait/23029.png"
+    },
+    {
+      "id": "light-cone-23051",
+      "sourceId": "23051",
+      "name": "Though Worlds Apart",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23051.png",
+      "previewPath": "image/light_cone_preview/23051.png",
+      "portraitPath": "image/light_cone_portrait/23051.png"
+    },
+    {
+      "id": "light-cone-23044",
+      "sourceId": "23044",
+      "name": "Thus Burns the Dawn",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23044.png",
+      "previewPath": "image/light_cone_preview/23044.png",
+      "portraitPath": "image/light_cone_portrait/23044.png"
+    },
+    {
+      "id": "light-cone-23013",
+      "sourceId": "23013",
+      "name": "Time Waits for No One",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23013.png",
+      "previewPath": "image/light_cone_preview/23013.png",
+      "portraitPath": "image/light_cone_portrait/23013.png"
+    },
+    {
+      "id": "light-cone-23036",
+      "sourceId": "23036",
+      "name": "Time Woven Into Gold",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23036.png",
+      "previewPath": "image/light_cone_preview/23036.png",
+      "portraitPath": "image/light_cone_portrait/23036.png"
+    },
+    {
+      "id": "light-cone-23049",
+      "sourceId": "23049",
+      "name": "To Evernight's Stars",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23049.png",
+      "previewPath": "image/light_cone_preview/23049.png",
+      "portraitPath": "image/light_cone_portrait/23049.png"
+    },
+    {
+      "id": "light-cone-21034",
+      "sourceId": "21034",
+      "name": "Today Is Another Peaceful Day",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21034.png",
+      "previewPath": "image/light_cone_preview/21034.png",
+      "portraitPath": "image/light_cone_portrait/21034.png"
+    },
+    {
+      "id": "light-cone-21065",
+      "sourceId": "21065",
+      "name": "Today's Good Luck",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21065.png",
+      "previewPath": "image/light_cone_preview/21065.png",
+      "portraitPath": "image/light_cone_portrait/21065.png"
+    },
+    {
+      "id": "light-cone-22007",
+      "sourceId": "22007",
+      "name": "Tomorrow, Together",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/22007.png",
+      "previewPath": "image/light_cone_preview/22007.png",
+      "portraitPath": "image/light_cone_portrait/22007.png"
+    },
+    {
+      "id": "light-cone-21016",
+      "sourceId": "21016",
+      "name": "Trend of the Universal Market",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21016.png",
+      "previewPath": "image/light_cone_preview/21016.png",
+      "portraitPath": "image/light_cone_portrait/21016.png"
+    },
+    {
+      "id": "light-cone-21019",
+      "sourceId": "21019",
+      "name": "Under the Blue Sky",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21019.png",
+      "previewPath": "image/light_cone_preview/21019.png",
+      "portraitPath": "image/light_cone_portrait/21019.png"
+    },
+    {
+      "id": "light-cone-23058",
+      "sourceId": "23058",
+      "name": "Until the Flowers Bloom Again",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23058.png",
+      "previewPath": "image/light_cone_preview/23058.png",
+      "portraitPath": "image/light_cone_portrait/23058.png"
+    },
+    {
+      "id": "light-cone-21055",
+      "sourceId": "21055",
+      "name": "Unto Tomorrow's Morrow",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21055.png",
+      "previewPath": "image/light_cone_preview/21055.png",
+      "portraitPath": "image/light_cone_portrait/21055.png"
+    },
+    {
+      "id": "light-cone-21050",
+      "sourceId": "21050",
+      "name": "Victory In a Blink",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21050.png",
+      "previewPath": "image/light_cone_preview/21050.png",
+      "portraitPath": "image/light_cone_portrait/21050.png"
+    },
+    {
+      "id": "light-cone-20004",
+      "sourceId": "20004",
+      "name": "Void",
+      "itemType": "light_cone",
+      "rarity": 3,
+      "iconPath": "icon/light_cone/20004.png",
+      "previewPath": "image/light_cone_preview/20004.png",
+      "portraitPath": "image/light_cone_portrait/20004.png"
+    },
+    {
+      "id": "light-cone-21028",
+      "sourceId": "21028",
+      "name": "Warmth Shortens Cold Nights",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21028.png",
+      "previewPath": "image/light_cone_preview/21028.png",
+      "portraitPath": "image/light_cone_portrait/21028.png"
+    },
+    {
+      "id": "light-cone-21023",
+      "sourceId": "21023",
+      "name": "We Are Wildfire",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21023.png",
+      "previewPath": "image/light_cone_preview/21023.png",
+      "portraitPath": "image/light_cone_portrait/21023.png"
+    },
+    {
+      "id": "light-cone-21029",
+      "sourceId": "21029",
+      "name": "We Will Meet Again",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21029.png",
+      "previewPath": "image/light_cone_preview/21029.png",
+      "portraitPath": "image/light_cone_portrait/21029.png"
+    },
+    {
+      "id": "light-cone-23057",
+      "sourceId": "23057",
+      "name": "Welcome to the Cosmic City",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23057.png",
+      "previewPath": "image/light_cone_preview/23057.png",
+      "portraitPath": "image/light_cone_portrait/23057.png"
+    },
+    {
+      "id": "light-cone-21035",
+      "sourceId": "21035",
+      "name": "What Is Real?",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21035.png",
+      "previewPath": "image/light_cone_preview/21035.png",
+      "portraitPath": "image/light_cone_portrait/21035.png"
+    },
+    {
+      "id": "light-cone-23054",
+      "sourceId": "23054",
+      "name": "When She Decided to See",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23054.png",
+      "previewPath": "image/light_cone_preview/23054.png",
+      "portraitPath": "image/light_cone_portrait/23054.png"
+    },
+    {
+      "id": "light-cone-23025",
+      "sourceId": "23025",
+      "name": "Whereabouts Should Dreams Rest",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23025.png",
+      "previewPath": "image/light_cone_preview/23025.png",
+      "portraitPath": "image/light_cone_portrait/23025.png"
+    },
+    {
+      "id": "light-cone-23047",
+      "sourceId": "23047",
+      "name": "Why Does the Ocean Sing",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23047.png",
+      "previewPath": "image/light_cone_preview/23047.png",
+      "portraitPath": "image/light_cone_portrait/23047.png"
+    },
+    {
+      "id": "light-cone-21026",
+      "sourceId": "21026",
+      "name": "Woof! Walk Time!",
+      "itemType": "light_cone",
+      "rarity": 4,
+      "iconPath": "icon/light_cone/21026.png",
+      "previewPath": "image/light_cone_preview/21026.png",
+      "portraitPath": "image/light_cone_portrait/21026.png"
+    },
+    {
+      "id": "light-cone-23016",
+      "sourceId": "23016",
+      "name": "Worrisome, Blissful",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23016.png",
+      "previewPath": "image/light_cone_preview/23016.png",
+      "portraitPath": "image/light_cone_portrait/23016.png"
+    },
+    {
+      "id": "light-cone-23028",
+      "sourceId": "23028",
+      "name": "Yet Hope Is Priceless",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23028.png",
+      "previewPath": "image/light_cone_preview/23028.png",
+      "portraitPath": "image/light_cone_portrait/23028.png"
+    }
+  ]
+}
