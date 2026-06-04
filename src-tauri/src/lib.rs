@@ -30,6 +30,13 @@ fn list_warp_pulls(
 }
 
 #[tauri::command]
+fn list_backup_snapshots(
+    app: tauri::AppHandle,
+) -> Result<Vec<database::BackupSnapshotSummary>, String> {
+    database::list_backup_snapshots(&app)
+}
+
+#[tauri::command]
 fn export_backup_snapshot(
     app: tauri::AppHandle,
 ) -> Result<database::ExportBackupSnapshotResult, String> {
@@ -59,6 +66,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             export_backup_snapshot,
             get_database_status,
+            list_backup_snapshots,
             list_warp_pulls,
             restore_latest_backup_snapshot,
             save_manual_import_draft,

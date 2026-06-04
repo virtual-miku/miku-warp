@@ -26,6 +26,8 @@ import {
   type ManualImportAccountInput,
 } from '../features/persistence/data/manual-import-save'
 import {
+  listBackupSnapshots,
+  type BackupSnapshotSummary,
   exportBackupSnapshot,
   type ExportBackupSnapshotResult,
   restoreLatestBackupSnapshot,
@@ -68,6 +70,9 @@ export function App() {
   const [backupExporting, setBackupExporting] = useState(false)
   const [backupRestoring, setBackupRestoring] = useState(false)
   const [backupNotice, setBackupNotice] = useState<BackupNotice>()
+  const [backupSnapshots, setBackupSnapshots] = useState<
+    BackupSnapshotSummary[]
+  >([])
   const [manualNoteDraft, setManualNoteDraft] = useState(manualNoteSample)
   const [persistedPulls, setPersistedPulls] = useState<WarpPull[]>([])
   const manualImportPreview = useMemo(
@@ -107,6 +112,15 @@ export function App() {
     }
   }, [fetchPersistedPulls])
 
+  const refreshBackupSnapshots = useCallback(async () => {
+    try {
+      const snapshots = await listBackupSnapshots()
+      setBackupSnapshots(snapshots)
+    } catch {
+      setBackupSnapshots([])
+    }
+  }, [])
+
   useEffect(() => {
     let isActive = true
 
@@ -126,6 +140,26 @@ export function App() {
       isActive = false
     }
   }, [fetchPersistedPulls])
+
+  useEffect(() => {
+    let isActive = true
+
+    listBackupSnapshots()
+      .then((snapshots) => {
+        if (isActive) {
+          setBackupSnapshots(snapshots)
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setBackupSnapshots([])
+        }
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [])
 
   const handleManualNoteChange = (value: string) => {
     setManualNoteDraft(value)
@@ -198,6 +232,7 @@ export function App() {
 
     try {
       const result = await exportBackupSnapshot()
+      await refreshBackupSnapshots()
 
       setBackupNotice({
         tone: 'success',
@@ -213,7 +248,7 @@ export function App() {
     } finally {
       setBackupExporting(false)
     }
-  }, [backupExporting, backupRestoring])
+  }, [backupExporting, backupRestoring, refreshBackupSnapshots])
 
   const handleRestoreBackup = useCallback(async () => {
     if (backupExporting || backupRestoring) {
@@ -226,6 +261,7 @@ export function App() {
     try {
       const result = await restoreLatestBackupSnapshot()
       await refreshPersistedPulls()
+      await refreshBackupSnapshots()
 
       setBackupNotice({
         tone: 'success',
@@ -241,7 +277,12 @@ export function App() {
     } finally {
       setBackupRestoring(false)
     }
-  }, [backupExporting, backupRestoring, refreshPersistedPulls])
+  }, [
+    backupExporting,
+    backupRestoring,
+    refreshBackupSnapshots,
+    refreshPersistedPulls,
+  ])
 
   return (
     <>
@@ -288,7 +329,7 @@ export function App() {
             <div className="header-actions" aria-label="Quick actions">
               <AppButton icon={RefreshCw}>Sync</AppButton>
               <AppButton
-                disabled={backupExporting}
+                disabled={backupExporting || backupRestoring}
                 icon={Download}
                 onClick={handleExportBackup}
               >
@@ -317,8 +358,10 @@ export function App() {
                 onOpenManualImport={() => setManualImportOpen(true)}
               />
               <BackupPanel
+                backupCount={backupSnapshots.length}
                 isExporting={backupExporting}
                 isRestoring={backupRestoring}
+                latestBackup={backupSnapshots[0]}
                 notice={backupNotice}
                 onExportBackup={handleExportBackup}
                 onRestoreBackup={handleRestoreBackup}

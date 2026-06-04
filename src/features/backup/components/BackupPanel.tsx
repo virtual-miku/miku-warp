@@ -7,17 +7,27 @@ export type BackupNotice = {
   detail: string
 }
 
+export type BackupSnapshotInfo = {
+  exportedAt: string
+  fileName: string
+  warpPulls: number
+}
+
 type BackupPanelProps = {
+  backupCount: number
   isExporting: boolean
   isRestoring: boolean
+  latestBackup?: BackupSnapshotInfo
   notice?: BackupNotice
   onExportBackup: () => void
   onRestoreBackup: () => void
 }
 
 export function BackupPanel({
+  backupCount,
   isExporting,
   isRestoring,
+  latestBackup,
   notice,
   onExportBackup,
   onRestoreBackup,
@@ -32,7 +42,7 @@ export function BackupPanel({
     >
       <header className="panel-header">
         <h2>Backup</h2>
-        <span className="status-pill">Local snapshot</span>
+        <span className="status-pill">{formatSnapshotCount(backupCount)}</span>
       </header>
       <div className="tool-panel-body">
         <div className="tool-row">
@@ -47,7 +57,11 @@ export function BackupPanel({
         <div className="tool-row">
           <div>
             <strong>Local backup</strong>
-            <span>Snapshot JSON from this device</span>
+            <span title={latestBackup?.fileName}>
+              {latestBackup
+                ? `${latestBackup.warpPulls} pulls - ${formatSnapshotTime(latestBackup.exportedAt)}`
+                : 'No local snapshot yet'}
+            </span>
           </div>
           <div className="backup-action-group">
             <AppButton
@@ -59,7 +73,7 @@ export function BackupPanel({
               {isExporting ? 'Exporting' : 'Export'}
             </AppButton>
             <AppButton
-              disabled={isBusy}
+              disabled={isBusy || !latestBackup}
               icon={RefreshCcw}
               onClick={onRestoreBackup}
               variant="ghost"
@@ -80,4 +94,20 @@ export function BackupPanel({
       </div>
     </section>
   )
+}
+
+function formatSnapshotCount(count: number) {
+  if (count === 0) {
+    return 'No snapshots'
+  }
+
+  if (count === 1) {
+    return '1 snapshot'
+  }
+
+  return `${count} snapshots`
+}
+
+function formatSnapshotTime(value: string) {
+  return value.replace('T', ' ').replace('Z', ' UTC')
 }

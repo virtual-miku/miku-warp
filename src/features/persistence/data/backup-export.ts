@@ -10,6 +10,10 @@ export type ExportBackupSnapshotResult = {
   warpPulls: number
 }
 
+export type BackupSnapshotSummary = ExportBackupSnapshotResult & {
+  fileName: string
+}
+
 export type RestoreBackupSnapshotResult = ExportBackupSnapshotResult & {
   warpPullsInserted: number
   duplicateWarpPulls: number
@@ -18,6 +22,10 @@ export type RestoreBackupSnapshotResult = ExportBackupSnapshotResult & {
 
 export function exportBackupSnapshot() {
   return invokeTauri<ExportBackupSnapshotResult>('export_backup_snapshot')
+}
+
+export function listBackupSnapshots() {
+  return invokeTauri<BackupSnapshotSummary[]>('list_backup_snapshots')
 }
 
 export function restoreLatestBackupSnapshot() {

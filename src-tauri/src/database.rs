@@ -118,6 +118,19 @@ pub struct ExportBackupSnapshotResult {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct BackupSnapshotSummary {
+    pub backup_path: String,
+    pub file_name: String,
+    pub exported_at: String,
+    pub accounts: usize,
+    pub banners: usize,
+    pub warp_items: usize,
+    pub import_batches: usize,
+    pub warp_pulls: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RestoreBackupSnapshotResult {
     pub backup_path: String,
     pub exported_at: String,
@@ -326,6 +339,12 @@ pub fn export_backup_snapshot(app: &AppHandle) -> Result<ExportBackupSnapshotRes
     let backup_directory = resolve_backup_directory(app)?;
 
     export_backup_snapshot_to_directory(&connection, &backup_directory)
+}
+
+pub fn list_backup_snapshots(app: &AppHandle) -> Result<Vec<BackupSnapshotSummary>, String> {
+    let backup_directory = resolve_backup_directory(app)?;
+
+    list_backup_snapshots_in_directory(&backup_directory)
 }
 
 pub fn restore_latest_backup_snapshot(
@@ -713,7 +732,7 @@ fn export_backup_snapshot_to_directory(
 
     Ok(ExportBackupSnapshotResult {
         backup_path: backup_path.to_string_lossy().to_string(),
-        exported_at: snapshot.exported_at,
+        exported_at: snapshot.exported_at.clone(),
         accounts: snapshot.accounts.len(),
         banners: snapshot.banners.len(),
         warp_items: snapshot.warp_items.len(),
@@ -1179,12 +1198,14 @@ fn validate_backup_snapshot(snapshot: &BackupSnapshot) -> Result<(), String> {
     Ok(())
 }
 
-fn find_latest_backup_snapshot_path(backup_directory: &Path) -> Result<PathBuf, String> {
-    let mut candidates = Vec::new();
-
+fn list_backup_snapshots_in_directory(
+    backup_directory: &Path,
+) -> Result<Vec<BackupSnapshotSummary>, String> {
     if !backup_directory.exists() {
-        return Err("No local backup snapshots found yet.".to_string());
+        return Ok(Vec::new());
     }
+
+    let mut snapshots = Vec::new();
 
     for entry in fs::read_dir(backup_directory)
         .map_err(|error| format!("Failed to read backup directory: {error}"))?
@@ -1193,14 +1214,50 @@ fn find_latest_backup_snapshot_path(backup_directory: &Path) -> Result<PathBuf, 
             .map_err(|error| format!("Failed to read backup directory entry: {error}"))?
             .path();
 
-        if is_backup_snapshot_file(&path) {
-            candidates.push(path);
+        if !is_backup_snapshot_file(&path) {
+            continue;
+        }
+
+        if let Ok(summary) = read_backup_snapshot_summary(&path) {
+            snapshots.push(summary);
         }
     }
 
-    candidates.sort_by(|left, right| left.file_name().cmp(&right.file_name()));
-    candidates
-        .pop()
+    snapshots.sort_by(|left, right| right.file_name.cmp(&left.file_name));
+
+    Ok(snapshots)
+}
+
+fn read_backup_snapshot_summary(path: &Path) -> Result<BackupSnapshotSummary, String> {
+    let payload = fs::read_to_string(path)
+        .map_err(|error| format!("Failed to read backup snapshot: {error}"))?;
+    let snapshot: BackupSnapshot = serde_json::from_str(&payload)
+        .map_err(|error| format!("Failed to parse backup snapshot: {error}"))?;
+
+    validate_backup_snapshot(&snapshot)?;
+
+    Ok(BackupSnapshotSummary {
+        backup_path: path.to_string_lossy().to_string(),
+        file_name: path
+            .file_name()
+            .and_then(|file_name| file_name.to_str())
+            .unwrap_or("backup.json")
+            .to_string(),
+        exported_at: snapshot.exported_at,
+        accounts: snapshot.accounts.len(),
+        banners: snapshot.banners.len(),
+        warp_items: snapshot.warp_items.len(),
+        import_batches: snapshot.import_batches.len(),
+        warp_pulls: snapshot.warp_pulls.len(),
+    })
+}
+
+fn find_latest_backup_snapshot_path(backup_directory: &Path) -> Result<PathBuf, String> {
+    let snapshots = list_backup_snapshots_in_directory(backup_directory)?;
+
+    snapshots
+        .first()
+        .map(|snapshot| PathBuf::from(&snapshot.backup_path))
         .ok_or_else(|| "No local backup snapshots found yet.".to_string())
 }
 
@@ -1799,6 +1856,7 @@ mod tests {
         let payload = std::fs::read_to_string(&backup_path).expect("backup file can be read");
         let snapshot: serde_json::Value =
             serde_json::from_str(&payload).expect("backup file is valid json");
+        let snapshots = list_backup_snapshots_in_directory(&backup_directory).expect("backup list");
 
         assert!(backup_path.exists());
         assert_eq!(result.accounts, 1);
@@ -1812,6 +1870,9 @@ mod tests {
         );
         assert_eq!(snapshot["accounts"][0]["uid"].as_str(), Some("800000001"));
         assert_eq!(snapshot["warpPulls"].as_array().map(Vec::len), Some(2));
+        assert_eq!(snapshots.len(), 1);
+        assert_eq!(snapshots[0].warp_pulls, 2);
+        assert_eq!(snapshots[0].backup_path, result.backup_path);
 
         std::fs::remove_dir_all(backup_directory).ok();
     }
@@ -1874,8 +1935,11 @@ mod tests {
     fn reports_missing_local_backup_snapshots() {
         let backup_directory = unique_test_dir("empty-backup");
         let result = find_latest_backup_snapshot_path(&backup_directory);
+        let snapshots =
+            list_backup_snapshots_in_directory(&backup_directory).expect("missing backup list");
 
         assert!(result.is_err());
+        assert!(snapshots.is_empty());
         assert!(result
             .expect_err("missing backup should fail")
             .contains("No local backup snapshots"));
