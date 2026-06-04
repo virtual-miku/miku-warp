@@ -104,6 +104,12 @@ pub struct ListWarpPullsInput {
     pub limit: Option<usize>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreBackupSnapshotInput {
+    pub file_name: String,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportBackupSnapshotResult {
@@ -354,6 +360,18 @@ pub fn restore_latest_backup_snapshot(
     let mut connection = open_database(&database_path)?;
     let backup_directory = resolve_backup_directory(app)?;
     let backup_path = find_latest_backup_snapshot_path(&backup_directory)?;
+
+    restore_backup_snapshot_from_file(&mut connection, &backup_path)
+}
+
+pub fn restore_backup_snapshot(
+    app: &AppHandle,
+    input: RestoreBackupSnapshotInput,
+) -> Result<RestoreBackupSnapshotResult, String> {
+    let database_path = resolve_database_path(app)?;
+    let mut connection = open_database(&database_path)?;
+    let backup_directory = resolve_backup_directory(app)?;
+    let backup_path = resolve_backup_snapshot_path(&backup_directory, &input.file_name)?;
 
     restore_backup_snapshot_from_file(&mut connection, &backup_path)
 }
@@ -1261,6 +1279,37 @@ fn find_latest_backup_snapshot_path(backup_directory: &Path) -> Result<PathBuf, 
         .ok_or_else(|| "No local backup snapshots found yet.".to_string())
 }
 
+fn resolve_backup_snapshot_path(
+    backup_directory: &Path,
+    file_name: &str,
+) -> Result<PathBuf, String> {
+    if !is_plain_file_name(file_name) {
+        return Err("Backup snapshot file name is invalid.".to_string());
+    }
+
+    let backup_path = backup_directory.join(file_name);
+
+    if !is_backup_snapshot_file(&backup_path) {
+        return Err("Backup snapshot file name is invalid.".to_string());
+    }
+
+    if !backup_path.exists() {
+        return Err("Backup snapshot file was not found.".to_string());
+    }
+
+    read_backup_snapshot_summary(&backup_path)?;
+
+    Ok(backup_path)
+}
+
+fn is_plain_file_name(file_name: &str) -> bool {
+    !file_name.trim().is_empty()
+        && Path::new(file_name)
+            .file_name()
+            .and_then(|name| name.to_str())
+            == Some(file_name)
+}
+
 fn is_backup_snapshot_file(path: &Path) -> bool {
     let Some(file_name) = path.file_name().and_then(|file_name| file_name.to_str()) else {
         return false;
@@ -1897,11 +1946,20 @@ mod tests {
             export_backup_snapshot_to_directory(&source_connection, &backup_directory)
                 .expect("backup export");
         let backup_path = PathBuf::from(export_result.backup_path);
+        let backup_file_name = backup_path
+            .file_name()
+            .and_then(|file_name| file_name.to_str())
+            .expect("backup file name")
+            .to_string();
+        let resolved_backup_path =
+            resolve_backup_snapshot_path(&backup_directory, &backup_file_name)
+                .expect("backup path resolves by file name");
         let mut target_connection = Connection::open_in_memory().expect("target database");
         apply_migrations(&target_connection).expect("target migration applies");
 
-        let first_restore = restore_backup_snapshot_from_file(&mut target_connection, &backup_path)
-            .expect("first restore");
+        let first_restore =
+            restore_backup_snapshot_from_file(&mut target_connection, &resolved_backup_path)
+                .expect("first restore");
         let second_restore =
             restore_backup_snapshot_from_file(&mut target_connection, &backup_path)
                 .expect("second restore skips duplicates");
@@ -1943,6 +2001,18 @@ mod tests {
         assert!(result
             .expect_err("missing backup should fail")
             .contains("No local backup snapshots"));
+    }
+
+    #[test]
+    fn rejects_restore_snapshot_file_names_outside_backup_directory() {
+        let backup_directory = unique_test_dir("invalid-backup-file");
+        let traversal_result =
+            resolve_backup_snapshot_path(&backup_directory, "..\\warp-tracker-backup-1.json");
+        let wrong_extension_result =
+            resolve_backup_snapshot_path(&backup_directory, "warp-tracker-backup-1.txt");
+
+        assert!(traversal_result.is_err());
+        assert!(wrong_extension_result.is_err());
     }
 
     #[test]

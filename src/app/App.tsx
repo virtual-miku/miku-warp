@@ -30,6 +30,7 @@ import {
   type BackupSnapshotSummary,
   exportBackupSnapshot,
   type ExportBackupSnapshotResult,
+  restoreBackupSnapshot,
   restoreLatestBackupSnapshot,
   type RestoreBackupSnapshotResult,
 } from '../features/persistence/data/backup-export'
@@ -68,7 +69,8 @@ export function App() {
   const [manualImportSaveNotice, setManualImportSaveNotice] =
     useState<ManualImportSaveNotice>()
   const [backupExporting, setBackupExporting] = useState(false)
-  const [backupRestoring, setBackupRestoring] = useState(false)
+  const [restoringBackupFileName, setRestoringBackupFileName] =
+    useState<string>()
   const [backupNotice, setBackupNotice] = useState<BackupNotice>()
   const [backupSnapshots, setBackupSnapshots] = useState<
     BackupSnapshotSummary[]
@@ -94,6 +96,7 @@ export function App() {
     () => calculatePitySummary(timelinePulls),
     [timelinePulls],
   )
+  const backupRestoring = restoringBackupFileName !== undefined
 
   const fetchPersistedPulls = useCallback(() => {
     return listWarpPulls({
@@ -255,7 +258,7 @@ export function App() {
       return
     }
 
-    setBackupRestoring(true)
+    setRestoringBackupFileName(backupSnapshots[0]?.fileName ?? 'latest')
     setBackupNotice(undefined)
 
     try {
@@ -275,14 +278,52 @@ export function App() {
         detail: getErrorMessage(error),
       })
     } finally {
-      setBackupRestoring(false)
+      setRestoringBackupFileName(undefined)
     }
   }, [
     backupExporting,
     backupRestoring,
+    backupSnapshots,
     refreshBackupSnapshots,
     refreshPersistedPulls,
   ])
+
+  const handleRestoreBackupSnapshot = useCallback(
+    async (fileName: string) => {
+      if (backupExporting || backupRestoring) {
+        return
+      }
+
+      setRestoringBackupFileName(fileName)
+      setBackupNotice(undefined)
+
+      try {
+        const result = await restoreBackupSnapshot(fileName)
+        await refreshPersistedPulls()
+        await refreshBackupSnapshots()
+
+        setBackupNotice({
+          tone: 'success',
+          title: 'Backup restored',
+          detail: formatBackupRestoreDetail(result),
+        })
+      } catch (error) {
+        setBackupNotice({
+          tone: 'error',
+          title: 'Restore failed',
+          detail: getErrorMessage(error),
+        })
+      } finally {
+        setRestoringBackupFileName(undefined)
+      }
+    },
+    [
+      backupExporting,
+      backupRestoring,
+      refreshBackupSnapshots,
+      refreshPersistedPulls,
+    ],
+  )
 
   return (
     <>
@@ -363,8 +404,11 @@ export function App() {
                 isRestoring={backupRestoring}
                 latestBackup={backupSnapshots[0]}
                 notice={backupNotice}
+                restoringFileName={restoringBackupFileName}
+                snapshots={backupSnapshots}
                 onExportBackup={handleExportBackup}
                 onRestoreBackup={handleRestoreBackup}
+                onRestoreSnapshot={handleRestoreBackupSnapshot}
               />
               <section className="notice-panel" aria-label="Reminder">
                 <div className="notice-icon" aria-hidden="true">

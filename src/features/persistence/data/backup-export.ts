@@ -33,3 +33,9 @@ export function restoreLatestBackupSnapshot() {
     'restore_latest_backup_snapshot',
   )
 }
+
+export function restoreBackupSnapshot(fileName: string) {
+  return invokeTauri<RestoreBackupSnapshotResult>('restore_backup_snapshot', {
+    input: { fileName },
+  })
+}

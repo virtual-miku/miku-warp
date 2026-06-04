@@ -19,8 +19,11 @@ type BackupPanelProps = {
   isRestoring: boolean
   latestBackup?: BackupSnapshotInfo
   notice?: BackupNotice
+  restoringFileName?: string
+  snapshots: BackupSnapshotInfo[]
   onExportBackup: () => void
   onRestoreBackup: () => void
+  onRestoreSnapshot: (fileName: string) => void
 }
 
 export function BackupPanel({
@@ -29,10 +32,14 @@ export function BackupPanel({
   isRestoring,
   latestBackup,
   notice,
+  restoringFileName,
+  snapshots,
   onExportBackup,
   onRestoreBackup,
+  onRestoreSnapshot,
 }: BackupPanelProps) {
   const isBusy = isExporting || isRestoring
+  const visibleSnapshots = snapshots.slice(0, 3)
 
   return (
     <section
@@ -82,6 +89,30 @@ export function BackupPanel({
             </AppButton>
           </div>
         </div>
+        {visibleSnapshots.length > 0 ? (
+          <div className="backup-snapshot-list" aria-label="Recent backups">
+            {visibleSnapshots.map((snapshot) => (
+              <div className="backup-snapshot-row" key={snapshot.fileName}>
+                <div>
+                  <strong>{formatSnapshotTime(snapshot.exportedAt)}</strong>
+                  <span title={snapshot.fileName}>
+                    {snapshot.warpPulls} pulls
+                  </span>
+                </div>
+                <AppButton
+                  disabled={isBusy}
+                  icon={RefreshCcw}
+                  onClick={() => onRestoreSnapshot(snapshot.fileName)}
+                  variant="ghost"
+                >
+                  {restoringFileName === snapshot.fileName
+                    ? 'Restoring'
+                    : 'Restore'}
+                </AppButton>
+              </div>
+            ))}
+          </div>
+        ) : null}
         {notice ? (
           <div
             className={`backup-message backup-message-${notice.tone}`}
