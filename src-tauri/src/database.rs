@@ -3,12 +3,14 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
     fs,
-    path::PathBuf,
+    path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{AppHandle, Manager};
 
 const DATABASE_FILE_NAME: &str = "warp-tracker.sqlite";
+const BACKUP_DIRECTORY_NAME: &str = "backups";
+const BACKUP_SCHEMA_VERSION: i64 = 1;
 const INIT_MIGRATION_VERSION: &str = "0001_init";
 const INIT_MIGRATION_SQL: &str = include_str!("../migrations/0001_init.sql");
 const ALLOW_DUPLICATE_WARP_ITEM_NAMES_VERSION: &str = "0002_allow_duplicate_warp_item_names";
@@ -104,6 +106,18 @@ pub struct ListWarpPullsInput {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ExportBackupSnapshotResult {
+    pub backup_path: String,
+    pub exported_at: String,
+    pub accounts: usize,
+    pub banners: usize,
+    pub warp_items: usize,
+    pub import_batches: usize,
+    pub warp_pulls: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WarpPullRow {
     pub id: String,
     pub banner_type: String,
@@ -140,6 +154,94 @@ struct ExistingWarpItem {
 struct WarpPullPityCandidate {
     id: String,
     rarity: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupSnapshot {
+    schema_version: i64,
+    application: &'static str,
+    exported_at: String,
+    applied_migrations: Vec<String>,
+    accounts: Vec<BackupAccountRow>,
+    banners: Vec<BackupBannerRow>,
+    warp_items: Vec<BackupWarpItemRow>,
+    import_batches: Vec<BackupImportBatchRow>,
+    warp_pulls: Vec<BackupWarpPullRow>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupAccountRow {
+    id: String,
+    uid: String,
+    region: Option<String>,
+    nickname: Option<String>,
+    created_at: String,
+    updated_at: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupBannerRow {
+    id: String,
+    banner_type: String,
+    name: String,
+    version: Option<String>,
+    started_at: Option<String>,
+    ended_at: Option<String>,
+    created_at: String,
+    updated_at: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupWarpItemRow {
+    id: String,
+    source_id: Option<String>,
+    name: String,
+    item_type: String,
+    rarity: i64,
+    icon_path: Option<String>,
+    preview_path: Option<String>,
+    portrait_path: Option<String>,
+    updated_at: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupImportBatchRow {
+    id: String,
+    account_id: String,
+    source: String,
+    banner_type: Option<String>,
+    started_at: String,
+    finished_at: Option<String>,
+    records_found: i64,
+    records_inserted: i64,
+    records_skipped: i64,
+    status: String,
+    notes: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupWarpPullRow {
+    id: String,
+    account_id: String,
+    banner_id: String,
+    warp_item_id: String,
+    pulled_at: String,
+    pulled_at_timezone: Option<String>,
+    gacha_id: Option<String>,
+    source: String,
+    source_import_id: Option<String>,
+    source_line_number: Option<i64>,
+    sequence_in_timestamp_group: i64,
+    raw_item_name: Option<String>,
+    pity_4: Option<i64>,
+    pity_5: Option<i64>,
+    created_at: String,
 }
 
 const MIGRATIONS: &[Migration] = &[
@@ -203,11 +305,26 @@ pub fn list_warp_pulls(
     list_warp_pulls_from_database(&connection, &query)
 }
 
+pub fn export_backup_snapshot(app: &AppHandle) -> Result<ExportBackupSnapshotResult, String> {
+    let database_path = resolve_database_path(app)?;
+    let connection = open_database(&database_path)?;
+    let backup_directory = resolve_backup_directory(app)?;
+
+    export_backup_snapshot_to_directory(&connection, &backup_directory)
+}
+
 fn resolve_database_path(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
         .map(|path| path.join(DATABASE_FILE_NAME))
         .map_err(|error| format!("Failed to resolve app data directory: {error}"))
+}
+
+fn resolve_backup_directory(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_data_dir()
+        .map(|path| path.join(BACKUP_DIRECTORY_NAME))
+        .map_err(|error| format!("Failed to resolve backup directory: {error}"))
 }
 
 fn open_database(database_path: &PathBuf) -> Result<Connection, String> {
@@ -552,6 +669,217 @@ fn list_warp_pulls_from_database(
 
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|error| format!("Failed to decode warp pull rows: {error}"))
+}
+
+fn export_backup_snapshot_to_directory(
+    connection: &Connection,
+    backup_directory: &Path,
+) -> Result<ExportBackupSnapshotResult, String> {
+    let snapshot = build_backup_snapshot(connection)?;
+    let backup_path = backup_directory.join(create_backup_file_name()?);
+    let payload = serde_json::to_string_pretty(&snapshot)
+        .map_err(|error| format!("Failed to serialize backup snapshot: {error}"))?;
+
+    fs::create_dir_all(backup_directory)
+        .map_err(|error| format!("Failed to create backup directory: {error}"))?;
+    fs::write(&backup_path, payload)
+        .map_err(|error| format!("Failed to write backup snapshot: {error}"))?;
+
+    Ok(ExportBackupSnapshotResult {
+        backup_path: backup_path.to_string_lossy().to_string(),
+        exported_at: snapshot.exported_at,
+        accounts: snapshot.accounts.len(),
+        banners: snapshot.banners.len(),
+        warp_items: snapshot.warp_items.len(),
+        import_batches: snapshot.import_batches.len(),
+        warp_pulls: snapshot.warp_pulls.len(),
+    })
+}
+
+fn build_backup_snapshot(connection: &Connection) -> Result<BackupSnapshot, String> {
+    Ok(BackupSnapshot {
+        schema_version: BACKUP_SCHEMA_VERSION,
+        application: "warp-tracker",
+        exported_at: current_database_timestamp(connection)?,
+        applied_migrations: list_applied_migrations(connection)?,
+        accounts: read_backup_accounts(connection)?,
+        banners: read_backup_banners(connection)?,
+        warp_items: read_backup_warp_items(connection)?,
+        import_batches: read_backup_import_batches(connection)?,
+        warp_pulls: read_backup_warp_pulls(connection)?,
+    })
+}
+
+fn read_backup_accounts(connection: &Connection) -> Result<Vec<BackupAccountRow>, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT id, uid, region, nickname, created_at, updated_at
+             FROM accounts
+             ORDER BY uid, COALESCE(region, ''), id",
+        )
+        .map_err(|error| format!("Failed to prepare account backup query: {error}"))?;
+
+    let rows = statement
+        .query_map([], |row| {
+            Ok(BackupAccountRow {
+                id: row.get(0)?,
+                uid: row.get(1)?,
+                region: row.get(2)?,
+                nickname: row.get(3)?,
+                created_at: row.get(4)?,
+                updated_at: row.get(5)?,
+            })
+        })
+        .map_err(|error| format!("Failed to query account backup rows: {error}"))?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Failed to decode account backup rows: {error}"))
+}
+
+fn read_backup_banners(connection: &Connection) -> Result<Vec<BackupBannerRow>, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT id, banner_type, name, version, started_at, ended_at, created_at, updated_at
+             FROM banners
+             ORDER BY banner_type, COALESCE(version, ''), name, id",
+        )
+        .map_err(|error| format!("Failed to prepare banner backup query: {error}"))?;
+
+    let rows = statement
+        .query_map([], |row| {
+            Ok(BackupBannerRow {
+                id: row.get(0)?,
+                banner_type: row.get(1)?,
+                name: row.get(2)?,
+                version: row.get(3)?,
+                started_at: row.get(4)?,
+                ended_at: row.get(5)?,
+                created_at: row.get(6)?,
+                updated_at: row.get(7)?,
+            })
+        })
+        .map_err(|error| format!("Failed to query banner backup rows: {error}"))?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Failed to decode banner backup rows: {error}"))
+}
+
+fn read_backup_warp_items(connection: &Connection) -> Result<Vec<BackupWarpItemRow>, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT id, source_id, name, item_type, rarity, icon_path, preview_path,
+                    portrait_path, updated_at
+             FROM warp_items
+             ORDER BY item_type, rarity DESC, name, id",
+        )
+        .map_err(|error| format!("Failed to prepare item backup query: {error}"))?;
+
+    let rows = statement
+        .query_map([], |row| {
+            Ok(BackupWarpItemRow {
+                id: row.get(0)?,
+                source_id: row.get(1)?,
+                name: row.get(2)?,
+                item_type: row.get(3)?,
+                rarity: row.get(4)?,
+                icon_path: row.get(5)?,
+                preview_path: row.get(6)?,
+                portrait_path: row.get(7)?,
+                updated_at: row.get(8)?,
+            })
+        })
+        .map_err(|error| format!("Failed to query item backup rows: {error}"))?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Failed to decode item backup rows: {error}"))
+}
+
+fn read_backup_import_batches(
+    connection: &Connection,
+) -> Result<Vec<BackupImportBatchRow>, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT id, account_id, source, banner_type, started_at, finished_at,
+                    records_found, records_inserted, records_skipped, status, notes
+             FROM import_batches
+             ORDER BY started_at, id",
+        )
+        .map_err(|error| format!("Failed to prepare import batch backup query: {error}"))?;
+
+    let rows = statement
+        .query_map([], |row| {
+            Ok(BackupImportBatchRow {
+                id: row.get(0)?,
+                account_id: row.get(1)?,
+                source: row.get(2)?,
+                banner_type: row.get(3)?,
+                started_at: row.get(4)?,
+                finished_at: row.get(5)?,
+                records_found: row.get(6)?,
+                records_inserted: row.get(7)?,
+                records_skipped: row.get(8)?,
+                status: row.get(9)?,
+                notes: row.get(10)?,
+            })
+        })
+        .map_err(|error| format!("Failed to query import batch backup rows: {error}"))?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Failed to decode import batch backup rows: {error}"))
+}
+
+fn read_backup_warp_pulls(connection: &Connection) -> Result<Vec<BackupWarpPullRow>, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT id, account_id, banner_id, warp_item_id, pulled_at, pulled_at_timezone,
+                    gacha_id, source, source_import_id, source_line_number,
+                    sequence_in_timestamp_group, raw_item_name, pity_4, pity_5, created_at
+             FROM warp_pulls
+             ORDER BY account_id, banner_id, pulled_at, sequence_in_timestamp_group, id",
+        )
+        .map_err(|error| format!("Failed to prepare warp pull backup query: {error}"))?;
+
+    let rows = statement
+        .query_map([], |row| {
+            Ok(BackupWarpPullRow {
+                id: row.get(0)?,
+                account_id: row.get(1)?,
+                banner_id: row.get(2)?,
+                warp_item_id: row.get(3)?,
+                pulled_at: row.get(4)?,
+                pulled_at_timezone: row.get(5)?,
+                gacha_id: row.get(6)?,
+                source: row.get(7)?,
+                source_import_id: row.get(8)?,
+                source_line_number: row.get(9)?,
+                sequence_in_timestamp_group: row.get(10)?,
+                raw_item_name: row.get(11)?,
+                pity_4: row.get(12)?,
+                pity_5: row.get(13)?,
+                created_at: row.get(14)?,
+            })
+        })
+        .map_err(|error| format!("Failed to query warp pull backup rows: {error}"))?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Failed to decode warp pull backup rows: {error}"))
+}
+
+fn current_database_timestamp(connection: &Connection) -> Result<String, String> {
+    connection
+        .query_row("SELECT strftime('%Y-%m-%dT%H:%M:%fZ', 'now')", [], |row| {
+            row.get(0)
+        })
+        .map_err(|error| format!("Failed to create backup timestamp: {error}"))
+}
+
+fn create_backup_file_name() -> Result<String, String> {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| format!("System clock is before UNIX epoch: {error}"))?
+        .as_nanos();
+
+    Ok(format!("warp-tracker-backup-{timestamp}.json"))
 }
 
 fn validate_list_warp_pulls_query(query: &ListWarpPullsInput) -> Result<(), String> {
@@ -1102,6 +1430,45 @@ mod tests {
     }
 
     #[test]
+    fn exports_backup_snapshot_to_json_file() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+        upsert_warp_item_catalog(
+            &mut connection,
+            &[
+                catalog_item("character-1001", "1001", "Pela", "character", 4),
+                catalog_item("light-cone-2001", "2001", "Data Bank", "light_cone", 3),
+            ],
+        )
+        .expect("catalog sync");
+        save_manual_import_draft_to_database(&mut connection, &manual_import_draft())
+            .expect("manual import");
+
+        let backup_directory = unique_test_dir("backup-export");
+        let result = export_backup_snapshot_to_directory(&connection, &backup_directory)
+            .expect("backup export");
+        let backup_path = PathBuf::from(&result.backup_path);
+        let payload = std::fs::read_to_string(&backup_path).expect("backup file can be read");
+        let snapshot: serde_json::Value =
+            serde_json::from_str(&payload).expect("backup file is valid json");
+
+        assert!(backup_path.exists());
+        assert_eq!(result.accounts, 1);
+        assert_eq!(result.banners, 1);
+        assert_eq!(result.warp_items, 2);
+        assert_eq!(result.import_batches, 1);
+        assert_eq!(result.warp_pulls, 2);
+        assert_eq!(
+            snapshot["schemaVersion"].as_i64(),
+            Some(BACKUP_SCHEMA_VERSION)
+        );
+        assert_eq!(snapshot["accounts"][0]["uid"].as_str(), Some("800000001"));
+        assert_eq!(snapshot["warpPulls"].as_array().map(Vec::len), Some(2));
+
+        std::fs::remove_dir_all(backup_directory).ok();
+    }
+
+    #[test]
     fn lists_saved_manual_warp_pulls_for_account_and_banner() {
         let mut connection = Connection::open_in_memory().expect("in-memory database");
         apply_migrations(&connection).expect("migration applies");
@@ -1303,5 +1670,14 @@ mod tests {
                 row.get(0)
             })
             .expect("table count")
+    }
+
+    fn unique_test_dir(name: &str) -> PathBuf {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock after unix epoch")
+            .as_nanos();
+
+        std::env::temp_dir().join(format!("warp-tracker-{name}-{timestamp}"))
     }
 }

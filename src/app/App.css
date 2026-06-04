@@ -342,6 +342,39 @@
   font-size: 12px;
 }
 
+.backup-message {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.backup-message-error {
+  border-left-color: var(--warning);
+  background: var(--warning-bg);
+}
+
+.backup-message strong,
+.backup-message p {
+  margin: 0;
+}
+
+.backup-message strong {
+  color: var(--text-strong);
+  font-size: 13px;
+}
+
+.backup-message p {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .app-button {
   height: 36px;
   display: inline-flex;

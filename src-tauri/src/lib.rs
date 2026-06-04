@@ -29,6 +29,13 @@ fn list_warp_pulls(
     database::list_warp_pulls(&app, query)
 }
 
+#[tauri::command]
+fn export_backup_snapshot(
+    app: tauri::AppHandle,
+) -> Result<database::ExportBackupSnapshotResult, String> {
+    database::export_backup_snapshot(&app)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -43,6 +50,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            export_backup_snapshot,
             get_database_status,
             list_warp_pulls,
             save_manual_import_draft,

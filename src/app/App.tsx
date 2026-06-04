@@ -8,7 +8,10 @@ import {
   Settings,
   Upload,
 } from 'lucide-react'
-import { BackupPanel } from '../features/backup/components/BackupPanel'
+import {
+  BackupPanel,
+  type BackupNotice,
+} from '../features/backup/components/BackupPanel'
 import { ImportPanel } from '../features/import/components/ImportPanel'
 import {
   ManualImportDialog,
@@ -22,13 +25,20 @@ import {
   toSaveManualImportDraftPayload,
   type ManualImportAccountInput,
 } from '../features/persistence/data/manual-import-save'
+import {
+  exportBackupSnapshot,
+  type ExportBackupSnapshotResult,
+} from '../features/persistence/data/backup-export'
 import { syncWarpItemCatalog } from '../features/persistence/data/warp-item-catalog-sync'
 import { listWarpPulls } from '../features/persistence/data/warp-pull-history'
 import { BannerTabs } from '../features/warp-history/components/BannerTabs'
 import { PityOverview } from '../features/warp-history/components/PityOverview'
 import { WarpTimeline } from '../features/warp-history/components/WarpTimeline'
 import { itemCatalog } from '../features/warp-history/data/item-catalog'
-import { getBannerLabel, type BannerType } from '../features/warp-history/domain/banner'
+import {
+  getBannerLabel,
+  type BannerType,
+} from '../features/warp-history/domain/banner'
 import {
   annotatePityAtPull,
   calculatePitySummary,
@@ -53,6 +63,8 @@ export function App() {
   const [manualImportSaving, setManualImportSaving] = useState(false)
   const [manualImportSaveNotice, setManualImportSaveNotice] =
     useState<ManualImportSaveNotice>()
+  const [backupExporting, setBackupExporting] = useState(false)
+  const [backupNotice, setBackupNotice] = useState<BackupNotice>()
   const [manualNoteDraft, setManualNoteDraft] = useState(manualNoteSample)
   const [persistedPulls, setPersistedPulls] = useState<WarpPull[]>([])
   const manualImportPreview = useMemo(
@@ -173,6 +185,33 @@ export function App() {
     }
   }
 
+  const handleExportBackup = useCallback(async () => {
+    if (backupExporting) {
+      return
+    }
+
+    setBackupExporting(true)
+    setBackupNotice(undefined)
+
+    try {
+      const result = await exportBackupSnapshot()
+
+      setBackupNotice({
+        tone: 'success',
+        title: 'Backup exported',
+        detail: formatBackupExportDetail(result),
+      })
+    } catch (error) {
+      setBackupNotice({
+        tone: 'error',
+        title: 'Export failed',
+        detail: getErrorMessage(error),
+      })
+    } finally {
+      setBackupExporting(false)
+    }
+  }, [backupExporting])
+
   return (
     <>
       <main className="app-shell">
@@ -217,7 +256,13 @@ export function App() {
             </div>
             <div className="header-actions" aria-label="Quick actions">
               <AppButton icon={RefreshCw}>Sync</AppButton>
-              <AppButton icon={Download}>Export</AppButton>
+              <AppButton
+                disabled={backupExporting}
+                icon={Download}
+                onClick={handleExportBackup}
+              >
+                {backupExporting ? 'Exporting' : 'Export'}
+              </AppButton>
               <AppButton icon={Settings} variant="ghost">
                 Settings
               </AppButton>
@@ -240,7 +285,11 @@ export function App() {
                 manualImportPreview={manualImportPreview}
                 onOpenManualImport={() => setManualImportOpen(true)}
               />
-              <BackupPanel />
+              <BackupPanel
+                isExporting={backupExporting}
+                notice={backupNotice}
+                onExportBackup={handleExportBackup}
+              />
               <section className="notice-panel" aria-label="Reminder">
                 <div className="notice-icon" aria-hidden="true">
                   <Bell size={18} />
@@ -272,6 +321,13 @@ export function App() {
 }
 
 export default App
+
+function formatBackupExportDetail(result: ExportBackupSnapshotResult) {
+  return [
+    `${result.warpPulls} pulls, ${result.warpItems} catalog items, ${result.importBatches} import batches.`,
+    `Saved to ${result.backupPath}`,
+  ].join('\n')
+}
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) {
