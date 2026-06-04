@@ -226,13 +226,30 @@ fn open_database(database_path: &PathBuf) -> Result<Connection, String> {
 
 fn apply_migrations(connection: &Connection) -> Result<(), String> {
     connection
-        .execute_batch("PRAGMA foreign_keys = ON;")
-        .map_err(|error| format!("Failed to enable SQLite foreign keys: {error}"))?;
+        .execute_batch(
+            "PRAGMA foreign_keys = ON;
+
+             CREATE TABLE IF NOT EXISTS schema_migrations (
+               version TEXT PRIMARY KEY,
+               applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+             );",
+        )
+        .map_err(|error| format!("Failed to prepare migration metadata: {error}"))?;
+
+    let mut applied_migrations = list_applied_migrations(connection)?;
 
     for migration in MIGRATIONS {
+        if applied_migrations
+            .iter()
+            .any(|version| version == migration.version)
+        {
+            continue;
+        }
+
         connection
             .execute_batch(migration.sql)
             .map_err(|error| format!("Failed to apply migration {}: {error}", migration.version))?;
+        applied_migrations.push(migration.version.to_string());
     }
 
     Ok(())
@@ -1015,6 +1032,24 @@ mod tests {
 
         assert_eq!(result.inserted, 2);
         assert_eq!(result.total_in_database, 2);
+    }
+
+    #[test]
+    fn does_not_rerun_applied_migrations_with_duplicate_item_names() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("initial migration applies");
+        upsert_warp_item_catalog(
+            &mut connection,
+            &[
+                catalog_item("character-1001", "1001", "March 7th", "character", 4),
+                catalog_item("character-1224", "1224", "March 7th", "character", 4),
+            ],
+        )
+        .expect("duplicate names can be synced after migration 0002");
+
+        apply_migrations(&connection).expect("applied migrations are skipped");
+
+        assert_eq!(count_table(&connection, "warp_items"), 2);
     }
 
     #[test]
