@@ -36,6 +36,13 @@ fn export_backup_snapshot(
     database::export_backup_snapshot(&app)
 }
 
+#[tauri::command]
+fn restore_latest_backup_snapshot(
+    app: tauri::AppHandle,
+) -> Result<database::RestoreBackupSnapshotResult, String> {
+    database::restore_latest_backup_snapshot(&app)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -53,6 +60,7 @@ pub fn run() {
             export_backup_snapshot,
             get_database_status,
             list_warp_pulls,
+            restore_latest_backup_snapshot,
             save_manual_import_draft,
             sync_warp_item_catalog
         ])

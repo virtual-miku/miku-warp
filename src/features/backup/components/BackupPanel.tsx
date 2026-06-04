@@ -1,4 +1,4 @@
-import { Cloud, KeyRound } from 'lucide-react'
+import { Cloud, KeyRound, RefreshCcw } from 'lucide-react'
 import { AppButton } from '../../../shared/ui/AppButton'
 
 export type BackupNotice = {
@@ -9,15 +9,21 @@ export type BackupNotice = {
 
 type BackupPanelProps = {
   isExporting: boolean
+  isRestoring: boolean
   notice?: BackupNotice
   onExportBackup: () => void
+  onRestoreBackup: () => void
 }
 
 export function BackupPanel({
   isExporting,
+  isRestoring,
   notice,
   onExportBackup,
+  onRestoreBackup,
 }: BackupPanelProps) {
+  const isBusy = isExporting || isRestoring
+
   return (
     <section
       className="tool-panel"
@@ -43,14 +49,24 @@ export function BackupPanel({
             <strong>Local backup</strong>
             <span>Snapshot JSON from this device</span>
           </div>
-          <AppButton
-            disabled={isExporting}
-            icon={Cloud}
-            onClick={onExportBackup}
-            variant="ghost"
-          >
-            {isExporting ? 'Exporting' : 'Export'}
-          </AppButton>
+          <div className="backup-action-group">
+            <AppButton
+              disabled={isBusy}
+              icon={Cloud}
+              onClick={onExportBackup}
+              variant="ghost"
+            >
+              {isExporting ? 'Exporting' : 'Export'}
+            </AppButton>
+            <AppButton
+              disabled={isBusy}
+              icon={RefreshCcw}
+              onClick={onRestoreBackup}
+              variant="ghost"
+            >
+              {isRestoring ? 'Restoring' : 'Restore latest'}
+            </AppButton>
+          </div>
         </div>
         {notice ? (
           <div

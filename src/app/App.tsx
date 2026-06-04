@@ -28,6 +28,8 @@ import {
 import {
   exportBackupSnapshot,
   type ExportBackupSnapshotResult,
+  restoreLatestBackupSnapshot,
+  type RestoreBackupSnapshotResult,
 } from '../features/persistence/data/backup-export'
 import { syncWarpItemCatalog } from '../features/persistence/data/warp-item-catalog-sync'
 import { listWarpPulls } from '../features/persistence/data/warp-pull-history'
@@ -64,6 +66,7 @@ export function App() {
   const [manualImportSaveNotice, setManualImportSaveNotice] =
     useState<ManualImportSaveNotice>()
   const [backupExporting, setBackupExporting] = useState(false)
+  const [backupRestoring, setBackupRestoring] = useState(false)
   const [backupNotice, setBackupNotice] = useState<BackupNotice>()
   const [manualNoteDraft, setManualNoteDraft] = useState(manualNoteSample)
   const [persistedPulls, setPersistedPulls] = useState<WarpPull[]>([])
@@ -186,7 +189,7 @@ export function App() {
   }
 
   const handleExportBackup = useCallback(async () => {
-    if (backupExporting) {
+    if (backupExporting || backupRestoring) {
       return
     }
 
@@ -210,7 +213,35 @@ export function App() {
     } finally {
       setBackupExporting(false)
     }
-  }, [backupExporting])
+  }, [backupExporting, backupRestoring])
+
+  const handleRestoreBackup = useCallback(async () => {
+    if (backupExporting || backupRestoring) {
+      return
+    }
+
+    setBackupRestoring(true)
+    setBackupNotice(undefined)
+
+    try {
+      const result = await restoreLatestBackupSnapshot()
+      await refreshPersistedPulls()
+
+      setBackupNotice({
+        tone: 'success',
+        title: 'Backup restored',
+        detail: formatBackupRestoreDetail(result),
+      })
+    } catch (error) {
+      setBackupNotice({
+        tone: 'error',
+        title: 'Restore failed',
+        detail: getErrorMessage(error),
+      })
+    } finally {
+      setBackupRestoring(false)
+    }
+  }, [backupExporting, backupRestoring, refreshPersistedPulls])
 
   return (
     <>
@@ -287,8 +318,10 @@ export function App() {
               />
               <BackupPanel
                 isExporting={backupExporting}
+                isRestoring={backupRestoring}
                 notice={backupNotice}
                 onExportBackup={handleExportBackup}
+                onRestoreBackup={handleRestoreBackup}
               />
               <section className="notice-panel" aria-label="Reminder">
                 <div className="notice-icon" aria-hidden="true">
@@ -326,6 +359,14 @@ function formatBackupExportDetail(result: ExportBackupSnapshotResult) {
   return [
     `${result.warpPulls} pulls, ${result.warpItems} catalog items, ${result.importBatches} import batches.`,
     `Saved to ${result.backupPath}`,
+  ].join('\n')
+}
+
+function formatBackupRestoreDetail(result: RestoreBackupSnapshotResult) {
+  return [
+    `${result.warpPullsInserted} inserted, ${result.duplicateWarpPulls} skipped as duplicates.`,
+    `${result.recomputedBanners} banner pity groups recomputed.`,
+    `Restored from ${result.backupPath}`,
   ].join('\n')
 }
 

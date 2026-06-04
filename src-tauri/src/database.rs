@@ -118,6 +118,21 @@ pub struct ExportBackupSnapshotResult {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RestoreBackupSnapshotResult {
+    pub backup_path: String,
+    pub exported_at: String,
+    pub accounts: usize,
+    pub banners: usize,
+    pub warp_items: usize,
+    pub import_batches: usize,
+    pub warp_pulls: usize,
+    pub warp_pulls_inserted: usize,
+    pub duplicate_warp_pulls: usize,
+    pub recomputed_banners: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct WarpPullRow {
     pub id: String,
     pub banner_type: String,
@@ -156,11 +171,11 @@ struct WarpPullPityCandidate {
     rarity: i64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct BackupSnapshot {
     schema_version: i64,
-    application: &'static str,
+    application: String,
     exported_at: String,
     applied_migrations: Vec<String>,
     accounts: Vec<BackupAccountRow>,
@@ -170,7 +185,7 @@ struct BackupSnapshot {
     warp_pulls: Vec<BackupWarpPullRow>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct BackupAccountRow {
     id: String,
@@ -181,7 +196,7 @@ struct BackupAccountRow {
     updated_at: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct BackupBannerRow {
     id: String,
@@ -194,7 +209,7 @@ struct BackupBannerRow {
     updated_at: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct BackupWarpItemRow {
     id: String,
@@ -208,7 +223,7 @@ struct BackupWarpItemRow {
     updated_at: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct BackupImportBatchRow {
     id: String,
@@ -224,7 +239,7 @@ struct BackupImportBatchRow {
     notes: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct BackupWarpPullRow {
     id: String,
@@ -311,6 +326,17 @@ pub fn export_backup_snapshot(app: &AppHandle) -> Result<ExportBackupSnapshotRes
     let backup_directory = resolve_backup_directory(app)?;
 
     export_backup_snapshot_to_directory(&connection, &backup_directory)
+}
+
+pub fn restore_latest_backup_snapshot(
+    app: &AppHandle,
+) -> Result<RestoreBackupSnapshotResult, String> {
+    let database_path = resolve_database_path(app)?;
+    let mut connection = open_database(&database_path)?;
+    let backup_directory = resolve_backup_directory(app)?;
+    let backup_path = find_latest_backup_snapshot_path(&backup_directory)?;
+
+    restore_backup_snapshot_from_file(&mut connection, &backup_path)
 }
 
 fn resolve_database_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -696,10 +722,58 @@ fn export_backup_snapshot_to_directory(
     })
 }
 
+fn restore_backup_snapshot_from_file(
+    connection: &mut Connection,
+    backup_path: &Path,
+) -> Result<RestoreBackupSnapshotResult, String> {
+    let payload = fs::read_to_string(backup_path)
+        .map_err(|error| format!("Failed to read backup snapshot: {error}"))?;
+    let snapshot: BackupSnapshot = serde_json::from_str(&payload)
+        .map_err(|error| format!("Failed to parse backup snapshot: {error}"))?;
+
+    validate_backup_snapshot(&snapshot)?;
+    restore_backup_snapshot_to_database(connection, backup_path, &snapshot)
+}
+
+fn restore_backup_snapshot_to_database(
+    connection: &mut Connection,
+    backup_path: &Path,
+    snapshot: &BackupSnapshot,
+) -> Result<RestoreBackupSnapshotResult, String> {
+    let transaction = connection
+        .transaction()
+        .map_err(|error| format!("Failed to start backup restore transaction: {error}"))?;
+
+    restore_backup_accounts(&transaction, &snapshot.accounts)?;
+    restore_backup_banners(&transaction, &snapshot.banners)?;
+    restore_backup_warp_items(&transaction, &snapshot.warp_items)?;
+    restore_backup_import_batches(&transaction, &snapshot.import_batches)?;
+    let (warp_pulls_inserted, duplicate_warp_pulls) =
+        restore_backup_warp_pulls(&transaction, &snapshot.warp_pulls)?;
+    let recomputed_banners = recompute_pity_for_snapshot(&transaction, snapshot)?;
+
+    transaction
+        .commit()
+        .map_err(|error| format!("Failed to commit backup restore transaction: {error}"))?;
+
+    Ok(RestoreBackupSnapshotResult {
+        backup_path: backup_path.to_string_lossy().to_string(),
+        exported_at: snapshot.exported_at.clone(),
+        accounts: snapshot.accounts.len(),
+        banners: snapshot.banners.len(),
+        warp_items: snapshot.warp_items.len(),
+        import_batches: snapshot.import_batches.len(),
+        warp_pulls: snapshot.warp_pulls.len(),
+        warp_pulls_inserted,
+        duplicate_warp_pulls,
+        recomputed_banners,
+    })
+}
+
 fn build_backup_snapshot(connection: &Connection) -> Result<BackupSnapshot, String> {
     Ok(BackupSnapshot {
         schema_version: BACKUP_SCHEMA_VERSION,
-        application: "warp-tracker",
+        application: "warp-tracker".to_string(),
         exported_at: current_database_timestamp(connection)?,
         applied_migrations: list_applied_migrations(connection)?,
         accounts: read_backup_accounts(connection)?,
@@ -863,6 +937,280 @@ fn read_backup_warp_pulls(connection: &Connection) -> Result<Vec<BackupWarpPullR
 
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|error| format!("Failed to decode warp pull backup rows: {error}"))
+}
+
+fn restore_backup_accounts(
+    transaction: &Transaction<'_>,
+    accounts: &[BackupAccountRow],
+) -> Result<(), String> {
+    let mut statement = transaction
+        .prepare(
+            "INSERT INTO accounts (id, uid, region, nickname, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+             ON CONFLICT(id) DO UPDATE SET
+               uid = excluded.uid,
+               region = excluded.region,
+               nickname = excluded.nickname,
+               created_at = excluded.created_at,
+               updated_at = excluded.updated_at",
+        )
+        .map_err(|error| format!("Failed to prepare account restore statement: {error}"))?;
+
+    for account in accounts {
+        statement
+            .execute(params![
+                &account.id,
+                &account.uid,
+                account.region.as_deref(),
+                account.nickname.as_deref(),
+                &account.created_at,
+                &account.updated_at,
+            ])
+            .map_err(|error| format!("Failed to restore account {}: {error}", account.uid))?;
+    }
+
+    Ok(())
+}
+
+fn restore_backup_banners(
+    transaction: &Transaction<'_>,
+    banners: &[BackupBannerRow],
+) -> Result<(), String> {
+    let mut statement = transaction
+        .prepare(
+            "INSERT INTO banners (
+               id, banner_type, name, version, started_at, ended_at, created_at, updated_at
+             )
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+             ON CONFLICT(id) DO UPDATE SET
+               banner_type = excluded.banner_type,
+               name = excluded.name,
+               version = excluded.version,
+               started_at = excluded.started_at,
+               ended_at = excluded.ended_at,
+               created_at = excluded.created_at,
+               updated_at = excluded.updated_at",
+        )
+        .map_err(|error| format!("Failed to prepare banner restore statement: {error}"))?;
+
+    for banner in banners {
+        statement
+            .execute(params![
+                &banner.id,
+                &banner.banner_type,
+                &banner.name,
+                banner.version.as_deref(),
+                banner.started_at.as_deref(),
+                banner.ended_at.as_deref(),
+                &banner.created_at,
+                &banner.updated_at,
+            ])
+            .map_err(|error| format!("Failed to restore banner {}: {error}", banner.id))?;
+    }
+
+    Ok(())
+}
+
+fn restore_backup_warp_items(
+    transaction: &Transaction<'_>,
+    warp_items: &[BackupWarpItemRow],
+) -> Result<(), String> {
+    let mut statement = transaction
+        .prepare(
+            "INSERT INTO warp_items (
+               id, source_id, name, item_type, rarity, icon_path, preview_path, portrait_path,
+               updated_at
+             )
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+             ON CONFLICT(id) DO UPDATE SET
+               source_id = excluded.source_id,
+               name = excluded.name,
+               item_type = excluded.item_type,
+               rarity = excluded.rarity,
+               icon_path = excluded.icon_path,
+               preview_path = excluded.preview_path,
+               portrait_path = excluded.portrait_path,
+               updated_at = excluded.updated_at",
+        )
+        .map_err(|error| format!("Failed to prepare item restore statement: {error}"))?;
+
+    for item in warp_items {
+        statement
+            .execute(params![
+                &item.id,
+                item.source_id.as_deref(),
+                &item.name,
+                &item.item_type,
+                item.rarity,
+                item.icon_path.as_deref(),
+                item.preview_path.as_deref(),
+                item.portrait_path.as_deref(),
+                &item.updated_at,
+            ])
+            .map_err(|error| format!("Failed to restore item {}: {error}", item.id))?;
+    }
+
+    Ok(())
+}
+
+fn restore_backup_import_batches(
+    transaction: &Transaction<'_>,
+    import_batches: &[BackupImportBatchRow],
+) -> Result<(), String> {
+    let mut statement = transaction
+        .prepare(
+            "INSERT INTO import_batches (
+               id, account_id, source, banner_type, started_at, finished_at, records_found,
+               records_inserted, records_skipped, status, notes
+             )
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+             ON CONFLICT(id) DO UPDATE SET
+               account_id = excluded.account_id,
+               source = excluded.source,
+               banner_type = excluded.banner_type,
+               started_at = excluded.started_at,
+               finished_at = excluded.finished_at,
+               records_found = excluded.records_found,
+               records_inserted = excluded.records_inserted,
+               records_skipped = excluded.records_skipped,
+               status = excluded.status,
+               notes = excluded.notes",
+        )
+        .map_err(|error| format!("Failed to prepare import batch restore statement: {error}"))?;
+
+    for batch in import_batches {
+        statement
+            .execute(params![
+                &batch.id,
+                &batch.account_id,
+                &batch.source,
+                batch.banner_type.as_deref(),
+                &batch.started_at,
+                batch.finished_at.as_deref(),
+                batch.records_found,
+                batch.records_inserted,
+                batch.records_skipped,
+                &batch.status,
+                batch.notes.as_deref(),
+            ])
+            .map_err(|error| format!("Failed to restore import batch {}: {error}", batch.id))?;
+    }
+
+    Ok(())
+}
+
+fn restore_backup_warp_pulls(
+    transaction: &Transaction<'_>,
+    warp_pulls: &[BackupWarpPullRow],
+) -> Result<(usize, usize), String> {
+    let mut statement = transaction
+        .prepare(
+            "INSERT OR IGNORE INTO warp_pulls (
+               id, account_id, banner_id, warp_item_id, pulled_at, pulled_at_timezone,
+               gacha_id, source, source_import_id, source_line_number,
+               sequence_in_timestamp_group, raw_item_name, pity_4, pity_5, created_at
+             )
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+        )
+        .map_err(|error| format!("Failed to prepare warp pull restore statement: {error}"))?;
+    let mut inserted = 0;
+    let mut duplicate = 0;
+
+    for pull in warp_pulls {
+        let affected_rows = statement
+            .execute(params![
+                &pull.id,
+                &pull.account_id,
+                &pull.banner_id,
+                &pull.warp_item_id,
+                &pull.pulled_at,
+                pull.pulled_at_timezone.as_deref(),
+                pull.gacha_id.as_deref(),
+                &pull.source,
+                pull.source_import_id.as_deref(),
+                pull.source_line_number,
+                pull.sequence_in_timestamp_group,
+                pull.raw_item_name.as_deref(),
+                pull.pity_4,
+                pull.pity_5,
+                &pull.created_at,
+            ])
+            .map_err(|error| format!("Failed to restore warp pull {}: {error}", pull.id))?;
+
+        if affected_rows == 1 {
+            inserted += 1;
+        } else {
+            duplicate += 1;
+        }
+    }
+
+    Ok((inserted, duplicate))
+}
+
+fn recompute_pity_for_snapshot(
+    transaction: &Transaction<'_>,
+    snapshot: &BackupSnapshot,
+) -> Result<usize, String> {
+    let account_banner_pairs = snapshot
+        .warp_pulls
+        .iter()
+        .map(|pull| (pull.account_id.as_str(), pull.banner_id.as_str()))
+        .collect::<HashSet<_>>();
+
+    for (account_id, banner_id) in &account_banner_pairs {
+        recompute_pity_for_account_banner(transaction, account_id, banner_id)?;
+    }
+
+    Ok(account_banner_pairs.len())
+}
+
+fn validate_backup_snapshot(snapshot: &BackupSnapshot) -> Result<(), String> {
+    if snapshot.application != "warp-tracker" {
+        return Err("Backup snapshot was not created by Warp Tracker.".to_string());
+    }
+
+    if snapshot.schema_version != BACKUP_SCHEMA_VERSION {
+        return Err(format!(
+            "Unsupported backup schema version {}.",
+            snapshot.schema_version
+        ));
+    }
+
+    Ok(())
+}
+
+fn find_latest_backup_snapshot_path(backup_directory: &Path) -> Result<PathBuf, String> {
+    let mut candidates = Vec::new();
+
+    if !backup_directory.exists() {
+        return Err("No local backup snapshots found yet.".to_string());
+    }
+
+    for entry in fs::read_dir(backup_directory)
+        .map_err(|error| format!("Failed to read backup directory: {error}"))?
+    {
+        let path = entry
+            .map_err(|error| format!("Failed to read backup directory entry: {error}"))?
+            .path();
+
+        if is_backup_snapshot_file(&path) {
+            candidates.push(path);
+        }
+    }
+
+    candidates.sort_by(|left, right| left.file_name().cmp(&right.file_name()));
+    candidates
+        .pop()
+        .ok_or_else(|| "No local backup snapshots found yet.".to_string())
+}
+
+fn is_backup_snapshot_file(path: &Path) -> bool {
+    let Some(file_name) = path.file_name().and_then(|file_name| file_name.to_str()) else {
+        return false;
+    };
+
+    file_name.starts_with("warp-tracker-backup-")
+        && path.extension().and_then(|extension| extension.to_str()) == Some("json")
 }
 
 fn current_database_timestamp(connection: &Connection) -> Result<String, String> {
@@ -1466,6 +1814,71 @@ mod tests {
         assert_eq!(snapshot["warpPulls"].as_array().map(Vec::len), Some(2));
 
         std::fs::remove_dir_all(backup_directory).ok();
+    }
+
+    #[test]
+    fn restores_backup_snapshot_and_skips_duplicate_pulls() {
+        let mut source_connection = Connection::open_in_memory().expect("source database");
+        apply_migrations(&source_connection).expect("source migration applies");
+        upsert_warp_item_catalog(
+            &mut source_connection,
+            &[
+                catalog_item("character-1001", "1001", "Pela", "character", 4),
+                catalog_item("light-cone-2001", "2001", "Data Bank", "light_cone", 3),
+            ],
+        )
+        .expect("source catalog sync");
+        save_manual_import_draft_to_database(&mut source_connection, &manual_import_draft())
+            .expect("source manual import");
+
+        let backup_directory = unique_test_dir("backup-restore");
+        let export_result =
+            export_backup_snapshot_to_directory(&source_connection, &backup_directory)
+                .expect("backup export");
+        let backup_path = PathBuf::from(export_result.backup_path);
+        let mut target_connection = Connection::open_in_memory().expect("target database");
+        apply_migrations(&target_connection).expect("target migration applies");
+
+        let first_restore = restore_backup_snapshot_from_file(&mut target_connection, &backup_path)
+            .expect("first restore");
+        let second_restore =
+            restore_backup_snapshot_from_file(&mut target_connection, &backup_path)
+                .expect("second restore skips duplicates");
+        let restored_pulls = list_warp_pulls_from_database(
+            &target_connection,
+            &ListWarpPullsInput {
+                account_id: "account-1".to_string(),
+                banner_type: Some("character_event".to_string()),
+                limit: Some(10),
+            },
+        )
+        .expect("restored pulls can be listed");
+
+        assert_eq!(first_restore.accounts, 1);
+        assert_eq!(first_restore.warp_pulls, 2);
+        assert_eq!(first_restore.warp_pulls_inserted, 2);
+        assert_eq!(first_restore.duplicate_warp_pulls, 0);
+        assert_eq!(first_restore.recomputed_banners, 1);
+        assert_eq!(second_restore.warp_pulls_inserted, 0);
+        assert_eq!(second_restore.duplicate_warp_pulls, 2);
+        assert_eq!(count_table(&target_connection, "accounts"), 1);
+        assert_eq!(count_table(&target_connection, "import_batches"), 1);
+        assert_eq!(count_table(&target_connection, "warp_pulls"), 2);
+        assert_eq!(restored_pulls[0].item_name, "Pela");
+        assert_eq!(restored_pulls[0].pity_four_at_pull, Some(1));
+
+        std::fs::remove_dir_all(backup_directory).ok();
+    }
+
+    #[test]
+    fn reports_missing_local_backup_snapshots() {
+        let backup_directory = unique_test_dir("empty-backup");
+        let result = find_latest_backup_snapshot_path(&backup_directory);
+
+        assert!(result.is_err());
+        assert!(result
+            .expect_err("missing backup should fail")
+            .contains("No local backup snapshots"));
     }
 
     #[test]
