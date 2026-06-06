@@ -1,5 +1,6 @@
 import type { CloudBackupStatus } from '../../backup/domain/cloud-backup'
 import { invokeTauri } from './tauri-invoke'
+import type { RestoreBackupSnapshotResult } from './backup-export'
 
 export type UploadCloudBackupSnapshotResult = {
   localBackupPath: string
@@ -40,5 +41,14 @@ export function uploadLatestGoogleDriveBackup() {
 export function listGoogleDriveBackupSnapshots() {
   return invokeTauri<CloudBackupSnapshotSummary[]>(
     'list_google_drive_backup_snapshots',
+  )
+}
+
+export function restoreGoogleDriveBackupSnapshot(remoteFileId: string) {
+  return invokeTauri<RestoreBackupSnapshotResult>(
+    'restore_google_drive_backup_snapshot',
+    {
+      input: { remoteFileId },
+    },
   )
 }

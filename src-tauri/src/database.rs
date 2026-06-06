@@ -414,6 +414,17 @@ pub fn restore_backup_snapshot(
     restore_backup_snapshot_from_file(&mut connection, &backup_path)
 }
 
+pub fn restore_backup_snapshot_from_bytes(
+    app: &AppHandle,
+    backup_source: &str,
+    bytes: &[u8],
+) -> Result<RestoreBackupSnapshotResult, String> {
+    let database_path = resolve_database_path(app)?;
+    let mut connection = open_database(&database_path)?;
+
+    restore_backup_snapshot_payload(&mut connection, backup_source, bytes)
+}
+
 fn resolve_database_path(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
@@ -803,16 +814,37 @@ fn restore_backup_snapshot_from_file(
 ) -> Result<RestoreBackupSnapshotResult, String> {
     let payload = fs::read_to_string(backup_path)
         .map_err(|error| format!("Failed to read backup snapshot: {error}"))?;
-    let snapshot: BackupSnapshot = serde_json::from_str(&payload)
+    let backup_source = backup_path.to_string_lossy().to_string();
+
+    restore_backup_snapshot_text(connection, &backup_source, &payload)
+}
+
+fn restore_backup_snapshot_payload(
+    connection: &mut Connection,
+    backup_source: &str,
+    bytes: &[u8],
+) -> Result<RestoreBackupSnapshotResult, String> {
+    let payload = std::str::from_utf8(bytes)
+        .map_err(|error| format!("Backup snapshot is not valid UTF-8: {error}"))?;
+
+    restore_backup_snapshot_text(connection, backup_source, payload)
+}
+
+fn restore_backup_snapshot_text(
+    connection: &mut Connection,
+    backup_source: &str,
+    payload: &str,
+) -> Result<RestoreBackupSnapshotResult, String> {
+    let snapshot: BackupSnapshot = serde_json::from_str(payload)
         .map_err(|error| format!("Failed to parse backup snapshot: {error}"))?;
 
     validate_backup_snapshot(&snapshot)?;
-    restore_backup_snapshot_to_database(connection, backup_path, &snapshot)
+    restore_backup_snapshot_to_database(connection, backup_source, &snapshot)
 }
 
 fn restore_backup_snapshot_to_database(
     connection: &mut Connection,
-    backup_path: &Path,
+    backup_source: &str,
     snapshot: &BackupSnapshot,
 ) -> Result<RestoreBackupSnapshotResult, String> {
     let transaction = connection
@@ -832,7 +864,7 @@ fn restore_backup_snapshot_to_database(
         .map_err(|error| format!("Failed to commit backup restore transaction: {error}"))?;
 
     Ok(RestoreBackupSnapshotResult {
-        backup_path: backup_path.to_string_lossy().to_string(),
+        backup_path: backup_source.to_string(),
         exported_at: snapshot.exported_at.clone(),
         accounts: snapshot.accounts.len(),
         banners: snapshot.banners.len(),
@@ -2097,6 +2129,46 @@ mod tests {
         assert_eq!(count_table(&target_connection, "warp_pulls"), 2);
         assert_eq!(restored_pulls[0].item_name, "Pela");
         assert_eq!(restored_pulls[0].pity_four_at_pull, Some(1));
+
+        std::fs::remove_dir_all(backup_directory).ok();
+    }
+
+    #[test]
+    fn restores_backup_snapshot_from_bytes_source() {
+        let mut source_connection = Connection::open_in_memory().expect("source database");
+        apply_migrations(&source_connection).expect("source migration applies");
+        upsert_warp_item_catalog(
+            &mut source_connection,
+            &[
+                catalog_item("character-1001", "1001", "Pela", "character", 4),
+                catalog_item("light-cone-2001", "2001", "Data Bank", "light_cone", 3),
+            ],
+        )
+        .expect("source catalog sync");
+        save_manual_import_draft_to_database(&mut source_connection, &manual_import_draft())
+            .expect("source manual import");
+
+        let backup_directory = unique_test_dir("backup-restore-bytes");
+        let export_result =
+            export_backup_snapshot_to_directory(&source_connection, &backup_directory)
+                .expect("backup export");
+        let payload = std::fs::read(export_result.backup_path).expect("backup bytes");
+        let mut target_connection = Connection::open_in_memory().expect("target database");
+        apply_migrations(&target_connection).expect("target migration applies");
+
+        let restore_result = restore_backup_snapshot_payload(
+            &mut target_connection,
+            "google-drive://remote-1/warp-tracker-backup.json",
+            &payload,
+        )
+        .expect("bytes restore");
+
+        assert_eq!(
+            restore_result.backup_path,
+            "google-drive://remote-1/warp-tracker-backup.json"
+        );
+        assert_eq!(restore_result.warp_pulls_inserted, 2);
+        assert_eq!(count_table(&target_connection, "warp_pulls"), 2);
 
         std::fs::remove_dir_all(backup_directory).ok();
     }

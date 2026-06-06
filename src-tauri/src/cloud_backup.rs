@@ -90,6 +90,19 @@ pub struct CloudBackupSnapshotSummary {
     pub size: Option<String>,
 }
 
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DownloadCloudBackupSnapshotResult {
+    pub remote_file_id: String,
+    pub bytes: Vec<u8>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreCloudBackupSnapshotInput {
+    pub remote_file_id: String,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum SecretStoreError {
     Unavailable(String),
@@ -207,6 +220,23 @@ pub fn list_google_drive_backup_snapshots() -> Result<Vec<CloudBackupSnapshotSum
     list_backup_snapshots_from_drive(&access_token)
 }
 
+pub fn download_google_drive_backup_snapshot(
+    remote_file_id: &str,
+) -> Result<DownloadCloudBackupSnapshotResult, String> {
+    let secret_store = KeyringSecretStore;
+    let oauth_config = read_google_oauth_client_config_from_environment();
+    let client_id = oauth_config.client_id.as_deref().ok_or_else(|| {
+        format!("Configure {GOOGLE_OAUTH_CLIENT_ID_ENV} before restoring Google Drive backups.")
+    })?;
+    let access_token = refresh_google_access_token(&secret_store, client_id)?;
+    let bytes = download_backup_snapshot_from_drive(remote_file_id, &access_token)?;
+
+    Ok(DownloadCloudBackupSnapshotResult {
+        remote_file_id: remote_file_id.to_string(),
+        bytes,
+    })
+}
+
 fn cloud_backup_status(
     secret_store: &impl SecretStore,
     oauth_config: GoogleOAuthClientConfig,
@@ -322,6 +352,55 @@ fn list_backup_snapshots_from_drive(
         .into_iter()
         .map(to_cloud_backup_snapshot_summary)
         .collect()
+}
+
+fn download_backup_snapshot_from_drive(
+    remote_file_id: &str,
+    access_token: &str,
+) -> Result<Vec<u8>, String> {
+    validate_google_drive_file_id(remote_file_id)?;
+
+    let download_url = build_drive_download_url(remote_file_id)?;
+    let authorization = format!("Bearer {access_token}");
+    let response = ureq::get(&download_url)
+        .set("Authorization", &authorization)
+        .call()
+        .map_err(|error| format!("Failed to download Google Drive backup snapshot: {error}"))?;
+    let mut bytes = Vec::new();
+    response
+        .into_reader()
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("Failed to read Google Drive backup snapshot bytes: {error}"))?;
+
+    Ok(bytes)
+}
+
+fn build_drive_download_url(remote_file_id: &str) -> Result<String, String> {
+    validate_google_drive_file_id(remote_file_id)?;
+
+    let mut url = Url::parse(GOOGLE_DRIVE_FILES_ENDPOINT)
+        .map_err(|error| format!("Failed to build Google Drive download URL: {error}"))?;
+    url.path_segments_mut()
+        .map_err(|()| "Failed to append Google Drive file id to download URL.".to_string())?
+        .push(remote_file_id);
+    url.query_pairs_mut().append_pair("alt", "media");
+
+    Ok(url.to_string())
+}
+
+fn validate_google_drive_file_id(remote_file_id: &str) -> Result<(), String> {
+    if remote_file_id.trim().is_empty() {
+        return Err("Google Drive file id is required.".to_string());
+    }
+
+    if !remote_file_id
+        .chars()
+        .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
+    {
+        return Err("Google Drive file id contains unsupported characters.".to_string());
+    }
+
+    Ok(())
 }
 
 fn build_drive_backup_list_url() -> Result<String, String> {
@@ -821,6 +900,32 @@ mod tests {
         assert_eq!(summary.file_name, "warp-tracker-backup-20260606.json");
         assert_eq!(summary.remote_md5_checksum, Some("checksum".to_string()));
         assert_eq!(summary.size, Some("1234".to_string()));
+    }
+
+    #[test]
+    fn builds_google_drive_download_url_for_blob_file() {
+        let url = Url::parse(
+            &build_drive_download_url("remote_file-1").expect("download url can be built"),
+        )
+        .expect("download url can be parsed");
+        let query_pairs = url
+            .query_pairs()
+            .map(|(key, value)| (key.into_owned(), value.into_owned()))
+            .collect::<HashMap<_, _>>();
+
+        assert_eq!(
+            url.as_str().split('?').next(),
+            Some("https://www.googleapis.com/drive/v3/files/remote_file-1")
+        );
+        assert_eq!(query_pairs.get("alt"), Some(&"media".to_string()));
+    }
+
+    #[test]
+    fn rejects_invalid_google_drive_file_ids_before_download() {
+        assert!(validate_google_drive_file_id("").is_err());
+        assert!(validate_google_drive_file_id("../backup").is_err());
+        assert!(validate_google_drive_file_id("remote file").is_err());
+        assert!(validate_google_drive_file_id("remote_file-1").is_ok());
     }
 
     #[test]

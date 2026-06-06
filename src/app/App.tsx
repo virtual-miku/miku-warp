@@ -45,6 +45,7 @@ import {
   disconnectGoogleDriveBackup,
   getCloudBackupStatus,
   listGoogleDriveBackupSnapshots,
+  restoreGoogleDriveBackupSnapshot,
   uploadLatestGoogleDriveBackup,
   type UploadCloudBackupSnapshotResult,
 } from '../features/persistence/data/cloud-backup-status'
@@ -86,6 +87,8 @@ export function App() {
   const [deletingBackupFileName, setDeletingBackupFileName] = useState<string>()
   const [restoringBackupFileName, setRestoringBackupFileName] =
     useState<string>()
+  const [restoringCloudBackupFileId, setRestoringCloudBackupFileId] =
+    useState<string>()
   const [backupNotice, setBackupNotice] = useState<BackupNotice>()
   const [cloudBackupConnecting, setCloudBackupConnecting] = useState(false)
   const [cloudBackupDisconnecting, setCloudBackupDisconnecting] =
@@ -123,10 +126,12 @@ export function App() {
   )
   const backupDeleting = deletingBackupFileName !== undefined
   const backupRestoring = restoringBackupFileName !== undefined
+  const cloudBackupRestoring = restoringCloudBackupFileId !== undefined
   const cloudBackupBusy =
     cloudBackupConnecting ||
     cloudBackupDisconnecting ||
     cloudBackupListing ||
+    cloudBackupRestoring ||
     cloudBackupUploading
 
   const fetchPersistedPulls = useCallback(() => {
@@ -480,6 +485,60 @@ export function App() {
     refreshCloudBackupSnapshots,
   ])
 
+  const handleRestoreGoogleDriveBackup = useCallback(
+    async (remoteFileId: string) => {
+      if (
+        backupDeleting ||
+        backupExporting ||
+        backupRestoring ||
+        cloudBackupBusy ||
+        cloudBackupStatus.connectionStatus !== 'connected'
+      ) {
+        return
+      }
+
+      const confirmed = window.confirm(
+        'Restore this cloud backup snapshot? Existing matching pulls will be skipped as duplicates.',
+      )
+
+      if (!confirmed) {
+        return
+      }
+
+      setRestoringCloudBackupFileId(remoteFileId)
+      setBackupNotice(undefined)
+
+      try {
+        const result = await restoreGoogleDriveBackupSnapshot(remoteFileId)
+        await refreshPersistedPulls()
+
+        setBackupNotice({
+          tone: 'success',
+          title: 'Cloud backup restored',
+          detail: formatBackupRestoreDetail(result),
+        })
+      } catch (error) {
+        const fallbackStatus = await refreshCloudBackupStatus()
+        setBackupNotice({
+          tone: 'error',
+          title: 'Cloud restore failed',
+          detail: `${getErrorMessage(error)}\n${fallbackStatus.detail}`,
+        })
+      } finally {
+        setRestoringCloudBackupFileId(undefined)
+      }
+    },
+    [
+      backupDeleting,
+      backupExporting,
+      backupRestoring,
+      cloudBackupBusy,
+      cloudBackupStatus.connectionStatus,
+      refreshCloudBackupStatus,
+      refreshPersistedPulls,
+    ],
+  )
+
   const handleRefreshGoogleDriveBackups = useCallback(async () => {
     if (
       backupDeleting ||
@@ -725,12 +784,14 @@ export function App() {
                 isCloudConnecting={cloudBackupConnecting}
                 isCloudDisconnecting={cloudBackupDisconnecting}
                 isCloudListing={cloudBackupListing}
+                isCloudRestoring={cloudBackupRestoring}
                 isCloudUploading={cloudBackupUploading}
                 isExporting={backupExporting}
                 isDeleting={backupDeleting}
                 isRestoring={backupRestoring}
                 latestBackup={backupSnapshots[0]}
                 notice={backupNotice}
+                restoringCloudFileId={restoringCloudBackupFileId}
                 restoringFileName={restoringBackupFileName}
                 snapshots={backupSnapshots}
                 onConnectGoogleDrive={handleConnectGoogleDrive}
@@ -738,6 +799,7 @@ export function App() {
                 onDisconnectGoogleDrive={handleDisconnectGoogleDrive}
                 onExportBackup={handleExportBackup}
                 onRefreshGoogleDriveBackups={handleRefreshGoogleDriveBackups}
+                onRestoreGoogleDriveBackup={handleRestoreGoogleDriveBackup}
                 onRestoreBackup={handleRestoreBackup}
                 onRestoreSnapshot={handleRestoreBackupSnapshot}
                 onUploadGoogleDriveBackup={handleUploadGoogleDriveBackup}

@@ -36,6 +36,18 @@ fn list_google_drive_backup_snapshots(
 }
 
 #[tauri::command]
+fn restore_google_drive_backup_snapshot(
+    app: tauri::AppHandle,
+    input: cloud_backup::RestoreCloudBackupSnapshotInput,
+) -> Result<database::RestoreBackupSnapshotResult, String> {
+    let backup_snapshot =
+        cloud_backup::download_google_drive_backup_snapshot(&input.remote_file_id)?;
+    let backup_source = format!("google-drive://{}", backup_snapshot.remote_file_id);
+
+    database::restore_backup_snapshot_from_bytes(&app, &backup_source, &backup_snapshot.bytes)
+}
+
+#[tauri::command]
 fn get_database_status(app: tauri::AppHandle) -> Result<database::DatabaseStatus, String> {
     database::get_database_status(&app)
 }
@@ -124,6 +136,7 @@ pub fn run() {
             list_google_drive_backup_snapshots,
             list_backup_snapshots,
             list_warp_pulls,
+            restore_google_drive_backup_snapshot,
             restore_backup_snapshot,
             restore_latest_backup_snapshot,
             save_manual_import_draft,

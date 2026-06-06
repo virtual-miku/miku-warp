@@ -35,6 +35,7 @@ type BackupPanelProps = {
   isCloudConnecting: boolean
   isCloudDisconnecting: boolean
   isCloudListing: boolean
+  isCloudRestoring: boolean
   isCloudUploading: boolean
   isExporting: boolean
   isRestoring: boolean
@@ -42,12 +43,14 @@ type BackupPanelProps = {
   latestBackup?: BackupSnapshotInfo
   notice?: BackupNotice
   deletingFileName?: string
+  restoringCloudFileId?: string
   restoringFileName?: string
   snapshots: BackupSnapshotInfo[]
   onDeleteSnapshot: (fileName: string) => void
   onConnectGoogleDrive: () => void
   onDisconnectGoogleDrive: () => void
   onRefreshGoogleDriveBackups: () => void
+  onRestoreGoogleDriveBackup: (remoteFileId: string) => void
   onUploadGoogleDriveBackup: () => void
   onExportBackup: () => void
   onRestoreBackup: () => void
@@ -61,6 +64,7 @@ export function BackupPanel({
   isCloudConnecting,
   isCloudDisconnecting,
   isCloudListing,
+  isCloudRestoring,
   isCloudUploading,
   isExporting,
   isDeleting,
@@ -68,12 +72,14 @@ export function BackupPanel({
   latestBackup,
   notice,
   deletingFileName,
+  restoringCloudFileId,
   restoringFileName,
   snapshots,
   onDeleteSnapshot,
   onConnectGoogleDrive,
   onDisconnectGoogleDrive,
   onRefreshGoogleDriveBackups,
+  onRestoreGoogleDriveBackup,
   onUploadGoogleDriveBackup,
   onExportBackup,
   onRestoreBackup,
@@ -83,6 +89,7 @@ export function BackupPanel({
     isCloudConnecting ||
     isCloudDisconnecting ||
     isCloudListing ||
+    isCloudRestoring ||
     isCloudUploading
   const isBusy = isExporting || isRestoring || isDeleting || isCloudBusy
   const visibleSnapshots = snapshots.slice(0, 3)
@@ -174,7 +181,21 @@ export function BackupPanel({
                       )}
                     </span>
                   </div>
-                  <span className="status-pill">Cloud</span>
+                  <div className="backup-snapshot-actions">
+                    <span className="status-pill">Cloud</span>
+                    <AppButton
+                      disabled={isBusy}
+                      icon={RefreshCcw}
+                      onClick={() =>
+                        onRestoreGoogleDriveBackup(snapshot.remoteFileId)
+                      }
+                      variant="ghost"
+                    >
+                      {restoringCloudFileId === snapshot.remoteFileId
+                        ? 'Restoring'
+                        : 'Restore'}
+                    </AppButton>
+                  </div>
                 </div>
               ))
             ) : (
