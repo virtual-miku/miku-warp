@@ -17,6 +17,19 @@ fn disconnect_google_drive_backup() -> Result<cloud_backup::CloudBackupStatus, S
 }
 
 #[tauri::command]
+fn upload_latest_google_drive_backup(
+    app: tauri::AppHandle,
+) -> Result<cloud_backup::UploadCloudBackupSnapshotResult, String> {
+    let backup_snapshot = database::read_latest_backup_snapshot_file(&app)?;
+
+    cloud_backup::upload_google_drive_backup_snapshot(
+        &backup_snapshot.backup_path,
+        &backup_snapshot.file_name,
+        &backup_snapshot.bytes,
+    )
+}
+
+#[tauri::command]
 fn get_database_status(app: tauri::AppHandle) -> Result<database::DatabaseStatus, String> {
     database::get_database_status(&app)
 }
@@ -107,7 +120,8 @@ pub fn run() {
             restore_backup_snapshot,
             restore_latest_backup_snapshot,
             save_manual_import_draft,
-            sync_warp_item_catalog
+            sync_warp_item_catalog,
+            upload_latest_google_drive_backup
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

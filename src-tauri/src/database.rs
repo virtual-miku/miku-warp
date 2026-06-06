@@ -141,6 +141,13 @@ pub struct BackupSnapshotSummary {
     pub warp_pulls: usize,
 }
 
+#[derive(Debug)]
+pub struct BackupSnapshotFile {
+    pub backup_path: String,
+    pub file_name: String,
+    pub bytes: Vec<u8>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteBackupSnapshotResult {
@@ -365,6 +372,13 @@ pub fn list_backup_snapshots(app: &AppHandle) -> Result<Vec<BackupSnapshotSummar
     let backup_directory = resolve_backup_directory(app)?;
 
     list_backup_snapshots_in_directory(&backup_directory)
+}
+
+pub fn read_latest_backup_snapshot_file(app: &AppHandle) -> Result<BackupSnapshotFile, String> {
+    let backup_directory = resolve_backup_directory(app)?;
+    let backup_path = find_latest_backup_snapshot_path(&backup_directory)?;
+
+    read_backup_snapshot_file(&backup_path)
 }
 
 pub fn delete_backup_snapshot(
@@ -1323,6 +1337,22 @@ fn delete_backup_snapshot_file(
         backup_path: backup_path_string,
         file_name,
         remaining_snapshots,
+    })
+}
+
+fn read_backup_snapshot_file(backup_path: &Path) -> Result<BackupSnapshotFile, String> {
+    let file_name = backup_path
+        .file_name()
+        .and_then(|file_name| file_name.to_str())
+        .ok_or_else(|| "Backup snapshot file name is invalid.".to_string())?
+        .to_string();
+    let bytes = fs::read(backup_path)
+        .map_err(|error| format!("Failed to read local backup snapshot: {error}"))?;
+
+    Ok(BackupSnapshotFile {
+        backup_path: backup_path.to_string_lossy().to_string(),
+        file_name,
+        bytes,
     })
 }
 

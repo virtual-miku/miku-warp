@@ -43,6 +43,8 @@ import {
   connectGoogleDriveBackup,
   disconnectGoogleDriveBackup,
   getCloudBackupStatus,
+  uploadLatestGoogleDriveBackup,
+  type UploadCloudBackupSnapshotResult,
 } from '../features/persistence/data/cloud-backup-status'
 import { syncWarpItemCatalog } from '../features/persistence/data/warp-item-catalog-sync'
 import { listWarpPulls } from '../features/persistence/data/warp-pull-history'
@@ -86,6 +88,7 @@ export function App() {
   const [cloudBackupConnecting, setCloudBackupConnecting] = useState(false)
   const [cloudBackupDisconnecting, setCloudBackupDisconnecting] =
     useState(false)
+  const [cloudBackupUploading, setCloudBackupUploading] = useState(false)
   const [backupSnapshots, setBackupSnapshots] = useState<
     BackupSnapshotSummary[]
   >([])
@@ -114,7 +117,8 @@ export function App() {
   )
   const backupDeleting = deletingBackupFileName !== undefined
   const backupRestoring = restoringBackupFileName !== undefined
-  const cloudBackupBusy = cloudBackupConnecting || cloudBackupDisconnecting
+  const cloudBackupBusy =
+    cloudBackupConnecting || cloudBackupDisconnecting || cloudBackupUploading
 
   const fetchPersistedPulls = useCallback(() => {
     return listWarpPulls({
@@ -393,6 +397,47 @@ export function App() {
     refreshCloudBackupStatus,
   ])
 
+  const handleUploadGoogleDriveBackup = useCallback(async () => {
+    if (
+      backupDeleting ||
+      backupExporting ||
+      backupRestoring ||
+      cloudBackupBusy ||
+      !cloudBackupStatus.canUpload
+    ) {
+      return
+    }
+
+    setCloudBackupUploading(true)
+    setBackupNotice(undefined)
+
+    try {
+      const result = await uploadLatestGoogleDriveBackup()
+      await refreshCloudBackupStatus()
+      setBackupNotice({
+        tone: 'success',
+        title: 'Google Drive upload complete',
+        detail: formatCloudBackupUploadDetail(result),
+      })
+    } catch (error) {
+      const fallbackStatus = await refreshCloudBackupStatus()
+      setBackupNotice({
+        tone: 'error',
+        title: 'Google Drive upload failed',
+        detail: `${getErrorMessage(error)}\n${fallbackStatus.detail}`,
+      })
+    } finally {
+      setCloudBackupUploading(false)
+    }
+  }, [
+    backupDeleting,
+    backupExporting,
+    backupRestoring,
+    cloudBackupBusy,
+    cloudBackupStatus.canUpload,
+    refreshCloudBackupStatus,
+  ])
+
   const handleRestoreBackup = useCallback(async () => {
     if (backupDeleting || backupExporting || backupRestoring || cloudBackupBusy) {
       return
@@ -598,6 +643,7 @@ export function App() {
                 deletingFileName={deletingBackupFileName}
                 isCloudConnecting={cloudBackupConnecting}
                 isCloudDisconnecting={cloudBackupDisconnecting}
+                isCloudUploading={cloudBackupUploading}
                 isExporting={backupExporting}
                 isDeleting={backupDeleting}
                 isRestoring={backupRestoring}
@@ -611,6 +657,7 @@ export function App() {
                 onExportBackup={handleExportBackup}
                 onRestoreBackup={handleRestoreBackup}
                 onRestoreSnapshot={handleRestoreBackupSnapshot}
+                onUploadGoogleDriveBackup={handleUploadGoogleDriveBackup}
               />
               <section className="notice-panel" aria-label="Reminder">
                 <div className="notice-icon" aria-hidden="true">
@@ -656,6 +703,18 @@ function formatBackupRestoreDetail(result: RestoreBackupSnapshotResult) {
     `${result.warpPullsInserted} inserted, ${result.duplicateWarpPulls} skipped as duplicates.`,
     `${result.recomputedBanners} banner pity groups recomputed.`,
     `Restored from ${result.backupPath}`,
+  ].join('\n')
+}
+
+function formatCloudBackupUploadDetail(
+  result: UploadCloudBackupSnapshotResult,
+) {
+  return [
+    `${result.fileName} uploaded to Google Drive app data.`,
+    `${result.bytesUploaded} bytes uploaded. Remote file id: ${result.remoteFileId}.`,
+    result.remoteModifiedTime
+      ? `Modified at ${result.remoteModifiedTime}.`
+      : `Local file: ${result.localBackupPath}`,
   ].join('\n')
 }
 

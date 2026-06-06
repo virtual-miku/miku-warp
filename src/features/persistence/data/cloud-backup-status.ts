@@ -1,6 +1,16 @@
 import type { CloudBackupStatus } from '../../backup/domain/cloud-backup'
 import { invokeTauri } from './tauri-invoke'
 
+export type UploadCloudBackupSnapshotResult = {
+  localBackupPath: string
+  fileName: string
+  remoteFileId: string
+  remoteFileName: string
+  remoteMd5Checksum?: string
+  remoteModifiedTime?: string
+  bytesUploaded: number
+}
+
 export function getCloudBackupStatus() {
   return invokeTauri<CloudBackupStatus>('get_cloud_backup_status')
 }
@@ -11,4 +21,10 @@ export function connectGoogleDriveBackup() {
 
 export function disconnectGoogleDriveBackup() {
   return invokeTauri<CloudBackupStatus>('disconnect_google_drive_backup')
+}
+
+export function uploadLatestGoogleDriveBackup() {
+  return invokeTauri<UploadCloudBackupSnapshotResult>(
+    'upload_latest_google_drive_backup',
+  )
 }

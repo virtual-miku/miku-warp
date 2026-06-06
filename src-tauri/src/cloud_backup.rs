@@ -1,7 +1,7 @@
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use keyring::{Entry, Error as KeyringError};
 use rand::{rngs::OsRng, RngCore};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::env;
 use std::io::{Read, Write};
@@ -15,8 +15,10 @@ const KEYRING_SERVICE_NAME: &str = "app.warptracker.desktop.google-drive";
 const GOOGLE_DRIVE_REFRESH_TOKEN_KEY: &str = "google-drive-refresh-token";
 const GOOGLE_AUTHORIZATION_ENDPOINT: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_ENDPOINT: &str = "https://oauth2.googleapis.com/token";
+const GOOGLE_DRIVE_UPLOAD_ENDPOINT: &str = "https://www.googleapis.com/upload/drive/v3/files";
 const OAUTH_CALLBACK_TIMEOUT: Duration = Duration::from_secs(180);
 const OAUTH_RANDOM_TOKEN_BYTES: usize = 64;
+const DRIVE_MULTIPART_BOUNDARY_PREFIX: &str = "warp-tracker-backup";
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -61,6 +63,18 @@ pub struct CloudBackupStatus {
     pub can_upload: bool,
     pub label: String,
     pub detail: String,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UploadCloudBackupSnapshotResult {
+    pub local_backup_path: String,
+    pub file_name: String,
+    pub remote_file_id: String,
+    pub remote_file_name: String,
+    pub remote_md5_checksum: Option<String>,
+    pub remote_modified_time: Option<String>,
+    pub bytes_uploaded: usize,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -142,6 +156,33 @@ pub fn disconnect_google_drive_backup() -> Result<CloudBackupStatus, String> {
     ))
 }
 
+pub fn upload_google_drive_backup_snapshot(
+    local_backup_path: &str,
+    file_name: &str,
+    bytes: &[u8],
+) -> Result<UploadCloudBackupSnapshotResult, String> {
+    let secret_store = KeyringSecretStore;
+    let oauth_config = read_google_oauth_client_config_from_environment();
+    let client_id = oauth_config.client_id.as_deref().ok_or_else(|| {
+        format!("Configure {GOOGLE_OAUTH_CLIENT_ID_ENV} before uploading Google Drive backup.")
+    })?;
+    let access_token = refresh_google_access_token(&secret_store, client_id)?;
+    let remote_file = upload_backup_snapshot_to_drive(file_name, bytes, &access_token)?;
+    let remote_file_id = remote_file
+        .id
+        .ok_or_else(|| "Google Drive upload did not return a remote file id.".to_string())?;
+
+    Ok(UploadCloudBackupSnapshotResult {
+        local_backup_path: local_backup_path.to_string(),
+        file_name: file_name.to_string(),
+        remote_file_id,
+        remote_file_name: remote_file.name.unwrap_or_else(|| file_name.to_string()),
+        remote_md5_checksum: remote_file.md5_checksum,
+        remote_modified_time: remote_file.modified_time,
+        bytes_uploaded: bytes.len(),
+    })
+}
+
 fn cloud_backup_status(
     secret_store: &impl SecretStore,
     oauth_config: GoogleOAuthClientConfig,
@@ -179,9 +220,9 @@ fn cloud_backup_status(
             true,
             false,
             true,
-            false,
+            true,
             "Token stored securely",
-            "A Google Drive refresh token exists in secure storage. Upload and restore commands are not enabled yet.".to_string(),
+            "Google Drive is connected. Local snapshots can be uploaded to the app data folder.".to_string(),
         ),
         Ok(None) => create_status(
             CloudBackupConnectionStatus::Disconnected,
@@ -194,6 +235,92 @@ fn cloud_backup_status(
             "Secure token storage is ready. The next step is the Google OAuth connect flow.".to_string(),
         ),
     }
+}
+
+fn refresh_google_access_token(
+    secret_store: &impl SecretStore,
+    client_id: &str,
+) -> Result<String, String> {
+    let refresh_token = secret_store
+        .read_secret(GOOGLE_DRIVE_REFRESH_TOKEN_KEY)
+        .map_err(secret_store_error_message)?
+        .ok_or_else(|| "Connect Google Drive before uploading cloud backups.".to_string())?;
+    let token_response = ureq::post(GOOGLE_TOKEN_ENDPOINT)
+        .send_form(&[
+            ("client_id", client_id),
+            ("grant_type", "refresh_token"),
+            ("refresh_token", &refresh_token),
+        ])
+        .map_err(|error| format!("Failed to refresh Google Drive access token: {error}"))?
+        .into_json::<GoogleTokenResponse>()
+        .map_err(|error| format!("Failed to read Google Drive access token response: {error}"))?;
+
+    token_response.access_token.ok_or_else(|| {
+        "Google did not return an access token. Disconnect and connect Google Drive again."
+            .to_string()
+    })
+}
+
+fn upload_backup_snapshot_to_drive(
+    file_name: &str,
+    bytes: &[u8],
+    access_token: &str,
+) -> Result<GoogleDriveFileResponse, String> {
+    let boundary = create_drive_multipart_boundary();
+    let body = build_drive_multipart_upload_body(file_name, bytes, &boundary)?;
+    let upload_url = build_drive_upload_url()?;
+    let authorization = format!("Bearer {access_token}");
+    let content_type = format!("multipart/related; boundary={boundary}");
+
+    ureq::post(&upload_url)
+        .set("Authorization", &authorization)
+        .set("Content-Type", &content_type)
+        .send_bytes(&body)
+        .map_err(|error| format!("Failed to upload backup snapshot to Google Drive: {error}"))?
+        .into_json::<GoogleDriveFileResponse>()
+        .map_err(|error| format!("Failed to read Google Drive upload response: {error}"))
+}
+
+fn build_drive_upload_url() -> Result<String, String> {
+    Url::parse_with_params(
+        GOOGLE_DRIVE_UPLOAD_ENDPOINT,
+        &[
+            ("uploadType", "multipart"),
+            ("fields", "id,name,md5Checksum,modifiedTime,size"),
+        ],
+    )
+    .map(|url| url.to_string())
+    .map_err(|error| format!("Failed to build Google Drive upload URL: {error}"))
+}
+
+fn build_drive_multipart_upload_body(
+    file_name: &str,
+    bytes: &[u8],
+    boundary: &str,
+) -> Result<Vec<u8>, String> {
+    let metadata = serde_json::json!({
+        "name": file_name,
+        "parents": ["appDataFolder"],
+    })
+    .to_string();
+    let mut body = Vec::new();
+
+    body.extend_from_slice(format!("--{boundary}\r\n").as_bytes());
+    body.extend_from_slice(b"Content-Type: application/json; charset=UTF-8\r\n\r\n");
+    body.extend_from_slice(metadata.as_bytes());
+    body.extend_from_slice(format!("\r\n--{boundary}\r\n").as_bytes());
+    body.extend_from_slice(b"Content-Type: application/json\r\n\r\n");
+    body.extend_from_slice(bytes);
+    body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
+
+    Ok(body)
+}
+
+fn create_drive_multipart_boundary() -> String {
+    format!(
+        "{DRIVE_MULTIPART_BOUNDARY_PREFIX}-{}",
+        generate_oauth_random_token()
+    )
 }
 
 fn complete_google_oauth_flow(
@@ -420,9 +547,19 @@ fn secret_store_error_message(error: SecretStoreError) -> String {
     }
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, Deserialize)]
 struct GoogleTokenResponse {
+    access_token: Option<String>,
     refresh_token: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GoogleDriveFileResponse {
+    id: Option<String>,
+    name: Option<String>,
+    md5_checksum: Option<String>,
+    modified_time: Option<String>,
 }
 
 #[cfg(test)]
@@ -471,7 +608,7 @@ mod tests {
     }
 
     #[test]
-    fn reports_securely_stored_token_without_enabling_upload_yet() {
+    fn reports_securely_stored_token_with_manual_upload_enabled() {
         let store = MemorySecretStore::default();
         store
             .write_secret(GOOGLE_DRIVE_REFRESH_TOKEN_KEY, "refresh-token")
@@ -485,7 +622,7 @@ mod tests {
         );
         assert_eq!(status.label, "Token stored securely");
         assert!(status.can_disconnect);
-        assert!(!status.can_upload);
+        assert!(status.can_upload);
     }
 
     #[test]
@@ -530,6 +667,46 @@ mod tests {
             Some(&"S256".to_string())
         );
         assert_eq!(query_pairs.get("access_type"), Some(&"offline".to_string()));
+    }
+
+    #[test]
+    fn builds_google_drive_upload_url_for_multipart_create() {
+        let url = Url::parse(&build_drive_upload_url().expect("upload url can be built"))
+            .expect("upload url can be parsed");
+        let query_pairs = url
+            .query_pairs()
+            .map(|(key, value)| (key.into_owned(), value.into_owned()))
+            .collect::<HashMap<_, _>>();
+
+        assert_eq!(
+            url.as_str().split('?').next(),
+            Some(GOOGLE_DRIVE_UPLOAD_ENDPOINT)
+        );
+        assert_eq!(
+            query_pairs.get("uploadType"),
+            Some(&"multipart".to_string())
+        );
+        assert_eq!(
+            query_pairs.get("fields"),
+            Some(&"id,name,md5Checksum,modifiedTime,size".to_string())
+        );
+    }
+
+    #[test]
+    fn builds_drive_multipart_body_with_app_data_parent_and_snapshot_bytes() {
+        let body = build_drive_multipart_upload_body(
+            "warp-tracker-backup-20260606.json",
+            br#"{"schemaVersion":1}"#,
+            "boundary-token",
+        )
+        .expect("multipart body can be built");
+        let body_text = String::from_utf8(body).expect("body is utf8 for json snapshot");
+
+        assert!(body_text.contains("--boundary-token\r\n"));
+        assert!(body_text.contains(r#""name":"warp-tracker-backup-20260606.json""#));
+        assert!(body_text.contains(r#""parents":["appDataFolder"]"#));
+        assert!(body_text.contains(r#"{"schemaVersion":1}"#));
+        assert!(body_text.ends_with("--boundary-token--\r\n"));
     }
 
     #[test]
