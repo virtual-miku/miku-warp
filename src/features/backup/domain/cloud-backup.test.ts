@@ -11,6 +11,8 @@ describe('cloud backup status', () => {
 
     expect(status.provider).toBe('google_drive')
     expect(status.connectionStatus).toBe('not_configured')
+    expect(status.oauthClientConfigured).toBe(false)
+    expect(status.secureStorageStatus).toBe('ready')
     expect(status.canConnect).toBe(false)
     expect(status.canUpload).toBe(false)
     expect(status.scope).toBe(googleDriveAppDataScope)
@@ -19,6 +21,9 @@ describe('cloud backup status', () => {
   it('labels every supported connection state', () => {
     expect(getCloudBackupStatusLabel('not_configured')).toBe(
       'OAuth setup required',
+    )
+    expect(getCloudBackupStatusLabel('storage_unavailable')).toBe(
+      'Secure storage unavailable',
     )
     expect(getCloudBackupStatusLabel('disconnected')).toBe('Not connected')
     expect(getCloudBackupStatusLabel('connected')).toBe('Connected')

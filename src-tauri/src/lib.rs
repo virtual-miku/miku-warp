@@ -1,4 +1,10 @@
+pub mod cloud_backup;
 mod database;
+
+#[tauri::command]
+fn get_cloud_backup_status() -> cloud_backup::CloudBackupStatus {
+    cloud_backup::get_cloud_backup_status()
+}
 
 #[tauri::command]
 fn get_database_status(app: tauri::AppHandle) -> Result<database::DatabaseStatus, String> {
@@ -82,6 +88,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             delete_backup_snapshot,
             export_backup_snapshot,
+            get_cloud_backup_status,
             get_database_status,
             list_backup_snapshots,
             list_warp_pulls,

@@ -5,17 +5,22 @@ export type CloudBackupProvider = 'google_drive'
 
 export type CloudBackupConnectionStatus =
   | 'not_configured'
+  | 'storage_unavailable'
   | 'disconnected'
   | 'connected'
   | 'needs_reauth'
 
 export type CloudBackupStorageSpace = 'app_data_folder'
 
+export type SecureTokenStorageStatus = 'ready' | 'unavailable'
+
 export type CloudBackupStatus = {
   provider: CloudBackupProvider
   connectionStatus: CloudBackupConnectionStatus
   storageSpace: CloudBackupStorageSpace
   scope: typeof googleDriveAppDataScope
+  secureStorageStatus: SecureTokenStorageStatus
+  oauthClientConfigured: boolean
   canConnect: boolean
   canUpload: boolean
   label: string
@@ -28,6 +33,8 @@ export function createInitialGoogleDriveBackupStatus(): CloudBackupStatus {
     connectionStatus: 'not_configured',
     storageSpace: 'app_data_folder',
     scope: googleDriveAppDataScope,
+    secureStorageStatus: 'ready',
+    oauthClientConfigured: false,
     canConnect: false,
     canUpload: false,
     label: getCloudBackupStatusLabel('not_configured'),
@@ -42,6 +49,8 @@ export function getCloudBackupStatusLabel(
   switch (status) {
     case 'not_configured':
       return 'OAuth setup required'
+    case 'storage_unavailable':
+      return 'Secure storage unavailable'
     case 'disconnected':
       return 'Not connected'
     case 'connected':

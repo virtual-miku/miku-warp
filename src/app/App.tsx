@@ -12,7 +12,10 @@ import {
   BackupPanel,
   type BackupNotice,
 } from '../features/backup/components/BackupPanel'
-import { createInitialGoogleDriveBackupStatus } from '../features/backup/domain/cloud-backup'
+import {
+  createInitialGoogleDriveBackupStatus,
+  type CloudBackupStatus,
+} from '../features/backup/domain/cloud-backup'
 import { ImportPanel } from '../features/import/components/ImportPanel'
 import {
   ManualImportDialog,
@@ -36,6 +39,7 @@ import {
   restoreLatestBackupSnapshot,
   type RestoreBackupSnapshotResult,
 } from '../features/persistence/data/backup-export'
+import { getCloudBackupStatus } from '../features/persistence/data/cloud-backup-status'
 import { syncWarpItemCatalog } from '../features/persistence/data/warp-item-catalog-sync'
 import { listWarpPulls } from '../features/persistence/data/warp-pull-history'
 import { BannerTabs } from '../features/warp-history/components/BannerTabs'
@@ -78,6 +82,8 @@ export function App() {
   const [backupSnapshots, setBackupSnapshots] = useState<
     BackupSnapshotSummary[]
   >([])
+  const [cloudBackupStatus, setCloudBackupStatus] =
+    useState<CloudBackupStatus>(() => createInitialGoogleDriveBackupStatus())
   const [manualNoteDraft, setManualNoteDraft] = useState(manualNoteSample)
   const [persistedPulls, setPersistedPulls] = useState<WarpPull[]>([])
   const manualImportPreview = useMemo(
@@ -101,10 +107,6 @@ export function App() {
   )
   const backupDeleting = deletingBackupFileName !== undefined
   const backupRestoring = restoringBackupFileName !== undefined
-  const cloudBackupStatus = useMemo(
-    () => createInitialGoogleDriveBackupStatus(),
-    [],
-  )
 
   const fetchPersistedPulls = useCallback(() => {
     return listWarpPulls({
@@ -164,6 +166,26 @@ export function App() {
       .catch(() => {
         if (isActive) {
           setBackupSnapshots([])
+        }
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let isActive = true
+
+    getCloudBackupStatus()
+      .then((status) => {
+        if (isActive) {
+          setCloudBackupStatus(status)
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setCloudBackupStatus(createInitialGoogleDriveBackupStatus())
         }
       })
 
