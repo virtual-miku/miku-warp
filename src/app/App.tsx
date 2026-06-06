@@ -12,6 +12,7 @@ import {
   BackupPanel,
   type BackupNotice,
 } from '../features/backup/components/BackupPanel'
+import { createInitialGoogleDriveBackupStatus } from '../features/backup/domain/cloud-backup'
 import { ImportPanel } from '../features/import/components/ImportPanel'
 import {
   ManualImportDialog,
@@ -100,6 +101,10 @@ export function App() {
   )
   const backupDeleting = deletingBackupFileName !== undefined
   const backupRestoring = restoringBackupFileName !== undefined
+  const cloudBackupStatus = useMemo(
+    () => createInitialGoogleDriveBackupStatus(),
+    [],
+  )
 
   const fetchPersistedPulls = useCallback(() => {
     return listWarpPulls({
@@ -444,6 +449,7 @@ export function App() {
               />
               <BackupPanel
                 backupCount={backupSnapshots.length}
+                cloudBackupStatus={cloudBackupStatus}
                 deletingFileName={deletingBackupFileName}
                 isExporting={backupExporting}
                 isDeleting={backupDeleting}

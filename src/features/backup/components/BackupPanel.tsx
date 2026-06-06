@@ -1,5 +1,6 @@
 import { Cloud, KeyRound, RefreshCcw, Trash2 } from 'lucide-react'
 import { AppButton } from '../../../shared/ui/AppButton'
+import type { CloudBackupStatus } from '../domain/cloud-backup'
 
 export type BackupNotice = {
   tone: 'success' | 'error'
@@ -15,6 +16,7 @@ export type BackupSnapshotInfo = {
 
 type BackupPanelProps = {
   backupCount: number
+  cloudBackupStatus: CloudBackupStatus
   isExporting: boolean
   isRestoring: boolean
   isDeleting: boolean
@@ -31,6 +33,7 @@ type BackupPanelProps = {
 
 export function BackupPanel({
   backupCount,
+  cloudBackupStatus,
   isExporting,
   isDeleting,
   isRestoring,
@@ -61,10 +64,15 @@ export function BackupPanel({
         <div className="tool-row">
           <div>
             <strong>Google Drive</strong>
-            <span>Next step after local export</span>
+            <span title={cloudBackupStatus.detail}>
+              {cloudBackupStatus.label}
+            </span>
           </div>
-          <AppButton disabled icon={KeyRound}>
-            Connect
+          <AppButton
+            disabled={isBusy || !cloudBackupStatus.canConnect}
+            icon={KeyRound}
+          >
+            {getGoogleDriveActionLabel(cloudBackupStatus)}
           </AppButton>
         </div>
         <div className="tool-row">
@@ -143,6 +151,18 @@ export function BackupPanel({
       </div>
     </section>
   )
+}
+
+function getGoogleDriveActionLabel(status: CloudBackupStatus) {
+  if (status.connectionStatus === 'connected') {
+    return 'Connected'
+  }
+
+  if (status.connectionStatus === 'needs_reauth') {
+    return 'Re-login'
+  }
+
+  return 'Connect'
 }
 
 function formatSnapshotCount(count: number) {
