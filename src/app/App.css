@@ -370,9 +370,17 @@
   border-bottom: 0;
 }
 
+.backup-snapshot-row-heading {
+  background: var(--panel-bg);
+}
+
 .backup-snapshot-row strong,
 .backup-snapshot-row span {
   display: block;
+}
+
+.backup-snapshot-row .status-pill {
+  display: inline-flex;
 }
 
 .backup-snapshot-row strong {

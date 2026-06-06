@@ -30,6 +30,12 @@ fn upload_latest_google_drive_backup(
 }
 
 #[tauri::command]
+fn list_google_drive_backup_snapshots(
+) -> Result<Vec<cloud_backup::CloudBackupSnapshotSummary>, String> {
+    cloud_backup::list_google_drive_backup_snapshots()
+}
+
+#[tauri::command]
 fn get_database_status(app: tauri::AppHandle) -> Result<database::DatabaseStatus, String> {
     database::get_database_status(&app)
 }
@@ -115,6 +121,7 @@ pub fn run() {
             export_backup_snapshot,
             get_cloud_backup_status,
             get_database_status,
+            list_google_drive_backup_snapshots,
             list_backup_snapshots,
             list_warp_pulls,
             restore_backup_snapshot,

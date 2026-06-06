@@ -15,10 +15,13 @@ const KEYRING_SERVICE_NAME: &str = "app.warptracker.desktop.google-drive";
 const GOOGLE_DRIVE_REFRESH_TOKEN_KEY: &str = "google-drive-refresh-token";
 const GOOGLE_AUTHORIZATION_ENDPOINT: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_ENDPOINT: &str = "https://oauth2.googleapis.com/token";
+const GOOGLE_DRIVE_FILES_ENDPOINT: &str = "https://www.googleapis.com/drive/v3/files";
 const GOOGLE_DRIVE_UPLOAD_ENDPOINT: &str = "https://www.googleapis.com/upload/drive/v3/files";
 const OAUTH_CALLBACK_TIMEOUT: Duration = Duration::from_secs(180);
 const OAUTH_RANDOM_TOKEN_BYTES: usize = 64;
 const DRIVE_MULTIPART_BOUNDARY_PREFIX: &str = "warp-tracker-backup";
+const CLOUD_BACKUP_FILE_NAME_PREFIX: &str = "warp-tracker-backup-";
+const CLOUD_BACKUP_LIST_PAGE_SIZE: &str = "20";
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -75,6 +78,16 @@ pub struct UploadCloudBackupSnapshotResult {
     pub remote_md5_checksum: Option<String>,
     pub remote_modified_time: Option<String>,
     pub bytes_uploaded: usize,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CloudBackupSnapshotSummary {
+    pub remote_file_id: String,
+    pub file_name: String,
+    pub remote_md5_checksum: Option<String>,
+    pub remote_modified_time: Option<String>,
+    pub size: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -183,6 +196,17 @@ pub fn upload_google_drive_backup_snapshot(
     })
 }
 
+pub fn list_google_drive_backup_snapshots() -> Result<Vec<CloudBackupSnapshotSummary>, String> {
+    let secret_store = KeyringSecretStore;
+    let oauth_config = read_google_oauth_client_config_from_environment();
+    let client_id = oauth_config.client_id.as_deref().ok_or_else(|| {
+        format!("Configure {GOOGLE_OAUTH_CLIENT_ID_ENV} before listing Google Drive backups.")
+    })?;
+    let access_token = refresh_google_access_token(&secret_store, client_id)?;
+
+    list_backup_snapshots_from_drive(&access_token)
+}
+
 fn cloud_backup_status(
     secret_store: &impl SecretStore,
     oauth_config: GoogleOAuthClientConfig,
@@ -279,6 +303,62 @@ fn upload_backup_snapshot_to_drive(
         .map_err(|error| format!("Failed to upload backup snapshot to Google Drive: {error}"))?
         .into_json::<GoogleDriveFileResponse>()
         .map_err(|error| format!("Failed to read Google Drive upload response: {error}"))
+}
+
+fn list_backup_snapshots_from_drive(
+    access_token: &str,
+) -> Result<Vec<CloudBackupSnapshotSummary>, String> {
+    let list_url = build_drive_backup_list_url()?;
+    let authorization = format!("Bearer {access_token}");
+    let file_list = ureq::get(&list_url)
+        .set("Authorization", &authorization)
+        .call()
+        .map_err(|error| format!("Failed to list Google Drive backup snapshots: {error}"))?
+        .into_json::<GoogleDriveFileListResponse>()
+        .map_err(|error| format!("Failed to read Google Drive backup list response: {error}"))?;
+
+    file_list
+        .files
+        .into_iter()
+        .map(to_cloud_backup_snapshot_summary)
+        .collect()
+}
+
+fn build_drive_backup_list_url() -> Result<String, String> {
+    Url::parse_with_params(
+        GOOGLE_DRIVE_FILES_ENDPOINT,
+        &[
+            ("spaces", "appDataFolder"),
+            ("pageSize", CLOUD_BACKUP_LIST_PAGE_SIZE),
+            ("orderBy", "modifiedTime desc"),
+            ("fields", "files(id,name,md5Checksum,modifiedTime,size)"),
+            (
+                "q",
+                &format!("name contains '{CLOUD_BACKUP_FILE_NAME_PREFIX}'"),
+            ),
+        ],
+    )
+    .map(|url| url.to_string())
+    .map_err(|error| format!("Failed to build Google Drive backup list URL: {error}"))
+}
+
+fn to_cloud_backup_snapshot_summary(
+    file: GoogleDriveFileResponse,
+) -> Result<CloudBackupSnapshotSummary, String> {
+    let remote_file_id = file
+        .id
+        .ok_or_else(|| "Google Drive backup list returned a file without an id.".to_string())?;
+    let file_name = file
+        .name
+        .ok_or_else(|| "Google Drive backup list returned a file without a name.".to_string())?;
+
+    Ok(CloudBackupSnapshotSummary {
+        remote_file_id,
+        file_name,
+        remote_md5_checksum: file.md5_checksum,
+        remote_modified_time: file.modified_time,
+        size: file.size,
+    })
 }
 
 fn build_drive_upload_url() -> Result<String, String> {
@@ -560,6 +640,13 @@ struct GoogleDriveFileResponse {
     name: Option<String>,
     md5_checksum: Option<String>,
     modified_time: Option<String>,
+    size: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GoogleDriveFileListResponse {
+    files: Vec<GoogleDriveFileResponse>,
 }
 
 #[cfg(test)]
@@ -690,6 +777,50 @@ mod tests {
             query_pairs.get("fields"),
             Some(&"id,name,md5Checksum,modifiedTime,size".to_string())
         );
+    }
+
+    #[test]
+    fn builds_google_drive_list_url_for_app_data_snapshots() {
+        let url = Url::parse(&build_drive_backup_list_url().expect("list url can be built"))
+            .expect("list url can be parsed");
+        let query_pairs = url
+            .query_pairs()
+            .map(|(key, value)| (key.into_owned(), value.into_owned()))
+            .collect::<HashMap<_, _>>();
+
+        assert_eq!(
+            url.as_str().split('?').next(),
+            Some(GOOGLE_DRIVE_FILES_ENDPOINT)
+        );
+        assert_eq!(
+            query_pairs.get("spaces"),
+            Some(&"appDataFolder".to_string())
+        );
+        assert_eq!(
+            query_pairs.get("q"),
+            Some(&"name contains 'warp-tracker-backup-'".to_string())
+        );
+        assert_eq!(
+            query_pairs.get("orderBy"),
+            Some(&"modifiedTime desc".to_string())
+        );
+    }
+
+    #[test]
+    fn maps_google_drive_files_to_cloud_snapshot_summaries() {
+        let summary = to_cloud_backup_snapshot_summary(GoogleDriveFileResponse {
+            id: Some("remote-1".to_string()),
+            name: Some("warp-tracker-backup-20260606.json".to_string()),
+            md5_checksum: Some("checksum".to_string()),
+            modified_time: Some("2026-06-06T14:00:00.000Z".to_string()),
+            size: Some("1234".to_string()),
+        })
+        .expect("file can be mapped");
+
+        assert_eq!(summary.remote_file_id, "remote-1");
+        assert_eq!(summary.file_name, "warp-tracker-backup-20260606.json");
+        assert_eq!(summary.remote_md5_checksum, Some("checksum".to_string()));
+        assert_eq!(summary.size, Some("1234".to_string()));
     }
 
     #[test]

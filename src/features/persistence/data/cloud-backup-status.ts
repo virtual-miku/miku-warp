@@ -11,6 +11,14 @@ export type UploadCloudBackupSnapshotResult = {
   bytesUploaded: number
 }
 
+export type CloudBackupSnapshotSummary = {
+  remoteFileId: string
+  fileName: string
+  remoteMd5Checksum?: string
+  remoteModifiedTime?: string
+  size?: string
+}
+
 export function getCloudBackupStatus() {
   return invokeTauri<CloudBackupStatus>('get_cloud_backup_status')
 }
@@ -26,5 +34,11 @@ export function disconnectGoogleDriveBackup() {
 export function uploadLatestGoogleDriveBackup() {
   return invokeTauri<UploadCloudBackupSnapshotResult>(
     'upload_latest_google_drive_backup',
+  )
+}
+
+export function listGoogleDriveBackupSnapshots() {
+  return invokeTauri<CloudBackupSnapshotSummary[]>(
+    'list_google_drive_backup_snapshots',
   )
 }

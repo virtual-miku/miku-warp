@@ -1,4 +1,11 @@
-import { Cloud, KeyRound, LogOut, RefreshCcw, Trash2, Upload } from 'lucide-react'
+import {
+  Cloud,
+  KeyRound,
+  LogOut,
+  RefreshCcw,
+  Trash2,
+  Upload,
+} from 'lucide-react'
 import { AppButton } from '../../../shared/ui/AppButton'
 import type { CloudBackupStatus } from '../domain/cloud-backup'
 
@@ -14,11 +21,20 @@ export type BackupSnapshotInfo = {
   warpPulls: number
 }
 
+export type CloudBackupSnapshotInfo = {
+  remoteFileId: string
+  fileName: string
+  remoteModifiedTime?: string
+  size?: string
+}
+
 type BackupPanelProps = {
   backupCount: number
+  cloudSnapshots: CloudBackupSnapshotInfo[]
   cloudBackupStatus: CloudBackupStatus
   isCloudConnecting: boolean
   isCloudDisconnecting: boolean
+  isCloudListing: boolean
   isCloudUploading: boolean
   isExporting: boolean
   isRestoring: boolean
@@ -31,6 +47,7 @@ type BackupPanelProps = {
   onDeleteSnapshot: (fileName: string) => void
   onConnectGoogleDrive: () => void
   onDisconnectGoogleDrive: () => void
+  onRefreshGoogleDriveBackups: () => void
   onUploadGoogleDriveBackup: () => void
   onExportBackup: () => void
   onRestoreBackup: () => void
@@ -39,9 +56,11 @@ type BackupPanelProps = {
 
 export function BackupPanel({
   backupCount,
+  cloudSnapshots,
   cloudBackupStatus,
   isCloudConnecting,
   isCloudDisconnecting,
+  isCloudListing,
   isCloudUploading,
   isExporting,
   isDeleting,
@@ -54,15 +73,20 @@ export function BackupPanel({
   onDeleteSnapshot,
   onConnectGoogleDrive,
   onDisconnectGoogleDrive,
+  onRefreshGoogleDriveBackups,
   onUploadGoogleDriveBackup,
   onExportBackup,
   onRestoreBackup,
   onRestoreSnapshot,
 }: BackupPanelProps) {
   const isCloudBusy =
-    isCloudConnecting || isCloudDisconnecting || isCloudUploading
+    isCloudConnecting ||
+    isCloudDisconnecting ||
+    isCloudListing ||
+    isCloudUploading
   const isBusy = isExporting || isRestoring || isDeleting || isCloudBusy
   const visibleSnapshots = snapshots.slice(0, 3)
+  const visibleCloudSnapshots = cloudSnapshots.slice(0, 3)
   const isGoogleDriveConnected =
     cloudBackupStatus.connectionStatus === 'connected'
 
@@ -117,6 +141,52 @@ export function BackupPanel({
             </AppButton>
           </div>
         </div>
+        {isGoogleDriveConnected ? (
+          <div className="backup-snapshot-list" aria-label="Cloud backups">
+            <div className="backup-snapshot-row backup-snapshot-row-heading">
+              <div>
+                <strong>Cloud backups</strong>
+                <span>{formatCloudSnapshotCount(cloudSnapshots.length)}</span>
+              </div>
+              <AppButton
+                disabled={isBusy}
+                icon={RefreshCcw}
+                onClick={onRefreshGoogleDriveBackups}
+                variant="ghost"
+              >
+                {isCloudListing ? 'Refreshing' : 'Refresh'}
+              </AppButton>
+            </div>
+            {visibleCloudSnapshots.length > 0 ? (
+              visibleCloudSnapshots.map((snapshot) => (
+                <div
+                  className="backup-snapshot-row"
+                  key={snapshot.remoteFileId}
+                >
+                  <div>
+                    <strong title={snapshot.fileName}>
+                      {snapshot.fileName}
+                    </strong>
+                    <span>
+                      {formatCloudSnapshotMeta(
+                        snapshot.remoteModifiedTime,
+                        snapshot.size,
+                      )}
+                    </span>
+                  </div>
+                  <span className="status-pill">Cloud</span>
+                </div>
+              ))
+            ) : (
+              <div className="backup-snapshot-row">
+                <div>
+                  <strong>No cloud snapshots</strong>
+                  <span>Upload a local snapshot first</span>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : null}
         <div className="tool-row">
           <div>
             <strong>Local backup</strong>
@@ -233,4 +303,33 @@ function formatSnapshotCount(count: number) {
 
 function formatSnapshotTime(value: string) {
   return value.replace('T', ' ').replace('Z', ' UTC')
+}
+
+function formatCloudSnapshotCount(count: number) {
+  if (count === 0) {
+    return 'No snapshots'
+  }
+
+  if (count === 1) {
+    return '1 snapshot'
+  }
+
+  return `${count} snapshots`
+}
+
+function formatCloudSnapshotMeta(
+  modifiedTime: string | undefined,
+  size: string | undefined,
+) {
+  const parts = []
+
+  if (modifiedTime) {
+    parts.push(modifiedTime.replace('T', ' ').replace('.000Z', ' UTC'))
+  }
+
+  if (size) {
+    parts.push(`${size} bytes`)
+  }
+
+  return parts.length > 0 ? parts.join(' - ') : 'Metadata unavailable'
 }
