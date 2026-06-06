@@ -14,6 +14,7 @@ describe('cloud backup status', () => {
     expect(status.oauthClientConfigured).toBe(false)
     expect(status.secureStorageStatus).toBe('ready')
     expect(status.canConnect).toBe(false)
+    expect(status.canDisconnect).toBe(false)
     expect(status.canUpload).toBe(false)
     expect(status.scope).toBe(googleDriveAppDataScope)
   })

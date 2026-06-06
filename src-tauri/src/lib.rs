@@ -7,6 +7,16 @@ fn get_cloud_backup_status() -> cloud_backup::CloudBackupStatus {
 }
 
 #[tauri::command]
+fn connect_google_drive_backup() -> Result<cloud_backup::CloudBackupStatus, String> {
+    cloud_backup::connect_google_drive_backup()
+}
+
+#[tauri::command]
+fn disconnect_google_drive_backup() -> Result<cloud_backup::CloudBackupStatus, String> {
+    cloud_backup::disconnect_google_drive_backup()
+}
+
+#[tauri::command]
 fn get_database_status(app: tauri::AppHandle) -> Result<database::DatabaseStatus, String> {
     database::get_database_status(&app)
 }
@@ -86,7 +96,9 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            connect_google_drive_backup,
             delete_backup_snapshot,
+            disconnect_google_drive_backup,
             export_backup_snapshot,
             get_cloud_backup_status,
             get_database_status,

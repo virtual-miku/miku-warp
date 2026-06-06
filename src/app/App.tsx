@@ -39,7 +39,11 @@ import {
   restoreLatestBackupSnapshot,
   type RestoreBackupSnapshotResult,
 } from '../features/persistence/data/backup-export'
-import { getCloudBackupStatus } from '../features/persistence/data/cloud-backup-status'
+import {
+  connectGoogleDriveBackup,
+  disconnectGoogleDriveBackup,
+  getCloudBackupStatus,
+} from '../features/persistence/data/cloud-backup-status'
 import { syncWarpItemCatalog } from '../features/persistence/data/warp-item-catalog-sync'
 import { listWarpPulls } from '../features/persistence/data/warp-pull-history'
 import { BannerTabs } from '../features/warp-history/components/BannerTabs'
@@ -79,6 +83,9 @@ export function App() {
   const [restoringBackupFileName, setRestoringBackupFileName] =
     useState<string>()
   const [backupNotice, setBackupNotice] = useState<BackupNotice>()
+  const [cloudBackupConnecting, setCloudBackupConnecting] = useState(false)
+  const [cloudBackupDisconnecting, setCloudBackupDisconnecting] =
+    useState(false)
   const [backupSnapshots, setBackupSnapshots] = useState<
     BackupSnapshotSummary[]
   >([])
@@ -107,6 +114,7 @@ export function App() {
   )
   const backupDeleting = deletingBackupFileName !== undefined
   const backupRestoring = restoringBackupFileName !== undefined
+  const cloudBackupBusy = cloudBackupConnecting || cloudBackupDisconnecting
 
   const fetchPersistedPulls = useCallback(() => {
     return listWarpPulls({
@@ -131,6 +139,18 @@ export function App() {
       setBackupSnapshots(snapshots)
     } catch {
       setBackupSnapshots([])
+    }
+  }, [])
+
+  const refreshCloudBackupStatus = useCallback(async () => {
+    try {
+      const status = await getCloudBackupStatus()
+      setCloudBackupStatus(status)
+      return status
+    } catch {
+      const fallbackStatus = createInitialGoogleDriveBackupStatus()
+      setCloudBackupStatus(fallbackStatus)
+      return fallbackStatus
     }
   }, [])
 
@@ -179,9 +199,11 @@ export function App() {
 
     getCloudBackupStatus()
       .then((status) => {
-        if (isActive) {
-          setCloudBackupStatus(status)
+        if (!isActive) {
+          return
         }
+
+        setCloudBackupStatus(status)
       })
       .catch(() => {
         if (isActive) {
@@ -256,7 +278,7 @@ export function App() {
   }
 
   const handleExportBackup = useCallback(async () => {
-    if (backupDeleting || backupExporting || backupRestoring) {
+    if (backupDeleting || backupExporting || backupRestoring || cloudBackupBusy) {
       return
     }
 
@@ -281,10 +303,98 @@ export function App() {
     } finally {
       setBackupExporting(false)
     }
-  }, [backupDeleting, backupExporting, backupRestoring, refreshBackupSnapshots])
+  }, [
+    backupDeleting,
+    backupExporting,
+    backupRestoring,
+    cloudBackupBusy,
+    refreshBackupSnapshots,
+  ])
+
+  const handleConnectGoogleDrive = useCallback(async () => {
+    if (
+      backupDeleting ||
+      backupExporting ||
+      backupRestoring ||
+      cloudBackupBusy ||
+      !cloudBackupStatus.canConnect
+    ) {
+      return
+    }
+
+    setCloudBackupConnecting(true)
+    setBackupNotice(undefined)
+
+    try {
+      const status = await connectGoogleDriveBackup()
+      setCloudBackupStatus(status)
+      setBackupNotice({
+        tone: 'success',
+        title: 'Google Drive connected',
+        detail: status.detail,
+      })
+    } catch (error) {
+      const fallbackStatus = await refreshCloudBackupStatus()
+      setBackupNotice({
+        tone: 'error',
+        title: 'Google Drive connect failed',
+        detail: `${getErrorMessage(error)}\n${fallbackStatus.detail}`,
+      })
+    } finally {
+      setCloudBackupConnecting(false)
+    }
+  }, [
+    backupDeleting,
+    backupExporting,
+    backupRestoring,
+    cloudBackupBusy,
+    cloudBackupStatus.canConnect,
+    refreshCloudBackupStatus,
+  ])
+
+  const handleDisconnectGoogleDrive = useCallback(async () => {
+    if (
+      backupDeleting ||
+      backupExporting ||
+      backupRestoring ||
+      cloudBackupBusy ||
+      !cloudBackupStatus.canDisconnect
+    ) {
+      return
+    }
+
+    setCloudBackupDisconnecting(true)
+    setBackupNotice(undefined)
+
+    try {
+      const status = await disconnectGoogleDriveBackup()
+      setCloudBackupStatus(status)
+      setBackupNotice({
+        tone: 'success',
+        title: 'Google Drive disconnected',
+        detail: 'Local Google Drive token was removed from secure storage.',
+      })
+    } catch (error) {
+      const fallbackStatus = await refreshCloudBackupStatus()
+      setBackupNotice({
+        tone: 'error',
+        title: 'Google Drive disconnect failed',
+        detail: `${getErrorMessage(error)}\n${fallbackStatus.detail}`,
+      })
+    } finally {
+      setCloudBackupDisconnecting(false)
+    }
+  }, [
+    backupDeleting,
+    backupExporting,
+    backupRestoring,
+    cloudBackupBusy,
+    cloudBackupStatus.canDisconnect,
+    refreshCloudBackupStatus,
+  ])
 
   const handleRestoreBackup = useCallback(async () => {
-    if (backupDeleting || backupExporting || backupRestoring) {
+    if (backupDeleting || backupExporting || backupRestoring || cloudBackupBusy) {
       return
     }
 
@@ -315,13 +425,14 @@ export function App() {
     backupDeleting,
     backupRestoring,
     backupSnapshots,
+    cloudBackupBusy,
     refreshBackupSnapshots,
     refreshPersistedPulls,
   ])
 
   const handleRestoreBackupSnapshot = useCallback(
     async (fileName: string) => {
-      if (backupDeleting || backupExporting || backupRestoring) {
+      if (backupDeleting || backupExporting || backupRestoring || cloudBackupBusy) {
         return
       }
 
@@ -352,6 +463,7 @@ export function App() {
       backupExporting,
       backupDeleting,
       backupRestoring,
+      cloudBackupBusy,
       refreshBackupSnapshots,
       refreshPersistedPulls,
     ],
@@ -359,7 +471,7 @@ export function App() {
 
   const handleDeleteBackupSnapshot = useCallback(
     async (fileName: string) => {
-      if (backupDeleting || backupExporting || backupRestoring) {
+      if (backupDeleting || backupExporting || backupRestoring || cloudBackupBusy) {
         return
       }
 
@@ -393,7 +505,13 @@ export function App() {
         setDeletingBackupFileName(undefined)
       }
     },
-    [backupDeleting, backupExporting, backupRestoring, refreshBackupSnapshots],
+    [
+      backupDeleting,
+      backupExporting,
+      backupRestoring,
+      cloudBackupBusy,
+      refreshBackupSnapshots,
+    ],
   )
 
   return (
@@ -441,7 +559,12 @@ export function App() {
             <div className="header-actions" aria-label="Quick actions">
               <AppButton icon={RefreshCw}>Sync</AppButton>
               <AppButton
-                disabled={backupDeleting || backupExporting || backupRestoring}
+                disabled={
+                  backupDeleting ||
+                  backupExporting ||
+                  backupRestoring ||
+                  cloudBackupBusy
+                }
                 icon={Download}
                 onClick={handleExportBackup}
               >
@@ -473,6 +596,8 @@ export function App() {
                 backupCount={backupSnapshots.length}
                 cloudBackupStatus={cloudBackupStatus}
                 deletingFileName={deletingBackupFileName}
+                isCloudConnecting={cloudBackupConnecting}
+                isCloudDisconnecting={cloudBackupDisconnecting}
                 isExporting={backupExporting}
                 isDeleting={backupDeleting}
                 isRestoring={backupRestoring}
@@ -480,7 +605,9 @@ export function App() {
                 notice={backupNotice}
                 restoringFileName={restoringBackupFileName}
                 snapshots={backupSnapshots}
+                onConnectGoogleDrive={handleConnectGoogleDrive}
                 onDeleteSnapshot={handleDeleteBackupSnapshot}
+                onDisconnectGoogleDrive={handleDisconnectGoogleDrive}
                 onExportBackup={handleExportBackup}
                 onRestoreBackup={handleRestoreBackup}
                 onRestoreSnapshot={handleRestoreBackupSnapshot}

@@ -25,3 +25,10 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 tauri = { version = "2.11.2", features = [] }
 tauri-plugin-log = "2"
 keyring = "3.6.3"
+ureq = { version = "2", features = ["json"] }
+rand = "0.8"
+sha2 = "0.10"
+base64 = "0.22"
+url = "2"
+webbrowser = "=1.1.0"
+

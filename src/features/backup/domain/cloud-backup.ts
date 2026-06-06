@@ -22,6 +22,7 @@ export type CloudBackupStatus = {
   secureStorageStatus: SecureTokenStorageStatus
   oauthClientConfigured: boolean
   canConnect: boolean
+  canDisconnect: boolean
   canUpload: boolean
   label: string
   detail: string
@@ -36,6 +37,7 @@ export function createInitialGoogleDriveBackupStatus(): CloudBackupStatus {
     secureStorageStatus: 'ready',
     oauthClientConfigured: false,
     canConnect: false,
+    canDisconnect: false,
     canUpload: false,
     label: getCloudBackupStatusLabel('not_configured'),
     detail:

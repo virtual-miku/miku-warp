@@ -1,11 +1,22 @@
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use keyring::{Entry, Error as KeyringError};
+use rand::{rngs::OsRng, RngCore};
 use serde::Serialize;
+use sha2::{Digest, Sha256};
 use std::env;
+use std::io::{Read, Write};
+use std::net::TcpListener;
+use std::time::{Duration, Instant};
+use url::Url;
 
 const GOOGLE_DRIVE_APP_DATA_SCOPE: &str = "https://www.googleapis.com/auth/drive.appdata";
 const GOOGLE_OAUTH_CLIENT_ID_ENV: &str = "WARP_TRACKER_GOOGLE_CLIENT_ID";
 const KEYRING_SERVICE_NAME: &str = "app.warptracker.desktop.google-drive";
 const GOOGLE_DRIVE_REFRESH_TOKEN_KEY: &str = "google-drive-refresh-token";
+const GOOGLE_AUTHORIZATION_ENDPOINT: &str = "https://accounts.google.com/o/oauth2/v2/auth";
+const GOOGLE_TOKEN_ENDPOINT: &str = "https://oauth2.googleapis.com/token";
+const OAUTH_CALLBACK_TIMEOUT: Duration = Duration::from_secs(180);
+const OAUTH_RANDOM_TOKEN_BYTES: usize = 64;
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -46,6 +57,7 @@ pub struct CloudBackupStatus {
     pub secure_storage_status: SecureTokenStorageStatus,
     pub oauth_client_configured: bool,
     pub can_connect: bool,
+    pub can_disconnect: bool,
     pub can_upload: bool,
     pub label: String,
     pub detail: String,
@@ -106,6 +118,30 @@ pub fn get_cloud_backup_status() -> CloudBackupStatus {
     )
 }
 
+pub fn connect_google_drive_backup() -> Result<CloudBackupStatus, String> {
+    let secret_store = KeyringSecretStore;
+    let oauth_config = read_google_oauth_client_config_from_environment();
+    let client_id = oauth_config.client_id.clone().ok_or_else(|| {
+        format!("Configure {GOOGLE_OAUTH_CLIENT_ID_ENV} before connecting Google Drive.")
+    })?;
+
+    complete_google_oauth_flow(&secret_store, &client_id)?;
+
+    Ok(cloud_backup_status(&secret_store, oauth_config))
+}
+
+pub fn disconnect_google_drive_backup() -> Result<CloudBackupStatus, String> {
+    let secret_store = KeyringSecretStore;
+    secret_store
+        .delete_secret(GOOGLE_DRIVE_REFRESH_TOKEN_KEY)
+        .map_err(secret_store_error_message)?;
+
+    Ok(cloud_backup_status(
+        &secret_store,
+        read_google_oauth_client_config_from_environment(),
+    ))
+}
+
 fn cloud_backup_status(
     secret_store: &impl SecretStore,
     oauth_config: GoogleOAuthClientConfig,
@@ -119,6 +155,7 @@ fn cloud_backup_status(
             oauth_config.client_id.is_some(),
             false,
             false,
+            false,
             "Secure storage unavailable",
             format!(
                 "OS credential storage is unavailable: {error}. Google Drive backup will stay disabled so tokens are not stored unsafely."
@@ -127,6 +164,7 @@ fn cloud_backup_status(
         Ok(_token) if oauth_config.client_id.is_none() => create_status(
             CloudBackupConnectionStatus::NotConfigured,
             SecureTokenStorageStatus::Ready,
+            false,
             false,
             false,
             false,
@@ -140,6 +178,7 @@ fn cloud_backup_status(
             SecureTokenStorageStatus::Ready,
             true,
             false,
+            true,
             false,
             "Token stored securely",
             "A Google Drive refresh token exists in secure storage. Upload and restore commands are not enabled yet.".to_string(),
@@ -147,6 +186,7 @@ fn cloud_backup_status(
         Ok(None) => create_status(
             CloudBackupConnectionStatus::Disconnected,
             SecureTokenStorageStatus::Ready,
+            true,
             true,
             false,
             false,
@@ -156,11 +196,190 @@ fn cloud_backup_status(
     }
 }
 
+fn complete_google_oauth_flow(
+    secret_store: &impl SecretStore,
+    client_id: &str,
+) -> Result<(), String> {
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .map_err(|error| format!("Failed to start local OAuth callback listener: {error}"))?;
+    let local_port = listener
+        .local_addr()
+        .map_err(|error| format!("Failed to read local OAuth callback address: {error}"))?
+        .port();
+    let redirect_uri = format!("http://127.0.0.1:{local_port}");
+    let code_verifier = generate_oauth_random_token();
+    let state = generate_oauth_random_token();
+    let code_challenge = create_pkce_code_challenge(&code_verifier);
+    let authorization_url =
+        build_google_authorization_url(client_id, &redirect_uri, &state, &code_challenge)?;
+
+    webbrowser::open(&authorization_url)
+        .map_err(|error| format!("Failed to open system browser for Google OAuth: {error}"))?;
+
+    let authorization_code = wait_for_authorization_code(listener, &state)?;
+    let token_response = exchange_authorization_code(
+        client_id,
+        &redirect_uri,
+        &code_verifier,
+        &authorization_code,
+    )?;
+    let refresh_token = token_response.refresh_token.ok_or_else(|| {
+        "Google did not return a refresh token. Try disconnecting the app from your Google account, then connect again.".to_string()
+    })?;
+
+    secret_store
+        .write_secret(GOOGLE_DRIVE_REFRESH_TOKEN_KEY, &refresh_token)
+        .map_err(secret_store_error_message)
+}
+
+fn wait_for_authorization_code(
+    listener: TcpListener,
+    expected_state: &str,
+) -> Result<String, String> {
+    listener
+        .set_nonblocking(true)
+        .map_err(|error| format!("Failed to prepare OAuth callback listener: {error}"))?;
+
+    let started_at = Instant::now();
+
+    while started_at.elapsed() < OAUTH_CALLBACK_TIMEOUT {
+        match listener.accept() {
+            Ok((mut stream, _address)) => {
+                let mut buffer = [0_u8; 4096];
+                let bytes_read = stream
+                    .read(&mut buffer)
+                    .map_err(|error| format!("Failed to read OAuth callback: {error}"))?;
+                let request = String::from_utf8_lossy(&buffer[..bytes_read]);
+                let code_result = parse_oauth_callback_request(&request, expected_state);
+                let response = oauth_callback_response(code_result.is_ok());
+                stream.write_all(response.as_bytes()).map_err(|error| {
+                    format!("Failed to finish OAuth callback response: {error}")
+                })?;
+
+                return code_result;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err(error) => {
+                return Err(format!("Failed to receive OAuth callback: {error}"));
+            }
+        }
+    }
+
+    Err("Google OAuth timed out before the browser returned an authorization code.".to_string())
+}
+
+fn exchange_authorization_code(
+    client_id: &str,
+    redirect_uri: &str,
+    code_verifier: &str,
+    authorization_code: &str,
+) -> Result<GoogleTokenResponse, String> {
+    ureq::post(GOOGLE_TOKEN_ENDPOINT)
+        .send_form(&[
+            ("client_id", client_id),
+            ("code", authorization_code),
+            ("code_verifier", code_verifier),
+            ("grant_type", "authorization_code"),
+            ("redirect_uri", redirect_uri),
+        ])
+        .map_err(|error| format!("Failed to exchange Google OAuth code: {error}"))?
+        .into_json::<GoogleTokenResponse>()
+        .map_err(|error| format!("Failed to read Google OAuth token response: {error}"))
+}
+
+fn build_google_authorization_url(
+    client_id: &str,
+    redirect_uri: &str,
+    state: &str,
+    code_challenge: &str,
+) -> Result<String, String> {
+    Url::parse_with_params(
+        GOOGLE_AUTHORIZATION_ENDPOINT,
+        &[
+            ("client_id", client_id),
+            ("redirect_uri", redirect_uri),
+            ("response_type", "code"),
+            ("scope", GOOGLE_DRIVE_APP_DATA_SCOPE),
+            ("state", state),
+            ("code_challenge", code_challenge),
+            ("code_challenge_method", "S256"),
+            ("access_type", "offline"),
+            ("prompt", "consent"),
+        ],
+    )
+    .map(|url| url.to_string())
+    .map_err(|error| format!("Failed to build Google OAuth URL: {error}"))
+}
+
+fn parse_oauth_callback_request(request: &str, expected_state: &str) -> Result<String, String> {
+    let request_line = request
+        .lines()
+        .next()
+        .ok_or_else(|| "OAuth callback request is empty.".to_string())?;
+    let path = request_line
+        .split_whitespace()
+        .nth(1)
+        .ok_or_else(|| "OAuth callback request is malformed.".to_string())?;
+    let callback_url = Url::parse(&format!("http://127.0.0.1{path}"))
+        .map_err(|error| format!("OAuth callback URL is malformed: {error}"))?;
+    let mut code = None;
+    let mut state = None;
+    let mut oauth_error = None;
+
+    for (key, value) in callback_url.query_pairs() {
+        match key.as_ref() {
+            "code" => code = Some(value.into_owned()),
+            "state" => state = Some(value.into_owned()),
+            "error" => oauth_error = Some(value.into_owned()),
+            _ => {}
+        }
+    }
+
+    if let Some(error) = oauth_error {
+        return Err(format!("Google OAuth failed: {error}"));
+    }
+
+    if state.as_deref() != Some(expected_state) {
+        return Err("Google OAuth callback state did not match the active request.".to_string());
+    }
+
+    code.ok_or_else(|| "Google OAuth callback did not include an authorization code.".to_string())
+}
+
+fn oauth_callback_response(is_success: bool) -> String {
+    let body = if is_success {
+        "Google Drive is connected. You can close this browser tab."
+    } else {
+        "Google Drive connection failed. Return to Warp Tracker and try again."
+    };
+
+    let html = format!("<!doctype html><html><body><p>{body}</p></body></html>");
+
+    format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\n\r\n{}",
+        html.len(),
+        html
+    )
+}
+
+fn generate_oauth_random_token() -> String {
+    let mut bytes = [0_u8; OAUTH_RANDOM_TOKEN_BYTES];
+    OsRng.fill_bytes(&mut bytes);
+    URL_SAFE_NO_PAD.encode(bytes)
+}
+
+fn create_pkce_code_challenge(code_verifier: &str) -> String {
+    URL_SAFE_NO_PAD.encode(Sha256::digest(code_verifier.as_bytes()))
+}
+
 fn create_status(
     connection_status: CloudBackupConnectionStatus,
     secure_storage_status: SecureTokenStorageStatus,
     oauth_client_configured: bool,
     can_connect: bool,
+    can_disconnect: bool,
     can_upload: bool,
     label: &str,
     detail: String,
@@ -173,6 +392,7 @@ fn create_status(
         secure_storage_status,
         oauth_client_configured,
         can_connect,
+        can_disconnect,
         can_upload,
         label: label.to_string(),
         detail,
@@ -190,6 +410,19 @@ fn read_google_oauth_client_config_from_environment() -> GoogleOAuthClientConfig
 
 fn to_secret_store_error(error: KeyringError) -> SecretStoreError {
     SecretStoreError::Unavailable(error.to_string())
+}
+
+fn secret_store_error_message(error: SecretStoreError) -> String {
+    match error {
+        SecretStoreError::Unavailable(error) => {
+            format!("Secure token storage is unavailable: {error}")
+        }
+    }
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct GoogleTokenResponse {
+    refresh_token: Option<String>,
 }
 
 #[cfg(test)]
@@ -213,6 +446,7 @@ mod tests {
         );
         assert!(!status.oauth_client_configured);
         assert!(!status.can_connect);
+        assert!(!status.can_disconnect);
         assert!(!status.can_upload);
     }
 
@@ -231,6 +465,8 @@ mod tests {
             SecureTokenStorageStatus::Ready
         );
         assert!(status.oauth_client_configured);
+        assert!(status.can_connect);
+        assert!(!status.can_disconnect);
         assert_eq!(status.label, "Not connected");
     }
 
@@ -248,7 +484,75 @@ mod tests {
             CloudBackupConnectionStatus::Connected
         );
         assert_eq!(status.label, "Token stored securely");
+        assert!(status.can_disconnect);
         assert!(!status.can_upload);
+    }
+
+    #[test]
+    fn creates_pkce_s256_challenge() {
+        let challenge = create_pkce_code_challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk");
+
+        assert_eq!(challenge, "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM");
+    }
+
+    #[test]
+    fn builds_google_authorization_url_for_drive_app_data_scope() {
+        let url = Url::parse(
+            &build_google_authorization_url(
+                "client-id",
+                "http://127.0.0.1:9004",
+                "state-token",
+                "challenge-token",
+            )
+            .expect("authorization url can be built"),
+        )
+        .expect("authorization url can be parsed");
+        let query_pairs = url
+            .query_pairs()
+            .map(|(key, value)| (key.into_owned(), value.into_owned()))
+            .collect::<HashMap<_, _>>();
+
+        assert_eq!(
+            url.as_str().split('?').next(),
+            Some(GOOGLE_AUTHORIZATION_ENDPOINT)
+        );
+        assert_eq!(query_pairs.get("client_id"), Some(&"client-id".to_string()));
+        assert_eq!(
+            query_pairs.get("redirect_uri"),
+            Some(&"http://127.0.0.1:9004".to_string())
+        );
+        assert_eq!(
+            query_pairs.get("scope"),
+            Some(&GOOGLE_DRIVE_APP_DATA_SCOPE.to_string())
+        );
+        assert_eq!(
+            query_pairs.get("code_challenge_method"),
+            Some(&"S256".to_string())
+        );
+        assert_eq!(query_pairs.get("access_type"), Some(&"offline".to_string()));
+    }
+
+    #[test]
+    fn parses_oauth_callback_code_after_state_validation() {
+        let code = parse_oauth_callback_request(
+            "GET /?code=auth-code&state=state-token HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n",
+            "state-token",
+        )
+        .expect("callback has code");
+
+        assert_eq!(code, "auth-code");
+    }
+
+    #[test]
+    fn rejects_oauth_callback_with_wrong_state() {
+        let result = parse_oauth_callback_request(
+            "GET /?code=auth-code&state=wrong-state HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n",
+            "state-token",
+        );
+
+        assert!(result
+            .expect_err("wrong state should fail")
+            .contains("state did not match"));
     }
 
     #[test]
@@ -270,6 +574,7 @@ mod tests {
         );
         assert!(status.detail.contains("credential manager disabled"));
         assert!(!status.can_connect);
+        assert!(!status.can_disconnect);
     }
 
     #[test]
