@@ -37,6 +37,14 @@ fn list_backup_snapshots(
 }
 
 #[tauri::command]
+fn delete_backup_snapshot(
+    app: tauri::AppHandle,
+    input: database::DeleteBackupSnapshotInput,
+) -> Result<database::DeleteBackupSnapshotResult, String> {
+    database::delete_backup_snapshot(&app, input)
+}
+
+#[tauri::command]
 fn export_backup_snapshot(
     app: tauri::AppHandle,
 ) -> Result<database::ExportBackupSnapshotResult, String> {
@@ -72,6 +80,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            delete_backup_snapshot,
             export_backup_snapshot,
             get_database_status,
             list_backup_snapshots,

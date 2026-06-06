@@ -110,6 +110,12 @@ pub struct RestoreBackupSnapshotInput {
     pub file_name: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteBackupSnapshotInput {
+    pub file_name: String,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportBackupSnapshotResult {
@@ -133,6 +139,14 @@ pub struct BackupSnapshotSummary {
     pub warp_items: usize,
     pub import_batches: usize,
     pub warp_pulls: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteBackupSnapshotResult {
+    pub backup_path: String,
+    pub file_name: String,
+    pub remaining_snapshots: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -351,6 +365,16 @@ pub fn list_backup_snapshots(app: &AppHandle) -> Result<Vec<BackupSnapshotSummar
     let backup_directory = resolve_backup_directory(app)?;
 
     list_backup_snapshots_in_directory(&backup_directory)
+}
+
+pub fn delete_backup_snapshot(
+    app: &AppHandle,
+    input: DeleteBackupSnapshotInput,
+) -> Result<DeleteBackupSnapshotResult, String> {
+    let backup_directory = resolve_backup_directory(app)?;
+    let backup_path = resolve_backup_snapshot_path(&backup_directory, &input.file_name)?;
+
+    delete_backup_snapshot_file(&backup_directory, &backup_path)
 }
 
 pub fn restore_latest_backup_snapshot(
@@ -1279,6 +1303,29 @@ fn find_latest_backup_snapshot_path(backup_directory: &Path) -> Result<PathBuf, 
         .ok_or_else(|| "No local backup snapshots found yet.".to_string())
 }
 
+fn delete_backup_snapshot_file(
+    backup_directory: &Path,
+    backup_path: &Path,
+) -> Result<DeleteBackupSnapshotResult, String> {
+    let file_name = backup_path
+        .file_name()
+        .and_then(|file_name| file_name.to_str())
+        .ok_or_else(|| "Backup snapshot file name is invalid.".to_string())?
+        .to_string();
+    let backup_path_string = backup_path.to_string_lossy().to_string();
+
+    fs::remove_file(backup_path)
+        .map_err(|error| format!("Failed to delete backup snapshot: {error}"))?;
+
+    let remaining_snapshots = list_backup_snapshots_in_directory(backup_directory)?.len();
+
+    Ok(DeleteBackupSnapshotResult {
+        backup_path: backup_path_string,
+        file_name,
+        remaining_snapshots,
+    })
+}
+
 fn resolve_backup_snapshot_path(
     backup_directory: &Path,
     file_name: &str,
@@ -1922,6 +1969,41 @@ mod tests {
         assert_eq!(snapshots.len(), 1);
         assert_eq!(snapshots[0].warp_pulls, 2);
         assert_eq!(snapshots[0].backup_path, result.backup_path);
+
+        std::fs::remove_dir_all(backup_directory).ok();
+    }
+
+    #[test]
+    fn deletes_backup_snapshot_file_after_validation() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+        upsert_warp_item_catalog(
+            &mut connection,
+            &[
+                catalog_item("character-1001", "1001", "Pela", "character", 4),
+                catalog_item("light-cone-2001", "2001", "Data Bank", "light_cone", 3),
+            ],
+        )
+        .expect("catalog sync");
+        save_manual_import_draft_to_database(&mut connection, &manual_import_draft())
+            .expect("manual import");
+
+        let backup_directory = unique_test_dir("backup-delete");
+        let export_result = export_backup_snapshot_to_directory(&connection, &backup_directory)
+            .expect("backup export");
+        let backup_path = PathBuf::from(&export_result.backup_path);
+        let delete_result =
+            delete_backup_snapshot_file(&backup_directory, &backup_path).expect("backup delete");
+
+        assert_eq!(delete_result.remaining_snapshots, 0);
+        assert_eq!(
+            delete_result.file_name,
+            backup_path
+                .file_name()
+                .and_then(|file_name| file_name.to_str())
+                .expect("backup file name")
+        );
+        assert!(!backup_path.exists());
 
         std::fs::remove_dir_all(backup_directory).ok();
     }

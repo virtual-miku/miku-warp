@@ -385,6 +385,13 @@
   font-size: 12px;
 }
 
+.backup-snapshot-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .backup-message {
   display: grid;
   gap: 4px;

@@ -1,4 +1,4 @@
-import { Cloud, KeyRound, RefreshCcw } from 'lucide-react'
+import { Cloud, KeyRound, RefreshCcw, Trash2 } from 'lucide-react'
 import { AppButton } from '../../../shared/ui/AppButton'
 
 export type BackupNotice = {
@@ -17,10 +17,13 @@ type BackupPanelProps = {
   backupCount: number
   isExporting: boolean
   isRestoring: boolean
+  isDeleting: boolean
   latestBackup?: BackupSnapshotInfo
   notice?: BackupNotice
+  deletingFileName?: string
   restoringFileName?: string
   snapshots: BackupSnapshotInfo[]
+  onDeleteSnapshot: (fileName: string) => void
   onExportBackup: () => void
   onRestoreBackup: () => void
   onRestoreSnapshot: (fileName: string) => void
@@ -29,16 +32,19 @@ type BackupPanelProps = {
 export function BackupPanel({
   backupCount,
   isExporting,
+  isDeleting,
   isRestoring,
   latestBackup,
   notice,
+  deletingFileName,
   restoringFileName,
   snapshots,
+  onDeleteSnapshot,
   onExportBackup,
   onRestoreBackup,
   onRestoreSnapshot,
 }: BackupPanelProps) {
-  const isBusy = isExporting || isRestoring
+  const isBusy = isExporting || isRestoring || isDeleting
   const visibleSnapshots = snapshots.slice(0, 3)
 
   return (
@@ -99,16 +105,28 @@ export function BackupPanel({
                     {snapshot.warpPulls} pulls
                   </span>
                 </div>
-                <AppButton
-                  disabled={isBusy}
-                  icon={RefreshCcw}
-                  onClick={() => onRestoreSnapshot(snapshot.fileName)}
-                  variant="ghost"
-                >
-                  {restoringFileName === snapshot.fileName
-                    ? 'Restoring'
-                    : 'Restore'}
-                </AppButton>
+                <div className="backup-snapshot-actions">
+                  <AppButton
+                    disabled={isBusy}
+                    icon={RefreshCcw}
+                    onClick={() => onRestoreSnapshot(snapshot.fileName)}
+                    variant="ghost"
+                  >
+                    {restoringFileName === snapshot.fileName
+                      ? 'Restoring'
+                      : 'Restore'}
+                  </AppButton>
+                  <AppButton
+                    disabled={isBusy}
+                    icon={Trash2}
+                    onClick={() => onDeleteSnapshot(snapshot.fileName)}
+                    variant="ghost"
+                  >
+                    {deletingFileName === snapshot.fileName
+                      ? 'Deleting'
+                      : 'Delete'}
+                  </AppButton>
+                </div>
               </div>
             ))}
           </div>

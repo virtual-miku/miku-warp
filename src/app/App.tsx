@@ -26,6 +26,7 @@ import {
   type ManualImportAccountInput,
 } from '../features/persistence/data/manual-import-save'
 import {
+  deleteBackupSnapshot,
   listBackupSnapshots,
   type BackupSnapshotSummary,
   exportBackupSnapshot,
@@ -69,6 +70,7 @@ export function App() {
   const [manualImportSaveNotice, setManualImportSaveNotice] =
     useState<ManualImportSaveNotice>()
   const [backupExporting, setBackupExporting] = useState(false)
+  const [deletingBackupFileName, setDeletingBackupFileName] = useState<string>()
   const [restoringBackupFileName, setRestoringBackupFileName] =
     useState<string>()
   const [backupNotice, setBackupNotice] = useState<BackupNotice>()
@@ -96,6 +98,7 @@ export function App() {
     () => calculatePitySummary(timelinePulls),
     [timelinePulls],
   )
+  const backupDeleting = deletingBackupFileName !== undefined
   const backupRestoring = restoringBackupFileName !== undefined
 
   const fetchPersistedPulls = useCallback(() => {
@@ -226,7 +229,7 @@ export function App() {
   }
 
   const handleExportBackup = useCallback(async () => {
-    if (backupExporting || backupRestoring) {
+    if (backupDeleting || backupExporting || backupRestoring) {
       return
     }
 
@@ -251,10 +254,10 @@ export function App() {
     } finally {
       setBackupExporting(false)
     }
-  }, [backupExporting, backupRestoring, refreshBackupSnapshots])
+  }, [backupDeleting, backupExporting, backupRestoring, refreshBackupSnapshots])
 
   const handleRestoreBackup = useCallback(async () => {
-    if (backupExporting || backupRestoring) {
+    if (backupDeleting || backupExporting || backupRestoring) {
       return
     }
 
@@ -282,6 +285,7 @@ export function App() {
     }
   }, [
     backupExporting,
+    backupDeleting,
     backupRestoring,
     backupSnapshots,
     refreshBackupSnapshots,
@@ -290,7 +294,7 @@ export function App() {
 
   const handleRestoreBackupSnapshot = useCallback(
     async (fileName: string) => {
-      if (backupExporting || backupRestoring) {
+      if (backupDeleting || backupExporting || backupRestoring) {
         return
       }
 
@@ -319,10 +323,50 @@ export function App() {
     },
     [
       backupExporting,
+      backupDeleting,
       backupRestoring,
       refreshBackupSnapshots,
       refreshPersistedPulls,
     ],
+  )
+
+  const handleDeleteBackupSnapshot = useCallback(
+    async (fileName: string) => {
+      if (backupDeleting || backupExporting || backupRestoring) {
+        return
+      }
+
+      const confirmed = window.confirm(
+        'Delete this local backup snapshot? This only removes the JSON backup file on this device.',
+      )
+
+      if (!confirmed) {
+        return
+      }
+
+      setDeletingBackupFileName(fileName)
+      setBackupNotice(undefined)
+
+      try {
+        const result = await deleteBackupSnapshot(fileName)
+        await refreshBackupSnapshots()
+
+        setBackupNotice({
+          tone: 'success',
+          title: 'Backup deleted',
+          detail: `${result.fileName} deleted. ${result.remainingSnapshots} snapshots left.`,
+        })
+      } catch (error) {
+        setBackupNotice({
+          tone: 'error',
+          title: 'Delete failed',
+          detail: getErrorMessage(error),
+        })
+      } finally {
+        setDeletingBackupFileName(undefined)
+      }
+    },
+    [backupDeleting, backupExporting, backupRestoring, refreshBackupSnapshots],
   )
 
   return (
@@ -370,7 +414,7 @@ export function App() {
             <div className="header-actions" aria-label="Quick actions">
               <AppButton icon={RefreshCw}>Sync</AppButton>
               <AppButton
-                disabled={backupExporting || backupRestoring}
+                disabled={backupDeleting || backupExporting || backupRestoring}
                 icon={Download}
                 onClick={handleExportBackup}
               >
@@ -400,12 +444,15 @@ export function App() {
               />
               <BackupPanel
                 backupCount={backupSnapshots.length}
+                deletingFileName={deletingBackupFileName}
                 isExporting={backupExporting}
+                isDeleting={backupDeleting}
                 isRestoring={backupRestoring}
                 latestBackup={backupSnapshots[0]}
                 notice={backupNotice}
                 restoringFileName={restoringBackupFileName}
                 snapshots={backupSnapshots}
+                onDeleteSnapshot={handleDeleteBackupSnapshot}
                 onExportBackup={handleExportBackup}
                 onRestoreBackup={handleRestoreBackup}
                 onRestoreSnapshot={handleRestoreBackupSnapshot}
