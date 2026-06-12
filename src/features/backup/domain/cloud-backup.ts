@@ -28,6 +28,16 @@ export type CloudBackupStatus = {
   detail: string
 }
 
+export type CloudBackupPolicyTrigger = 'manual_import_saved'
+
+export type CloudBackupPolicy = {
+  provider: CloudBackupProvider
+  autoBackupEnabled: boolean
+  triggerName: CloudBackupPolicyTrigger
+  minIntervalMinutes: number
+  updatedAt: string
+}
+
 export function createInitialGoogleDriveBackupStatus(): CloudBackupStatus {
   return {
     provider: 'google_drive',
@@ -43,6 +53,31 @@ export function createInitialGoogleDriveBackupStatus(): CloudBackupStatus {
     detail:
       'Google OAuth client and secure token storage must be configured before Drive backup can be enabled.',
   }
+}
+
+export function createInitialGoogleDriveBackupPolicy(): CloudBackupPolicy {
+  return {
+    provider: 'google_drive',
+    autoBackupEnabled: false,
+    triggerName: 'manual_import_saved',
+    minIntervalMinutes: 0,
+    updatedAt: '',
+  }
+}
+
+export function getCloudBackupPolicyDetail(
+  policy: CloudBackupPolicy,
+  canUpload: boolean,
+) {
+  if (policy.autoBackupEnabled && canUpload) {
+    return 'After manual import'
+  }
+
+  if (policy.autoBackupEnabled) {
+    return 'Enabled, waiting for Drive'
+  }
+
+  return canUpload ? 'Off' : 'Connect Drive first'
 }
 
 export function getCloudBackupStatusLabel(

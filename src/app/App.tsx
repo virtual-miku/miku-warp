@@ -14,7 +14,9 @@ import {
   type BackupNotice,
 } from '../features/backup/components/BackupPanel'
 import {
+  createInitialGoogleDriveBackupPolicy,
   createInitialGoogleDriveBackupStatus,
+  type CloudBackupPolicy,
   type CloudBackupStatus,
 } from '../features/backup/domain/cloud-backup'
 import { ImportPanel } from '../features/import/components/ImportPanel'
@@ -43,9 +45,11 @@ import {
 import {
   connectGoogleDriveBackup,
   disconnectGoogleDriveBackup,
+  getCloudBackupPolicy,
   getCloudBackupStatus,
   listGoogleDriveBackupSnapshots,
   restoreGoogleDriveBackupSnapshot,
+  updateCloudBackupPolicy,
   uploadLatestGoogleDriveBackup,
   type UploadCloudBackupSnapshotResult,
 } from '../features/persistence/data/cloud-backup-status'
@@ -94,6 +98,8 @@ export function App() {
   const [cloudBackupDisconnecting, setCloudBackupDisconnecting] =
     useState(false)
   const [cloudBackupListing, setCloudBackupListing] = useState(false)
+  const [cloudBackupPolicyUpdating, setCloudBackupPolicyUpdating] =
+    useState(false)
   const [cloudBackupUploading, setCloudBackupUploading] = useState(false)
   const [backupSnapshots, setBackupSnapshots] = useState<
     BackupSnapshotSummary[]
@@ -103,6 +109,8 @@ export function App() {
   >([])
   const [cloudBackupStatus, setCloudBackupStatus] =
     useState<CloudBackupStatus>(() => createInitialGoogleDriveBackupStatus())
+  const [cloudBackupPolicy, setCloudBackupPolicy] =
+    useState<CloudBackupPolicy>(() => createInitialGoogleDriveBackupPolicy())
   const [manualNoteDraft, setManualNoteDraft] = useState(manualNoteSample)
   const [persistedPulls, setPersistedPulls] = useState<WarpPull[]>([])
   const manualImportPreview = useMemo(
@@ -131,6 +139,7 @@ export function App() {
     cloudBackupConnecting ||
     cloudBackupDisconnecting ||
     cloudBackupListing ||
+    cloudBackupPolicyUpdating ||
     cloudBackupRestoring ||
     cloudBackupUploading
 
@@ -230,6 +239,26 @@ export function App() {
   useEffect(() => {
     let isActive = true
 
+    getCloudBackupPolicy()
+      .then((policy) => {
+        if (isActive) {
+          setCloudBackupPolicy(policy)
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setCloudBackupPolicy(createInitialGoogleDriveBackupPolicy())
+        }
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let isActive = true
+
     getCloudBackupStatus()
       .then((status) => {
         if (!isActive) {
@@ -277,6 +306,66 @@ export function App() {
     setManualImportSaveNotice(undefined)
   }
 
+  async function runAutoBackupAfterManualImport(insertedPulls: number) {
+    if (!cloudBackupPolicy.autoBackupEnabled) {
+      return undefined
+    }
+
+    if (insertedPulls < 1) {
+      return 'Auto backup skipped: no new pulls.'
+    }
+
+    if (!cloudBackupStatus.canUpload) {
+      const detail = 'Auto backup skipped: Google Drive is not ready.'
+
+      setBackupNotice({
+        tone: 'error',
+        title: 'Auto backup skipped',
+        detail,
+      })
+
+      return detail
+    }
+
+    setBackupNotice(undefined)
+    setBackupExporting(true)
+    setCloudBackupUploading(true)
+
+    try {
+      const exportResult = await exportBackupSnapshot()
+      await refreshBackupSnapshots()
+
+      const uploadResult = await uploadLatestGoogleDriveBackup()
+      await refreshCloudBackupStatus()
+      await refreshCloudBackupSnapshots().catch(() => undefined)
+
+      setBackupNotice({
+        tone: 'success',
+        title: 'Auto backup complete',
+        detail: [
+          formatCloudBackupUploadDetail(uploadResult),
+          `Local snapshot: ${exportResult.backupPath}`,
+        ].join('\n'),
+      })
+
+      return `Auto backup uploaded ${uploadResult.remoteFileName}.`
+    } catch (error) {
+      const fallbackStatus = await refreshCloudBackupStatus()
+      const detail = `${getErrorMessage(error)}\n${fallbackStatus.detail}`
+
+      setBackupNotice({
+        tone: 'error',
+        title: 'Auto backup failed',
+        detail,
+      })
+
+      return `Auto backup failed: ${getErrorMessage(error)}`
+    } finally {
+      setBackupExporting(false)
+      setCloudBackupUploading(false)
+    }
+  }
+
   const handleSaveManualImport = async () => {
     if (manualImportSaving) {
       return
@@ -306,11 +395,19 @@ export function App() {
         toSaveManualImportDraftPayload(activeAccount, draft),
       )
       await refreshPersistedPulls()
+      const autoBackupDetail = await runAutoBackupAfterManualImport(
+        result.recordsInserted,
+      )
 
       setManualImportSaveNotice({
         tone: 'success',
         title: 'Saved',
-        detail: `${result.recordsInserted} inserted, ${result.recordsSkipped} skipped, ${result.duplicateRecords} duplicates. Catalog ${catalogResult.totalInDatabase} items.`,
+        detail: [
+          `${result.recordsInserted} inserted, ${result.recordsSkipped} skipped, ${result.duplicateRecords} duplicates. Catalog ${catalogResult.totalInDatabase} items.`,
+          autoBackupDetail,
+        ]
+          .filter(Boolean)
+          .join('\n'),
       })
     } catch (error) {
       setManualImportSaveNotice({
@@ -399,6 +496,54 @@ export function App() {
     refreshCloudBackupSnapshots,
     refreshCloudBackupStatus,
   ])
+
+  const handleAutoBackupPolicyChange = useCallback(
+    async (enabled: boolean) => {
+      if (cloudBackupPolicyUpdating) {
+        return
+      }
+
+      if (enabled && !cloudBackupStatus.canUpload) {
+        setBackupNotice({
+          tone: 'error',
+          title: 'Auto backup unavailable',
+          detail: 'Connect Google Drive before enabling automatic backup.',
+        })
+        return
+      }
+
+      setCloudBackupPolicyUpdating(true)
+      setBackupNotice(undefined)
+
+      try {
+        const policy = await updateCloudBackupPolicy({
+          provider: 'google_drive',
+          autoBackupEnabled: enabled,
+        })
+        setCloudBackupPolicy(policy)
+        setBackupNotice({
+          tone: 'success',
+          title: 'Auto backup updated',
+          detail: enabled
+            ? 'Automatic backup will run after manual imports with new pulls.'
+            : 'Automatic backup is off.',
+        })
+      } catch (error) {
+        setBackupNotice({
+          tone: 'error',
+          title: 'Auto backup update failed',
+          detail: getErrorMessage(error),
+        })
+      } finally {
+        setCloudBackupPolicyUpdating(false)
+      }
+    },
+    [
+      cloudBackupPolicyUpdating,
+      cloudBackupStatus.canUpload,
+      setCloudBackupPolicy,
+    ],
+  )
 
   const handleDisconnectGoogleDrive = useCallback(async () => {
     if (
@@ -779,12 +924,14 @@ export function App() {
               />
               <BackupPanel
                 backupCount={backupSnapshots.length}
+                cloudBackupPolicy={cloudBackupPolicy}
                 cloudSnapshots={cloudBackupSnapshots}
                 cloudBackupStatus={cloudBackupStatus}
                 deletingFileName={deletingBackupFileName}
                 isCloudConnecting={cloudBackupConnecting}
                 isCloudDisconnecting={cloudBackupDisconnecting}
                 isCloudListing={cloudBackupListing}
+                isCloudPolicyUpdating={cloudBackupPolicyUpdating}
                 isCloudRestoring={cloudBackupRestoring}
                 isCloudUploading={cloudBackupUploading}
                 isExporting={backupExporting}
@@ -795,6 +942,7 @@ export function App() {
                 restoringCloudFileId={restoringCloudBackupFileId}
                 restoringFileName={restoringBackupFileName}
                 snapshots={backupSnapshots}
+                onAutoBackupPolicyChange={handleAutoBackupPolicyChange}
                 onConnectGoogleDrive={handleConnectGoogleDrive}
                 onDeleteSnapshot={handleDeleteBackupSnapshot}
                 onDisconnectGoogleDrive={handleDisconnectGoogleDrive}

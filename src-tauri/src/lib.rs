@@ -95,6 +95,19 @@ fn restore_google_drive_backup_snapshot(
     Ok(restore_result)
 }
 
+#[tauri::command]
+fn get_cloud_backup_policy(app: tauri::AppHandle) -> Result<database::CloudBackupPolicy, String> {
+    database::get_cloud_backup_policy(&app)
+}
+
+#[tauri::command]
+fn update_cloud_backup_policy(
+    app: tauri::AppHandle,
+    input: database::UpdateCloudBackupPolicyInput,
+) -> Result<database::CloudBackupPolicy, String> {
+    database::update_cloud_backup_policy(&app, input)
+}
+
 fn record_cloud_backup_audit(
     app: &tauri::AppHandle,
     input: database::RecordCloudBackupSnapshotInput,
@@ -200,6 +213,7 @@ pub fn run() {
             disconnect_google_drive_backup,
             export_backup_snapshot,
             get_cloud_backup_status,
+            get_cloud_backup_policy,
             get_database_status,
             list_google_drive_backup_snapshots,
             list_backup_snapshots,
@@ -209,6 +223,7 @@ pub fn run() {
             restore_latest_backup_snapshot,
             save_manual_import_draft,
             sync_warp_item_catalog,
+            update_cloud_backup_policy,
             upload_latest_google_drive_backup
         ])
         .run(tauri::generate_context!())

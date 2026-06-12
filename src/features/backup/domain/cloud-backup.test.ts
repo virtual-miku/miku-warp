@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  createInitialGoogleDriveBackupPolicy,
   createInitialGoogleDriveBackupStatus,
+  getCloudBackupPolicyDetail,
   getCloudBackupStatusLabel,
   googleDriveAppDataScope,
 } from './cloud-backup'
@@ -29,5 +31,32 @@ describe('cloud backup status', () => {
     expect(getCloudBackupStatusLabel('disconnected')).toBe('Not connected')
     expect(getCloudBackupStatusLabel('connected')).toBe('Connected')
     expect(getCloudBackupStatusLabel('needs_reauth')).toBe('Needs re-login')
+  })
+
+  it('starts with auto backup disabled until the user opts in', () => {
+    const policy = createInitialGoogleDriveBackupPolicy()
+
+    expect(policy.provider).toBe('google_drive')
+    expect(policy.autoBackupEnabled).toBe(false)
+    expect(policy.triggerName).toBe('manual_import_saved')
+    expect(policy.minIntervalMinutes).toBe(0)
+    expect(getCloudBackupPolicyDetail(policy, false)).toBe(
+      'Connect Drive first',
+    )
+    expect(getCloudBackupPolicyDetail(policy, true)).toBe('Off')
+  })
+
+  it('describes enabled auto backup policy readiness', () => {
+    const policy = {
+      ...createInitialGoogleDriveBackupPolicy(),
+      autoBackupEnabled: true,
+    }
+
+    expect(getCloudBackupPolicyDetail(policy, true)).toBe(
+      'After manual import',
+    )
+    expect(getCloudBackupPolicyDetail(policy, false)).toBe(
+      'Enabled, waiting for Drive',
+    )
   })
 })

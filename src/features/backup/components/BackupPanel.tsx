@@ -7,7 +7,11 @@ import {
   Upload,
 } from 'lucide-react'
 import { AppButton } from '../../../shared/ui/AppButton'
-import type { CloudBackupStatus } from '../domain/cloud-backup'
+import {
+  getCloudBackupPolicyDetail,
+  type CloudBackupPolicy,
+  type CloudBackupStatus,
+} from '../domain/cloud-backup'
 
 export type BackupNotice = {
   tone: 'success' | 'error'
@@ -31,11 +35,13 @@ export type CloudBackupSnapshotInfo = {
 
 type BackupPanelProps = {
   backupCount: number
+  cloudBackupPolicy: CloudBackupPolicy
   cloudSnapshots: CloudBackupSnapshotInfo[]
   cloudBackupStatus: CloudBackupStatus
   isCloudConnecting: boolean
   isCloudDisconnecting: boolean
   isCloudListing: boolean
+  isCloudPolicyUpdating: boolean
   isCloudRestoring: boolean
   isCloudUploading: boolean
   isExporting: boolean
@@ -50,6 +56,7 @@ type BackupPanelProps = {
   onDeleteSnapshot: (fileName: string) => void
   onConnectGoogleDrive: () => void
   onDisconnectGoogleDrive: () => void
+  onAutoBackupPolicyChange: (enabled: boolean) => void
   onRefreshGoogleDriveBackups: () => void
   onRestoreGoogleDriveBackup: (snapshot: CloudBackupSnapshotInfo) => void
   onUploadGoogleDriveBackup: () => void
@@ -60,11 +67,13 @@ type BackupPanelProps = {
 
 export function BackupPanel({
   backupCount,
+  cloudBackupPolicy,
   cloudSnapshots,
   cloudBackupStatus,
   isCloudConnecting,
   isCloudDisconnecting,
   isCloudListing,
+  isCloudPolicyUpdating,
   isCloudRestoring,
   isCloudUploading,
   isExporting,
@@ -77,6 +86,7 @@ export function BackupPanel({
   restoringFileName,
   snapshots,
   onDeleteSnapshot,
+  onAutoBackupPolicyChange,
   onConnectGoogleDrive,
   onDisconnectGoogleDrive,
   onRefreshGoogleDriveBackups,
@@ -90,6 +100,7 @@ export function BackupPanel({
     isCloudConnecting ||
     isCloudDisconnecting ||
     isCloudListing ||
+    isCloudPolicyUpdating ||
     isCloudRestoring ||
     isCloudUploading
   const isBusy = isExporting || isRestoring || isDeleting || isCloudBusy
@@ -97,6 +108,10 @@ export function BackupPanel({
   const visibleCloudSnapshots = cloudSnapshots.slice(0, 3)
   const isGoogleDriveConnected =
     cloudBackupStatus.connectionStatus === 'connected'
+  const autoBackupToggleDisabled =
+    isBusy ||
+    isCloudPolicyUpdating ||
+    (!cloudBackupPolicy.autoBackupEnabled && !cloudBackupStatus.canUpload)
 
   return (
     <section
@@ -148,6 +163,32 @@ export function BackupPanel({
               )}
             </AppButton>
           </div>
+        </div>
+        <div className="backup-policy-row">
+          <div>
+            <strong>Auto backup</strong>
+            <span>
+              {getCloudBackupPolicyDetail(
+                cloudBackupPolicy,
+                cloudBackupStatus.canUpload,
+              )}
+            </span>
+          </div>
+          <button
+            aria-checked={cloudBackupPolicy.autoBackupEnabled}
+            aria-label="Auto backup after manual import"
+            className={`switch-control${
+              cloudBackupPolicy.autoBackupEnabled ? ' switch-control-on' : ''
+            }`}
+            disabled={autoBackupToggleDisabled}
+            onClick={() =>
+              onAutoBackupPolicyChange(!cloudBackupPolicy.autoBackupEnabled)
+            }
+            role="switch"
+            type="button"
+          >
+            <span aria-hidden="true" />
+          </button>
         </div>
         {isGoogleDriveConnected ? (
           <div className="backup-snapshot-list" aria-label="Cloud backups">

@@ -18,6 +18,10 @@ const ALLOW_DUPLICATE_WARP_ITEM_NAMES_SQL: &str =
     include_str!("../migrations/0002_allow_duplicate_warp_item_names.sql");
 const CLOUD_BACKUP_AUDIT_VERSION: &str = "0003_cloud_backup_audit";
 const CLOUD_BACKUP_AUDIT_SQL: &str = include_str!("../migrations/0003_cloud_backup_audit.sql");
+const AUTO_BACKUP_POLICY_VERSION: &str = "0004_auto_backup_policy";
+const AUTO_BACKUP_POLICY_SQL: &str = include_str!("../migrations/0004_auto_backup_policy.sql");
+const GOOGLE_DRIVE_PROVIDER: &str = "google_drive";
+const MANUAL_IMPORT_SAVED_TRIGGER: &str = "manual_import_saved";
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -168,6 +172,23 @@ pub struct RecordCloudBackupSnapshotResult {
     pub snapshot_id: String,
     pub event_id: String,
     pub total_events: i64,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CloudBackupPolicy {
+    pub provider: String,
+    pub auto_backup_enabled: bool,
+    pub trigger_name: String,
+    pub min_interval_minutes: i64,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateCloudBackupPolicyInput {
+    pub provider: String,
+    pub auto_backup_enabled: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -334,6 +355,10 @@ const MIGRATIONS: &[Migration] = &[
         version: CLOUD_BACKUP_AUDIT_VERSION,
         sql: CLOUD_BACKUP_AUDIT_SQL,
     },
+    Migration {
+        version: AUTO_BACKUP_POLICY_VERSION,
+        sql: AUTO_BACKUP_POLICY_SQL,
+    },
 ];
 
 pub fn get_database_status(app: &AppHandle) -> Result<DatabaseStatus, String> {
@@ -459,6 +484,23 @@ pub fn record_cloud_backup_snapshot(
     let mut connection = open_database(&database_path)?;
 
     record_cloud_backup_snapshot_to_database(&mut connection, &input)
+}
+
+pub fn get_cloud_backup_policy(app: &AppHandle) -> Result<CloudBackupPolicy, String> {
+    let database_path = resolve_database_path(app)?;
+    let mut connection = open_database(&database_path)?;
+
+    get_cloud_backup_policy_from_database(&mut connection, GOOGLE_DRIVE_PROVIDER)
+}
+
+pub fn update_cloud_backup_policy(
+    app: &AppHandle,
+    input: UpdateCloudBackupPolicyInput,
+) -> Result<CloudBackupPolicy, String> {
+    let database_path = resolve_database_path(app)?;
+    let mut connection = open_database(&database_path)?;
+
+    update_cloud_backup_policy_in_database(&mut connection, &input)
 }
 
 fn resolve_database_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -1020,6 +1062,85 @@ fn record_cloud_backup_snapshot_to_database(
     })
 }
 
+fn get_cloud_backup_policy_from_database(
+    connection: &mut Connection,
+    provider: &str,
+) -> Result<CloudBackupPolicy, String> {
+    validate_cloud_backup_provider(provider)?;
+    ensure_cloud_backup_policy(connection, provider)?;
+
+    read_cloud_backup_policy(connection, provider)
+}
+
+fn update_cloud_backup_policy_in_database(
+    connection: &mut Connection,
+    input: &UpdateCloudBackupPolicyInput,
+) -> Result<CloudBackupPolicy, String> {
+    validate_cloud_backup_provider(&input.provider)?;
+
+    connection
+        .execute(
+            "INSERT INTO cloud_backup_policies (
+               provider, auto_backup_enabled, trigger_name, min_interval_minutes, updated_at
+             )
+             VALUES (?1, ?2, ?3, 0, CURRENT_TIMESTAMP)
+             ON CONFLICT(provider) DO UPDATE SET
+               auto_backup_enabled = excluded.auto_backup_enabled,
+               trigger_name = excluded.trigger_name,
+               updated_at = CURRENT_TIMESTAMP",
+            params![
+                &input.provider,
+                input.auto_backup_enabled,
+                MANUAL_IMPORT_SAVED_TRIGGER,
+            ],
+        )
+        .map_err(|error| {
+            format!(
+                "Failed to update cloud backup policy for {}: {error}",
+                input.provider
+            )
+        })?;
+
+    read_cloud_backup_policy(connection, &input.provider)
+}
+
+fn ensure_cloud_backup_policy(connection: &Connection, provider: &str) -> Result<(), String> {
+    connection
+        .execute(
+            "INSERT OR IGNORE INTO cloud_backup_policies (
+               provider, auto_backup_enabled, trigger_name, min_interval_minutes
+             )
+             VALUES (?1, 0, ?2, 0)",
+            params![provider, MANUAL_IMPORT_SAVED_TRIGGER],
+        )
+        .map_err(|error| format!("Failed to ensure cloud backup policy for {provider}: {error}"))?;
+
+    Ok(())
+}
+
+fn read_cloud_backup_policy(
+    connection: &Connection,
+    provider: &str,
+) -> Result<CloudBackupPolicy, String> {
+    connection
+        .query_row(
+            "SELECT provider, auto_backup_enabled, trigger_name, min_interval_minutes, updated_at
+             FROM cloud_backup_policies
+             WHERE provider = ?1",
+            params![provider],
+            |row| {
+                Ok(CloudBackupPolicy {
+                    provider: row.get(0)?,
+                    auto_backup_enabled: row.get(1)?,
+                    trigger_name: row.get(2)?,
+                    min_interval_minutes: row.get(3)?,
+                    updated_at: row.get(4)?,
+                })
+            },
+        )
+        .map_err(|error| format!("Failed to read cloud backup policy for {provider}: {error}"))
+}
+
 fn build_backup_snapshot(connection: &Connection) -> Result<BackupSnapshot, String> {
     Ok(BackupSnapshot {
         schema_version: BACKUP_SCHEMA_VERSION,
@@ -1432,12 +1553,7 @@ fn validate_backup_snapshot(snapshot: &BackupSnapshot) -> Result<(), String> {
 fn validate_cloud_backup_snapshot_record(
     input: &RecordCloudBackupSnapshotInput,
 ) -> Result<(), String> {
-    if input.provider != "google_drive" {
-        return Err(format!(
-            "Unsupported cloud backup provider {}.",
-            input.provider
-        ));
-    }
+    validate_cloud_backup_provider(&input.provider)?;
 
     if input.remote_file_id.trim().is_empty() {
         return Err("Cloud backup remote file id cannot be empty.".to_string());
@@ -1460,6 +1576,14 @@ fn validate_cloud_backup_snapshot_record(
 
     if matches!(input.size_bytes, Some(size_bytes) if size_bytes < 0) {
         return Err("Cloud backup size cannot be negative.".to_string());
+    }
+
+    Ok(())
+}
+
+fn validate_cloud_backup_provider(provider: &str) -> Result<(), String> {
+    if provider != GOOGLE_DRIVE_PROVIDER {
+        return Err(format!("Unsupported cloud backup provider {provider}."));
     }
 
     Ok(())
@@ -2067,6 +2191,13 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("cloud backup events table count");
+        let cloud_policy_table_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'cloud_backup_policies'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("cloud backup policies table count");
 
         assert_eq!(applied_migrations, planned_migrations());
         assert_eq!(table_count, 1);
@@ -2074,6 +2205,7 @@ mod tests {
         assert_eq!(name_index_count, 1);
         assert_eq!(cloud_snapshot_table_count, 1);
         assert_eq!(cloud_event_table_count, 1);
+        assert_eq!(cloud_policy_table_count, 1);
     }
 
     #[test]
@@ -2436,6 +2568,40 @@ mod tests {
         assert!(snapshot_row.4);
         assert_eq!(count_table(&connection, "cloud_backup_snapshots"), 1);
         assert_eq!(count_table(&connection, "cloud_backup_events"), 2);
+    }
+
+    #[test]
+    fn stores_cloud_backup_policy_off_by_default() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+
+        let default_policy =
+            get_cloud_backup_policy_from_database(&mut connection, GOOGLE_DRIVE_PROVIDER)
+                .expect("policy can be read");
+        let enabled_policy = update_cloud_backup_policy_in_database(
+            &mut connection,
+            &UpdateCloudBackupPolicyInput {
+                provider: GOOGLE_DRIVE_PROVIDER.to_string(),
+                auto_backup_enabled: true,
+            },
+        )
+        .expect("policy can be enabled");
+        let disabled_policy = update_cloud_backup_policy_in_database(
+            &mut connection,
+            &UpdateCloudBackupPolicyInput {
+                provider: GOOGLE_DRIVE_PROVIDER.to_string(),
+                auto_backup_enabled: false,
+            },
+        )
+        .expect("policy can be disabled");
+
+        assert_eq!(default_policy.provider, GOOGLE_DRIVE_PROVIDER);
+        assert!(!default_policy.auto_backup_enabled);
+        assert_eq!(default_policy.trigger_name, MANUAL_IMPORT_SAVED_TRIGGER);
+        assert_eq!(default_policy.min_interval_minutes, 0);
+        assert!(enabled_policy.auto_backup_enabled);
+        assert!(!disabled_policy.auto_backup_enabled);
+        assert_eq!(count_table(&connection, "cloud_backup_policies"), 1);
     }
 
     #[test]
