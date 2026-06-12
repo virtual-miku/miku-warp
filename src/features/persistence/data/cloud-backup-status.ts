@@ -20,6 +20,14 @@ export type CloudBackupSnapshotSummary = {
   size?: string
 }
 
+export type RestoreCloudBackupSnapshotInput = {
+  remoteFileId: string
+  fileName?: string
+  remoteMd5Checksum?: string
+  remoteModifiedTime?: string
+  size?: string
+}
+
 export function getCloudBackupStatus() {
   return invokeTauri<CloudBackupStatus>('get_cloud_backup_status')
 }
@@ -44,11 +52,13 @@ export function listGoogleDriveBackupSnapshots() {
   )
 }
 
-export function restoreGoogleDriveBackupSnapshot(remoteFileId: string) {
+export function restoreGoogleDriveBackupSnapshot(
+  input: RestoreCloudBackupSnapshotInput,
+) {
   return invokeTauri<RestoreBackupSnapshotResult>(
     'restore_google_drive_backup_snapshot',
     {
-      input: { remoteFileId },
+      input,
     },
   )
 }

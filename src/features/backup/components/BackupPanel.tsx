@@ -24,6 +24,7 @@ export type BackupSnapshotInfo = {
 export type CloudBackupSnapshotInfo = {
   remoteFileId: string
   fileName: string
+  remoteMd5Checksum?: string
   remoteModifiedTime?: string
   size?: string
 }
@@ -50,7 +51,7 @@ type BackupPanelProps = {
   onConnectGoogleDrive: () => void
   onDisconnectGoogleDrive: () => void
   onRefreshGoogleDriveBackups: () => void
-  onRestoreGoogleDriveBackup: (remoteFileId: string) => void
+  onRestoreGoogleDriveBackup: (snapshot: CloudBackupSnapshotInfo) => void
   onUploadGoogleDriveBackup: () => void
   onExportBackup: () => void
   onRestoreBackup: () => void
@@ -186,9 +187,7 @@ export function BackupPanel({
                     <AppButton
                       disabled={isBusy}
                       icon={RefreshCcw}
-                      onClick={() =>
-                        onRestoreGoogleDriveBackup(snapshot.remoteFileId)
-                      }
+                      onClick={() => onRestoreGoogleDriveBackup(snapshot)}
                       variant="ghost"
                     >
                       {restoringCloudFileId === snapshot.remoteFileId

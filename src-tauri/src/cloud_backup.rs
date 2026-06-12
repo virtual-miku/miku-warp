@@ -101,6 +101,10 @@ pub struct DownloadCloudBackupSnapshotResult {
 #[serde(rename_all = "camelCase")]
 pub struct RestoreCloudBackupSnapshotInput {
     pub remote_file_id: String,
+    pub file_name: Option<String>,
+    pub remote_md5_checksum: Option<String>,
+    pub remote_modified_time: Option<String>,
+    pub size: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq)]

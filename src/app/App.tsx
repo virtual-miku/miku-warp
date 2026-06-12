@@ -486,7 +486,7 @@ export function App() {
   ])
 
   const handleRestoreGoogleDriveBackup = useCallback(
-    async (remoteFileId: string) => {
+    async (snapshot: CloudBackupSnapshotInfo) => {
       if (
         backupDeleting ||
         backupExporting ||
@@ -497,6 +497,7 @@ export function App() {
         return
       }
 
+      const { remoteFileId } = snapshot
       const confirmed = window.confirm(
         'Restore this cloud backup snapshot? Existing matching pulls will be skipped as duplicates.',
       )
@@ -509,7 +510,7 @@ export function App() {
       setBackupNotice(undefined)
 
       try {
-        const result = await restoreGoogleDriveBackupSnapshot(remoteFileId)
+        const result = await restoreGoogleDriveBackupSnapshot(snapshot)
         await refreshPersistedPulls()
 
         setBackupNotice({

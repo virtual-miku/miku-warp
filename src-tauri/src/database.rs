@@ -16,6 +16,8 @@ const INIT_MIGRATION_SQL: &str = include_str!("../migrations/0001_init.sql");
 const ALLOW_DUPLICATE_WARP_ITEM_NAMES_VERSION: &str = "0002_allow_duplicate_warp_item_names";
 const ALLOW_DUPLICATE_WARP_ITEM_NAMES_SQL: &str =
     include_str!("../migrations/0002_allow_duplicate_warp_item_names.sql");
+const CLOUD_BACKUP_AUDIT_VERSION: &str = "0003_cloud_backup_audit";
+const CLOUD_BACKUP_AUDIT_SQL: &str = include_str!("../migrations/0003_cloud_backup_audit.sql");
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -146,6 +148,26 @@ pub struct BackupSnapshotFile {
     pub backup_path: String,
     pub file_name: String,
     pub bytes: Vec<u8>,
+}
+
+#[derive(Debug)]
+pub struct RecordCloudBackupSnapshotInput {
+    pub provider: String,
+    pub remote_file_id: String,
+    pub file_name: String,
+    pub remote_md5_checksum: Option<String>,
+    pub remote_modified_time: Option<String>,
+    pub size_bytes: Option<i64>,
+    pub operation: String,
+    pub status: String,
+    pub message: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct RecordCloudBackupSnapshotResult {
+    pub snapshot_id: String,
+    pub event_id: String,
+    pub total_events: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -308,6 +330,10 @@ const MIGRATIONS: &[Migration] = &[
         version: ALLOW_DUPLICATE_WARP_ITEM_NAMES_VERSION,
         sql: ALLOW_DUPLICATE_WARP_ITEM_NAMES_SQL,
     },
+    Migration {
+        version: CLOUD_BACKUP_AUDIT_VERSION,
+        sql: CLOUD_BACKUP_AUDIT_SQL,
+    },
 ];
 
 pub fn get_database_status(app: &AppHandle) -> Result<DatabaseStatus, String> {
@@ -423,6 +449,16 @@ pub fn restore_backup_snapshot_from_bytes(
     let mut connection = open_database(&database_path)?;
 
     restore_backup_snapshot_payload(&mut connection, backup_source, bytes)
+}
+
+pub fn record_cloud_backup_snapshot(
+    app: &AppHandle,
+    input: RecordCloudBackupSnapshotInput,
+) -> Result<RecordCloudBackupSnapshotResult, String> {
+    let database_path = resolve_database_path(app)?;
+    let mut connection = open_database(&database_path)?;
+
+    record_cloud_backup_snapshot_to_database(&mut connection, &input)
 }
 
 fn resolve_database_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -877,6 +913,113 @@ fn restore_backup_snapshot_to_database(
     })
 }
 
+fn record_cloud_backup_snapshot_to_database(
+    connection: &mut Connection,
+    input: &RecordCloudBackupSnapshotInput,
+) -> Result<RecordCloudBackupSnapshotResult, String> {
+    validate_cloud_backup_snapshot_record(input)?;
+
+    let snapshot_id = cloud_backup_snapshot_id(&input.provider, &input.remote_file_id);
+    let event_id = create_cloud_backup_event_id()?;
+    let transaction = connection
+        .transaction()
+        .map_err(|error| format!("Failed to start cloud backup audit transaction: {error}"))?;
+
+    transaction
+        .execute(
+            "INSERT INTO cloud_backup_snapshots (
+               id, provider, remote_file_id, file_name, remote_md5_checksum,
+               remote_modified_time, size_bytes, last_operation, last_status,
+               last_message, uploaded_at, restored_at, updated_at
+             )
+             VALUES (
+               ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10,
+               CASE WHEN ?8 = 'upload' THEN CURRENT_TIMESTAMP ELSE NULL END,
+               CASE WHEN ?8 = 'restore' THEN CURRENT_TIMESTAMP ELSE NULL END,
+               CURRENT_TIMESTAMP
+             )
+             ON CONFLICT(provider, remote_file_id) DO UPDATE SET
+               file_name = excluded.file_name,
+               remote_md5_checksum = COALESCE(
+                 excluded.remote_md5_checksum,
+                 cloud_backup_snapshots.remote_md5_checksum
+               ),
+               remote_modified_time = COALESCE(
+                 excluded.remote_modified_time,
+                 cloud_backup_snapshots.remote_modified_time
+               ),
+               size_bytes = COALESCE(
+                 excluded.size_bytes,
+                 cloud_backup_snapshots.size_bytes
+               ),
+               last_operation = excluded.last_operation,
+               last_status = excluded.last_status,
+               last_message = excluded.last_message,
+               uploaded_at = CASE
+                 WHEN excluded.last_operation = 'upload' THEN CURRENT_TIMESTAMP
+                 ELSE cloud_backup_snapshots.uploaded_at
+               END,
+               restored_at = CASE
+                 WHEN excluded.last_operation = 'restore' THEN CURRENT_TIMESTAMP
+                 ELSE cloud_backup_snapshots.restored_at
+               END,
+               updated_at = CURRENT_TIMESTAMP",
+            params![
+                &snapshot_id,
+                &input.provider,
+                &input.remote_file_id,
+                &input.file_name,
+                input.remote_md5_checksum.as_deref(),
+                input.remote_modified_time.as_deref(),
+                input.size_bytes,
+                &input.operation,
+                &input.status,
+                input.message.as_deref(),
+            ],
+        )
+        .map_err(|error| {
+            format!(
+                "Failed to upsert cloud backup snapshot {}: {error}",
+                input.remote_file_id
+            )
+        })?;
+
+    transaction
+        .execute(
+            "INSERT INTO cloud_backup_events (
+               id, provider, remote_file_id, file_name, operation, status, message
+             )
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![
+                &event_id,
+                &input.provider,
+                &input.remote_file_id,
+                &input.file_name,
+                &input.operation,
+                &input.status,
+                input.message.as_deref(),
+            ],
+        )
+        .map_err(|error| {
+            format!(
+                "Failed to insert cloud backup event for {}: {error}",
+                input.remote_file_id
+            )
+        })?;
+
+    transaction
+        .commit()
+        .map_err(|error| format!("Failed to commit cloud backup audit transaction: {error}"))?;
+
+    let total_events = count_cloud_backup_events(connection)?;
+
+    Ok(RecordCloudBackupSnapshotResult {
+        snapshot_id,
+        event_id,
+        total_events,
+    })
+}
+
 fn build_backup_snapshot(connection: &Connection) -> Result<BackupSnapshot, String> {
     Ok(BackupSnapshot {
         schema_version: BACKUP_SCHEMA_VERSION,
@@ -1281,6 +1424,42 @@ fn validate_backup_snapshot(snapshot: &BackupSnapshot) -> Result<(), String> {
             "Unsupported backup schema version {}.",
             snapshot.schema_version
         ));
+    }
+
+    Ok(())
+}
+
+fn validate_cloud_backup_snapshot_record(
+    input: &RecordCloudBackupSnapshotInput,
+) -> Result<(), String> {
+    if input.provider != "google_drive" {
+        return Err(format!(
+            "Unsupported cloud backup provider {}.",
+            input.provider
+        ));
+    }
+
+    if input.remote_file_id.trim().is_empty() {
+        return Err("Cloud backup remote file id cannot be empty.".to_string());
+    }
+
+    if input.file_name.trim().is_empty() {
+        return Err("Cloud backup file name cannot be empty.".to_string());
+    }
+
+    if !matches!(input.operation.as_str(), "upload" | "restore") {
+        return Err(format!(
+            "Unsupported cloud backup operation {}.",
+            input.operation
+        ));
+    }
+
+    if !matches!(input.status.as_str(), "success" | "failed") {
+        return Err(format!("Unsupported cloud backup status {}.", input.status));
+    }
+
+    if matches!(input.size_bytes, Some(size_bytes) if size_bytes < 0) {
+        return Err("Cloud backup size cannot be negative.".to_string());
     }
 
     Ok(())
@@ -1770,6 +1949,19 @@ fn create_import_batch_id() -> Result<String, String> {
     Ok(format!("manual-import-{timestamp}"))
 }
 
+fn create_cloud_backup_event_id() -> Result<String, String> {
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| format!("System clock is before UNIX epoch: {error}"))?
+        .as_nanos();
+
+    Ok(format!("cloud-backup-event-{timestamp}"))
+}
+
+fn cloud_backup_snapshot_id(provider: &str, remote_file_id: &str) -> String {
+    format!("cloud-backup:{provider}:{remote_file_id}")
+}
+
 fn manual_pull_id(
     account_id: &str,
     banner_id: &str,
@@ -1799,6 +1991,14 @@ fn count_warp_items(connection: &Connection) -> Result<i64, String> {
     connection
         .query_row("SELECT COUNT(*) FROM warp_items", [], |row| row.get(0))
         .map_err(|error| format!("Failed to count warp items: {error}"))
+}
+
+fn count_cloud_backup_events(connection: &Connection) -> Result<i64, String> {
+    connection
+        .query_row("SELECT COUNT(*) FROM cloud_backup_events", [], |row| {
+            row.get(0)
+        })
+        .map_err(|error| format!("Failed to count cloud backup events: {error}"))
 }
 
 fn planned_migrations() -> Vec<String> {
@@ -1853,11 +2053,27 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("warp item name index count");
+        let cloud_snapshot_table_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'cloud_backup_snapshots'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("cloud backup snapshots table count");
+        let cloud_event_table_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'cloud_backup_events'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("cloud backup events table count");
 
         assert_eq!(applied_migrations, planned_migrations());
         assert_eq!(table_count, 1);
         assert_eq!(unique_name_index_count, 0);
         assert_eq!(name_index_count, 1);
+        assert_eq!(cloud_snapshot_table_count, 1);
+        assert_eq!(cloud_event_table_count, 1);
     }
 
     #[test]
@@ -2174,6 +2390,55 @@ mod tests {
     }
 
     #[test]
+    fn records_cloud_backup_snapshot_audit_and_preserves_metadata() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+
+        let upload_result = record_cloud_backup_snapshot_to_database(
+            &mut connection,
+            &cloud_backup_record("upload", Some("checksum-1"), Some(2048)),
+        )
+        .expect("upload audit");
+        let restore_result = record_cloud_backup_snapshot_to_database(
+            &mut connection,
+            &cloud_backup_record("restore", None, None),
+        )
+        .expect("restore audit");
+        let snapshot_row = connection
+            .query_row(
+                "SELECT remote_md5_checksum, size_bytes, last_operation, uploaded_at IS NOT NULL,
+                        restored_at IS NOT NULL
+                 FROM cloud_backup_snapshots
+                 WHERE provider = 'google_drive' AND remote_file_id = 'remote-1'",
+                [],
+                |row| {
+                    Ok((
+                        row.get::<_, Option<String>>(0)?,
+                        row.get::<_, Option<i64>>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, bool>(3)?,
+                        row.get::<_, bool>(4)?,
+                    ))
+                },
+            )
+            .expect("snapshot audit row");
+
+        assert_eq!(
+            upload_result.snapshot_id,
+            "cloud-backup:google_drive:remote-1"
+        );
+        assert_ne!(upload_result.event_id, restore_result.event_id);
+        assert_eq!(restore_result.total_events, 2);
+        assert_eq!(snapshot_row.0, Some("checksum-1".to_string()));
+        assert_eq!(snapshot_row.1, Some(2048));
+        assert_eq!(snapshot_row.2, "restore");
+        assert!(snapshot_row.3);
+        assert!(snapshot_row.4);
+        assert_eq!(count_table(&connection, "cloud_backup_snapshots"), 1);
+        assert_eq!(count_table(&connection, "cloud_backup_events"), 2);
+    }
+
+    #[test]
     fn reports_missing_local_backup_snapshots() {
         let backup_directory = unique_test_dir("empty-backup");
         let result = find_latest_backup_snapshot_path(&backup_directory);
@@ -2392,6 +2657,24 @@ mod tests {
             source_line_number: sequence_in_timestamp_group + 2,
             sequence_in_timestamp_group,
             raw_item_name: raw_item_name.to_string(),
+        }
+    }
+
+    fn cloud_backup_record(
+        operation: &str,
+        remote_md5_checksum: Option<&str>,
+        size_bytes: Option<i64>,
+    ) -> RecordCloudBackupSnapshotInput {
+        RecordCloudBackupSnapshotInput {
+            provider: "google_drive".to_string(),
+            remote_file_id: "remote-1".to_string(),
+            file_name: "warp-tracker-backup-20260606.json".to_string(),
+            remote_md5_checksum: remote_md5_checksum.map(str::to_string),
+            remote_modified_time: Some("2026-06-06T14:00:00.000Z".to_string()),
+            size_bytes,
+            operation: operation.to_string(),
+            status: "success".to_string(),
+            message: Some(format!("{operation} completed")),
         }
     }
 

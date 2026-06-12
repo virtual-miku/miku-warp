@@ -22,11 +22,31 @@ fn upload_latest_google_drive_backup(
 ) -> Result<cloud_backup::UploadCloudBackupSnapshotResult, String> {
     let backup_snapshot = database::read_latest_backup_snapshot_file(&app)?;
 
-    cloud_backup::upload_google_drive_backup_snapshot(
+    let upload_result = cloud_backup::upload_google_drive_backup_snapshot(
         &backup_snapshot.backup_path,
         &backup_snapshot.file_name,
         &backup_snapshot.bytes,
-    )
+    )?;
+
+    record_cloud_backup_audit(
+        &app,
+        database::RecordCloudBackupSnapshotInput {
+            provider: "google_drive".to_string(),
+            remote_file_id: upload_result.remote_file_id.clone(),
+            file_name: upload_result.remote_file_name.clone(),
+            remote_md5_checksum: upload_result.remote_md5_checksum.clone(),
+            remote_modified_time: upload_result.remote_modified_time.clone(),
+            size_bytes: i64::try_from(upload_result.bytes_uploaded).ok(),
+            operation: "upload".to_string(),
+            status: "success".to_string(),
+            message: Some(format!(
+                "Uploaded local snapshot {}.",
+                upload_result.file_name
+            )),
+        },
+    );
+
+    Ok(upload_result)
 }
 
 #[tauri::command]
@@ -42,9 +62,57 @@ fn restore_google_drive_backup_snapshot(
 ) -> Result<database::RestoreBackupSnapshotResult, String> {
     let backup_snapshot =
         cloud_backup::download_google_drive_backup_snapshot(&input.remote_file_id)?;
-    let backup_source = format!("google-drive://{}", backup_snapshot.remote_file_id);
+    let file_name = input
+        .file_name
+        .clone()
+        .unwrap_or_else(|| backup_snapshot.remote_file_id.clone());
+    let backup_source = format!(
+        "google-drive://{}/{}",
+        backup_snapshot.remote_file_id, file_name
+    );
 
-    database::restore_backup_snapshot_from_bytes(&app, &backup_source, &backup_snapshot.bytes)
+    let restore_result =
+        database::restore_backup_snapshot_from_bytes(&app, &backup_source, &backup_snapshot.bytes)?;
+
+    record_cloud_backup_audit(
+        &app,
+        database::RecordCloudBackupSnapshotInput {
+            provider: "google_drive".to_string(),
+            remote_file_id: backup_snapshot.remote_file_id,
+            file_name,
+            remote_md5_checksum: input.remote_md5_checksum,
+            remote_modified_time: input.remote_modified_time,
+            size_bytes: parse_cloud_backup_size_bytes(input.size.as_deref()),
+            operation: "restore".to_string(),
+            status: "success".to_string(),
+            message: Some(format!(
+                "Restored {} pulls, inserted {} new pulls.",
+                restore_result.warp_pulls, restore_result.warp_pulls_inserted
+            )),
+        },
+    );
+
+    Ok(restore_result)
+}
+
+fn record_cloud_backup_audit(
+    app: &tauri::AppHandle,
+    input: database::RecordCloudBackupSnapshotInput,
+) {
+    match database::record_cloud_backup_snapshot(app, input) {
+        Ok(result) => log::info!(
+            "Recorded cloud backup audit event {} for {} ({} total events).",
+            result.event_id,
+            result.snapshot_id,
+            result.total_events
+        ),
+        Err(error) => log::warn!("Failed to record cloud backup audit: {error}"),
+    }
+}
+
+fn parse_cloud_backup_size_bytes(size: Option<&str>) -> Option<i64> {
+    size.and_then(|value| value.parse::<i64>().ok())
+        .filter(|size_bytes| *size_bytes >= 0)
 }
 
 #[tauri::command]
