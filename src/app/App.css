@@ -503,6 +503,10 @@
   gap: 10px;
 }
 
+.tool-row > div {
+  min-width: 0;
+}
+
 .tool-row strong,
 .tool-row span {
   display: block;
@@ -516,6 +520,7 @@
 .tool-row span {
   color: var(--text-muted);
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .backup-action-group {

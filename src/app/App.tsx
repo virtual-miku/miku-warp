@@ -53,6 +53,10 @@ import {
   uploadLatestGoogleDriveBackup,
   type UploadCloudBackupSnapshotResult,
 } from '../features/persistence/data/cloud-backup-status'
+import {
+  scanGameHistorySource,
+  type GameHistorySourceScanResult,
+} from '../features/persistence/data/game-history-source'
 import { syncWarpItemCatalog } from '../features/persistence/data/warp-item-catalog-sync'
 import {
   listWarpBannerSummaries,
@@ -112,6 +116,9 @@ export function App() {
   const [cloudBackupSnapshots, setCloudBackupSnapshots] = useState<
     CloudBackupSnapshotInfo[]
   >([])
+  const [gameHistoryScan, setGameHistoryScan] =
+    useState<GameHistorySourceScanResult>()
+  const [gameHistoryScanning, setGameHistoryScanning] = useState(false)
   const [cloudBackupStatus, setCloudBackupStatus] =
     useState<CloudBackupStatus>(() => createInitialGoogleDriveBackupStatus())
   const [cloudBackupPolicy, setCloudBackupPolicy] =
@@ -351,6 +358,28 @@ export function App() {
     setManualNoteDraft(value)
     setManualImportSaveNotice(undefined)
   }
+
+  const handleScanGameHistorySource = useCallback(async () => {
+    if (gameHistoryScanning) {
+      return
+    }
+
+    setGameHistoryScanning(true)
+
+    try {
+      const result = await scanGameHistorySource()
+      setGameHistoryScan(result)
+    } catch (error) {
+      setGameHistoryScan({
+        status: 'not_found',
+        cacheFilesChecked: 0,
+        candidateRoots: [],
+        detail: getErrorMessage(error),
+      })
+    } finally {
+      setGameHistoryScanning(false)
+    }
+  }, [gameHistoryScanning])
 
   const handleBannerTypeChange = (bannerType: BannerType) => {
     if (bannerType === activeBannerType) {
@@ -984,7 +1013,10 @@ export function App() {
 
             <aside className="side-column" aria-label="Import and backup">
               <ImportPanel
+                gameHistoryScan={gameHistoryScan}
+                isGameHistoryScanning={gameHistoryScanning}
                 manualImportPreview={manualImportPreview}
+                onScanGameHistory={handleScanGameHistorySource}
                 onOpenManualImport={() => setManualImportOpen(true)}
               />
               <BackupPanel

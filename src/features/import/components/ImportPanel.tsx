@@ -1,5 +1,6 @@
 import { FileInput, History, RotateCcw } from 'lucide-react'
 import { AppButton } from '../../../shared/ui/AppButton'
+import type { GameHistorySourceScanResult } from '../../persistence/data/game-history-source'
 import type { ManualImportPreview } from '../domain/manual-note-parser'
 import {
   getManualImportStatus,
@@ -7,15 +8,23 @@ import {
 } from '../domain/manual-import-preview'
 
 type ImportPanelProps = {
+  gameHistoryScan?: GameHistorySourceScanResult
+  isGameHistoryScanning: boolean
   manualImportPreview: ManualImportPreview
+  onScanGameHistory: () => void
   onOpenManualImport: () => void
 }
 
 export function ImportPanel({
+  gameHistoryScan,
+  isGameHistoryScanning,
   manualImportPreview,
+  onScanGameHistory,
   onOpenManualImport,
 }: ImportPanelProps) {
   const status = getManualImportStatus(manualImportPreview)
+  const gameHistoryTitle =
+    gameHistoryScan?.matchedCachePath ?? gameHistoryScan?.urlPreview
 
   return (
     <section className="tool-panel" id="import" aria-label="Import sources">
@@ -43,11 +52,30 @@ export function ImportPanel({
         <div className="tool-row">
           <div>
             <strong>Game history</strong>
-            <span>Local cache</span>
+            <span title={gameHistoryTitle}>
+              {formatGameHistoryScanDetail(
+                gameHistoryScan,
+                isGameHistoryScanning,
+              )}
+            </span>
           </div>
-          <AppButton icon={History} variant="ghost">
-            Scan
+          <AppButton
+            disabled={isGameHistoryScanning}
+            icon={History}
+            onClick={onScanGameHistory}
+            variant="ghost"
+          >
+            {isGameHistoryScanning ? 'Scanning' : 'Scan'}
           </AppButton>
+        </div>
+        <div className="tool-row">
+          <div>
+            <strong>Game source</strong>
+            <span>{formatGameHistorySourceMeta(gameHistoryScan)}</span>
+          </div>
+          <span className="status-pill">
+            {getGameHistoryScanStatusLabel(gameHistoryScan)}
+          </span>
         </div>
         <div className="tool-row">
           <div>
@@ -61,4 +89,55 @@ export function ImportPanel({
       </div>
     </section>
   )
+}
+
+function formatGameHistoryScanDetail(
+  scan: GameHistorySourceScanResult | undefined,
+  isScanning: boolean,
+) {
+  if (isScanning) {
+    return 'Scanning local cache'
+  }
+
+  if (!scan) {
+    return 'Local cache'
+  }
+
+  return scan.detail
+}
+
+function formatGameHistorySourceMeta(
+  scan: GameHistorySourceScanResult | undefined,
+) {
+  if (!scan) {
+    return 'Not scanned'
+  }
+
+  if (scan.endpointHost) {
+    return scan.endpointHost
+  }
+
+  if (scan.cacheFilesChecked > 0) {
+    return `${scan.cacheFilesChecked} cache files checked`
+  }
+
+  return `${scan.candidateRoots.length} candidate roots`
+}
+
+function getGameHistoryScanStatusLabel(
+  scan: GameHistorySourceScanResult | undefined,
+) {
+  if (!scan) {
+    return 'Not scanned'
+  }
+
+  if (scan.status === 'found') {
+    return 'Found'
+  }
+
+  if (scan.status === 'needs_history_opened') {
+    return 'Open history'
+  }
+
+  return 'Not found'
 }

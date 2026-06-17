@@ -1,5 +1,6 @@
 pub mod cloud_backup;
 mod database;
+mod game_history;
 
 #[tauri::command]
 fn get_cloud_backup_status() -> cloud_backup::CloudBackupStatus {
@@ -98,6 +99,11 @@ fn restore_google_drive_backup_snapshot(
 #[tauri::command]
 fn get_cloud_backup_policy(app: tauri::AppHandle) -> Result<database::CloudBackupPolicy, String> {
     database::get_cloud_backup_policy(&app)
+}
+
+#[tauri::command]
+fn scan_game_history_source() -> game_history::GameHistorySourceScanResult {
+    game_history::scan_game_history_source()
 }
 
 #[tauri::command]
@@ -231,6 +237,7 @@ pub fn run() {
             restore_backup_snapshot,
             restore_latest_backup_snapshot,
             save_manual_import_draft,
+            scan_game_history_source,
             sync_warp_item_catalog,
             update_cloud_backup_policy,
             upload_latest_google_drive_backup
