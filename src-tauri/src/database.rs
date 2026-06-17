@@ -1,7 +1,7 @@
 use rusqlite::{params, Connection, OptionalExtension, Row, Transaction};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, HashSet},
     fs,
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
@@ -108,6 +108,12 @@ pub struct ListWarpPullsInput {
     pub account_id: String,
     pub banner_type: Option<String>,
     pub limit: Option<usize>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListWarpBannerSummariesInput {
+    pub account_id: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -229,6 +235,22 @@ pub struct WarpPullRow {
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WarpBannerSummaryRow {
+    pub banner_type: String,
+    pub total_pulls: i64,
+    pub current_four_star_pity: i64,
+    pub current_five_star_pity: i64,
+    pub four_star_count: i64,
+    pub five_star_count: i64,
+    pub last_four_star_name: Option<String>,
+    pub last_five_star_name: Option<String>,
+    pub last_pull_at: Option<String>,
+    pub last_item_name: Option<String>,
+    pub last_item_rarity: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DatabaseDriverStatus {
     Ready,
@@ -252,6 +274,28 @@ struct ExistingWarpItem {
 struct WarpPullPityCandidate {
     id: String,
     rarity: i64,
+}
+
+struct WarpBannerSummaryCandidate {
+    banner_type: String,
+    item_name: String,
+    rarity: i64,
+    pulled_at: String,
+}
+
+#[derive(Default)]
+struct WarpBannerSummaryAccumulator {
+    banner_type: String,
+    total_pulls: i64,
+    current_four_star_pity: i64,
+    current_five_star_pity: i64,
+    four_star_count: i64,
+    five_star_count: i64,
+    last_four_star_name: Option<String>,
+    last_five_star_name: Option<String>,
+    last_pull_at: Option<String>,
+    last_item_name: Option<String>,
+    last_item_rarity: Option<i64>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -409,6 +453,16 @@ pub fn list_warp_pulls(
     let connection = open_database(&database_path)?;
 
     list_warp_pulls_from_database(&connection, &query)
+}
+
+pub fn list_warp_banner_summaries(
+    app: &AppHandle,
+    query: ListWarpBannerSummariesInput,
+) -> Result<Vec<WarpBannerSummaryRow>, String> {
+    let database_path = resolve_database_path(app)?;
+    let connection = open_database(&database_path)?;
+
+    list_warp_banner_summaries_from_database(&connection, &query)
 }
 
 pub fn export_backup_snapshot(app: &AppHandle) -> Result<ExportBackupSnapshotResult, String> {
@@ -859,6 +913,78 @@ fn list_warp_pulls_from_database(
 
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|error| format!("Failed to decode warp pull rows: {error}"))
+}
+
+fn list_warp_banner_summaries_from_database(
+    connection: &Connection,
+    query: &ListWarpBannerSummariesInput,
+) -> Result<Vec<WarpBannerSummaryRow>, String> {
+    validate_list_warp_banner_summaries_query(query)?;
+
+    let mut statement = connection
+        .prepare(
+            "SELECT b.banner_type, wi.name, wi.rarity, wp.pulled_at
+             FROM warp_pulls wp
+             INNER JOIN banners b ON b.id = wp.banner_id
+             INNER JOIN warp_items wi ON wi.id = wp.warp_item_id
+             WHERE wp.account_id = ?1
+             ORDER BY b.banner_type ASC, wp.pulled_at ASC,
+                      wp.sequence_in_timestamp_group ASC, wp.id ASC",
+        )
+        .map_err(|error| format!("Failed to prepare banner summary query: {error}"))?;
+    let rows = statement
+        .query_map(params![&query.account_id], |row| {
+            Ok(WarpBannerSummaryCandidate {
+                banner_type: row.get(0)?,
+                item_name: row.get(1)?,
+                rarity: row.get(2)?,
+                pulled_at: row.get(3)?,
+            })
+        })
+        .map_err(|error| format!("Failed to query banner summary rows: {error}"))?;
+    let pulls = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Failed to decode banner summary rows: {error}"))?;
+
+    Ok(build_warp_banner_summaries(pulls))
+}
+
+fn build_warp_banner_summaries(
+    pulls: Vec<WarpBannerSummaryCandidate>,
+) -> Vec<WarpBannerSummaryRow> {
+    let mut summaries = BTreeMap::<String, WarpBannerSummaryAccumulator>::new();
+
+    for pull in pulls {
+        let summary = summaries
+            .entry(pull.banner_type.clone())
+            .or_insert_with(|| WarpBannerSummaryAccumulator {
+                banner_type: pull.banner_type.clone(),
+                ..WarpBannerSummaryAccumulator::default()
+            });
+
+        summary.total_pulls += 1;
+        summary.current_four_star_pity += 1;
+        summary.current_five_star_pity += 1;
+        summary.last_pull_at = Some(pull.pulled_at);
+        summary.last_item_name = Some(pull.item_name.clone());
+        summary.last_item_rarity = Some(pull.rarity);
+
+        if pull.rarity == 5 {
+            summary.five_star_count += 1;
+            summary.last_five_star_name = Some(pull.item_name);
+            summary.current_four_star_pity = 0;
+            summary.current_five_star_pity = 0;
+        } else if pull.rarity == 4 {
+            summary.four_star_count += 1;
+            summary.last_four_star_name = Some(pull.item_name);
+            summary.current_four_star_pity = 0;
+        }
+    }
+
+    summaries
+        .into_values()
+        .map(WarpBannerSummaryAccumulator::into_row)
+        .collect()
 }
 
 fn export_backup_snapshot_to_directory(
@@ -1764,6 +1890,16 @@ fn validate_list_warp_pulls_query(query: &ListWarpPullsInput) -> Result<(), Stri
     Ok(())
 }
 
+fn validate_list_warp_banner_summaries_query(
+    query: &ListWarpBannerSummariesInput,
+) -> Result<(), String> {
+    if query.account_id.trim().is_empty() {
+        return Err("Warp banner summary query account id cannot be empty.".to_string());
+    }
+
+    Ok(())
+}
+
 fn query_limit(query: &ListWarpPullsInput) -> usize {
     query.limit.unwrap_or(100).clamp(1, 500)
 }
@@ -2141,6 +2277,24 @@ impl ExistingWarpItem {
             && self.icon_path == item.icon_path
             && self.preview_path == item.preview_path
             && self.portrait_path == item.portrait_path
+    }
+}
+
+impl WarpBannerSummaryAccumulator {
+    fn into_row(self) -> WarpBannerSummaryRow {
+        WarpBannerSummaryRow {
+            banner_type: self.banner_type,
+            total_pulls: self.total_pulls,
+            current_four_star_pity: self.current_four_star_pity,
+            current_five_star_pity: self.current_five_star_pity,
+            four_star_count: self.four_star_count,
+            five_star_count: self.five_star_count,
+            last_four_star_name: self.last_four_star_name,
+            last_five_star_name: self.last_five_star_name,
+            last_pull_at: self.last_pull_at,
+            last_item_name: self.last_item_name,
+            last_item_rarity: self.last_item_rarity,
+        }
     }
 }
 
@@ -2668,6 +2822,68 @@ mod tests {
         assert_eq!(pulls[1].rarity, 3);
         assert_eq!(pulls[1].pity_four_at_pull, None);
         assert_eq!(pulls[1].pity_five_at_pull, None);
+    }
+
+    #[test]
+    fn summarizes_saved_warp_pulls_by_banner() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+        upsert_warp_item_catalog(
+            &mut connection,
+            &[
+                catalog_item("light-cone-2001", "2001", "Data Bank", "light_cone", 3),
+                catalog_item("character-1001", "1001", "Pela", "character", 4),
+                catalog_item("character-1002", "1002", "Sparkle", "character", 5),
+            ],
+        )
+        .expect("catalog sync");
+        save_manual_import_draft_to_database(
+            &mut connection,
+            &manual_import_draft_with_pulls(vec![
+                manual_import_pull("character_event", "character-1001", "Pela", 1),
+                manual_import_pull("character_event", "light-cone-2001", "Data Bank", 2),
+                manual_import_pull("character_event", "character-1002", "Sparkle", 3),
+            ]),
+        )
+        .expect("character event import");
+        save_manual_import_draft_to_database(
+            &mut connection,
+            &manual_import_draft_with_pulls(vec![
+                manual_import_pull("standard", "light-cone-2001", "Data Bank", 1),
+                manual_import_pull("standard", "character-1001", "Pela", 2),
+            ]),
+        )
+        .expect("standard import");
+
+        let summaries = list_warp_banner_summaries_from_database(
+            &connection,
+            &ListWarpBannerSummariesInput {
+                account_id: "account-1".to_string(),
+            },
+        )
+        .expect("summaries can be listed");
+        let character_event = summaries
+            .iter()
+            .find(|summary| summary.banner_type == "character_event")
+            .expect("character event summary");
+        let standard = summaries
+            .iter()
+            .find(|summary| summary.banner_type == "standard")
+            .expect("standard summary");
+
+        assert_eq!(summaries.len(), 2);
+        assert_eq!(character_event.total_pulls, 3);
+        assert_eq!(character_event.five_star_count, 1);
+        assert_eq!(
+            character_event.last_five_star_name,
+            Some("Sparkle".to_string())
+        );
+        assert_eq!(character_event.current_five_star_pity, 0);
+        assert_eq!(standard.total_pulls, 2);
+        assert_eq!(standard.four_star_count, 1);
+        assert_eq!(standard.current_four_star_pity, 0);
+        assert_eq!(standard.current_five_star_pity, 2);
+        assert_eq!(standard.last_item_name, Some("Pela".to_string()));
     }
 
     #[test]

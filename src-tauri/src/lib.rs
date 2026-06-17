@@ -158,6 +158,14 @@ fn list_warp_pulls(
 }
 
 #[tauri::command]
+fn list_warp_banner_summaries(
+    app: tauri::AppHandle,
+    query: database::ListWarpBannerSummariesInput,
+) -> Result<Vec<database::WarpBannerSummaryRow>, String> {
+    database::list_warp_banner_summaries(&app, query)
+}
+
+#[tauri::command]
 fn list_backup_snapshots(
     app: tauri::AppHandle,
 ) -> Result<Vec<database::BackupSnapshotSummary>, String> {
@@ -215,6 +223,7 @@ pub fn run() {
             get_cloud_backup_status,
             get_cloud_backup_policy,
             get_database_status,
+            list_warp_banner_summaries,
             list_google_drive_backup_snapshots,
             list_backup_snapshots,
             list_warp_pulls,

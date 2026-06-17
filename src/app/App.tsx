@@ -54,7 +54,12 @@ import {
   type UploadCloudBackupSnapshotResult,
 } from '../features/persistence/data/cloud-backup-status'
 import { syncWarpItemCatalog } from '../features/persistence/data/warp-item-catalog-sync'
-import { listWarpPulls } from '../features/persistence/data/warp-pull-history'
+import {
+  listWarpBannerSummaries,
+  listWarpPulls,
+  type WarpBannerSummary,
+} from '../features/persistence/data/warp-pull-history'
+import { BannerSummaryGrid } from '../features/warp-history/components/BannerSummaryGrid'
 import { BannerTabs } from '../features/warp-history/components/BannerTabs'
 import { PityOverview } from '../features/warp-history/components/PityOverview'
 import { WarpTimeline } from '../features/warp-history/components/WarpTimeline'
@@ -68,7 +73,6 @@ import {
   calculatePitySummary,
 } from '../features/warp-history/domain/pity'
 import type { WarpPull } from '../features/warp-history/domain/warp-pull'
-import { demoPulls } from '../features/warp-history/data/demo-pulls'
 import { AppButton } from '../shared/ui/AppButton'
 import './App.css'
 
@@ -113,20 +117,16 @@ export function App() {
     useState<CloudBackupPolicy>(() => createInitialGoogleDriveBackupPolicy())
   const [manualNoteDraft, setManualNoteDraft] = useState(manualNoteSample)
   const [persistedPulls, setPersistedPulls] = useState<WarpPull[]>([])
+  const [bannerSummaries, setBannerSummaries] = useState<WarpBannerSummary[]>(
+    [],
+  )
   const manualImportPreview = useMemo(
     () => parseManualWarpNote(manualNoteDraft, itemCatalog),
     [manualNoteDraft],
   )
-  const demoActivePulls = useMemo(
-    () => demoPulls.filter((pull) => pull.bannerType === activeBannerType),
-    [activeBannerType],
-  )
   const timelinePulls = useMemo(
-    () =>
-      annotatePityAtPull(
-        persistedPulls.length > 0 ? persistedPulls : demoActivePulls,
-      ),
-    [demoActivePulls, persistedPulls],
+    () => annotatePityAtPull(persistedPulls),
+    [persistedPulls],
   )
   const pitySummary = useMemo(
     () => calculatePitySummary(timelinePulls),
@@ -159,6 +159,23 @@ export function App() {
       setPersistedPulls([])
     }
   }, [fetchPersistedPulls])
+
+  const refreshBannerSummaries = useCallback(async () => {
+    try {
+      const summaries = await listWarpBannerSummaries({
+        accountId: activeAccount.id,
+      })
+      setBannerSummaries(summaries)
+      return summaries
+    } catch {
+      setBannerSummaries([])
+      return []
+    }
+  }, [])
+
+  const refreshWarpHistory = useCallback(async () => {
+    await Promise.all([refreshPersistedPulls(), refreshBannerSummaries()])
+  }, [refreshBannerSummaries, refreshPersistedPulls])
 
   const refreshBackupSnapshots = useCallback(async () => {
     try {
@@ -215,6 +232,26 @@ export function App() {
       isActive = false
     }
   }, [fetchPersistedPulls])
+
+  useEffect(() => {
+    let isActive = true
+
+    listWarpBannerSummaries({ accountId: activeAccount.id })
+      .then((summaries) => {
+        if (isActive) {
+          setBannerSummaries(summaries)
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setBannerSummaries([])
+        }
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [])
 
   useEffect(() => {
     let isActive = true
@@ -394,7 +431,7 @@ export function App() {
       const result = await saveManualImportDraft(
         toSaveManualImportDraftPayload(activeAccount, draft),
       )
-      await refreshPersistedPulls()
+      await refreshWarpHistory()
       const autoBackupDetail = await runAutoBackupAfterManualImport(
         result.recordsInserted,
       )
@@ -656,7 +693,7 @@ export function App() {
 
       try {
         const result = await restoreGoogleDriveBackupSnapshot(snapshot)
-        await refreshPersistedPulls()
+        await refreshWarpHistory()
 
         setBackupNotice({
           tone: 'success',
@@ -681,7 +718,7 @@ export function App() {
       cloudBackupBusy,
       cloudBackupStatus.connectionStatus,
       refreshCloudBackupStatus,
-      refreshPersistedPulls,
+      refreshWarpHistory,
     ],
   )
 
@@ -733,7 +770,7 @@ export function App() {
 
     try {
       const result = await restoreLatestBackupSnapshot()
-      await refreshPersistedPulls()
+      await refreshWarpHistory()
       await refreshBackupSnapshots()
 
       setBackupNotice({
@@ -757,7 +794,7 @@ export function App() {
     backupSnapshots,
     cloudBackupBusy,
     refreshBackupSnapshots,
-    refreshPersistedPulls,
+    refreshWarpHistory,
   ])
 
   const handleRestoreBackupSnapshot = useCallback(
@@ -771,7 +808,7 @@ export function App() {
 
       try {
         const result = await restoreBackupSnapshot(fileName)
-        await refreshPersistedPulls()
+        await refreshWarpHistory()
         await refreshBackupSnapshots()
 
         setBackupNotice({
@@ -795,7 +832,7 @@ export function App() {
       backupRestoring,
       cloudBackupBusy,
       refreshBackupSnapshots,
-      refreshPersistedPulls,
+      refreshWarpHistory,
     ],
   )
 
@@ -913,6 +950,11 @@ export function App() {
 
           <section className="content-grid">
             <div className="primary-column" id="history">
+              <BannerSummaryGrid
+                activeBannerType={activeBannerType}
+                summaries={bannerSummaries}
+                onBannerTypeChange={handleBannerTypeChange}
+              />
               <PityOverview summary={pitySummary} />
               <WarpTimeline pulls={timelinePulls} />
             </div>

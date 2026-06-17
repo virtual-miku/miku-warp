@@ -8,8 +8,34 @@ export type ListWarpPullsInput = {
   limit?: number
 }
 
+export type ListWarpBannerSummariesInput = {
+  accountId: string
+}
+
 export type PersistedWarpPull = WarpPull
+
+export type WarpBannerSummary = {
+  bannerType: BannerType
+  totalPulls: number
+  currentFourStarPity: number
+  currentFiveStarPity: number
+  fourStarCount: number
+  fiveStarCount: number
+  lastFourStarName?: string
+  lastFiveStarName?: string
+  lastPullAt?: string
+  lastItemName?: string
+  lastItemRarity?: number
+}
 
 export function listWarpPulls(query: ListWarpPullsInput) {
   return invokeTauri<PersistedWarpPull[]>('list_warp_pulls', { query })
+}
+
+export function listWarpBannerSummaries(
+  query: ListWarpBannerSummariesInput,
+) {
+  return invokeTauri<WarpBannerSummary[]>('list_warp_banner_summaries', {
+    query,
+  })
 }

@@ -12,27 +12,36 @@ export function WarpTimeline({ pulls }: WarpTimelineProps) {
         <span>{pulls.length} records</span>
       </header>
       <div className="warp-list">
-        {pulls
-          .slice()
-          .reverse()
-          .map((pull) => (
-            <article className="warp-row" key={pull.id}>
-              <div className={`warp-rarity warp-rarity-${pull.rarity}`}>
-                {pull.rarity}
-              </div>
-              <div>
-                <span className="warp-item-name">{pull.itemName}</span>
-                <span className="warp-item-meta">{formatItemType(pull.itemType)}</span>
-              </div>
-              <time className="warp-time" dateTime={pull.pulledAt}>
-                {formatPullTime(pull.pulledAt)}
-              </time>
-              <div className="warp-pity">
-                <strong>{formatPityAtPull(pull)}</strong>
-                <span>{formatSource(pull.source)}</span>
-              </div>
-            </article>
-          ))}
+        {pulls.length > 0 ? (
+          pulls
+            .slice()
+            .reverse()
+            .map((pull) => (
+              <article className="warp-row" key={pull.id}>
+                <div className={`warp-rarity warp-rarity-${pull.rarity}`}>
+                  {pull.rarity}
+                </div>
+                <div>
+                  <span className="warp-item-name">{pull.itemName}</span>
+                  <span className="warp-item-meta">
+                    {formatItemType(pull.itemType)}
+                  </span>
+                </div>
+                <time className="warp-time" dateTime={pull.pulledAt}>
+                  {formatPullTime(pull.pulledAt)}
+                </time>
+                <div className="warp-pity">
+                  <strong>{formatPityAtPull(pull)}</strong>
+                  <span>{formatSource(pull.source)}</span>
+                </div>
+              </article>
+            ))
+        ) : (
+          <div className="warp-empty">
+            <strong>No saved pulls yet</strong>
+            <span>Import manual notes to start tracking this banner.</span>
+          </div>
+        )}
       </div>
     </section>
   )
