@@ -243,6 +243,10 @@ pub struct WarpBannerSummaryRow {
     pub current_five_star_pity: i64,
     pub four_star_count: i64,
     pub five_star_count: i64,
+    pub four_star_pity_total: i64,
+    pub five_star_pity_total: i64,
+    pub last_four_star_pity: Option<i64>,
+    pub last_five_star_pity: Option<i64>,
     pub last_four_star_name: Option<String>,
     pub last_five_star_name: Option<String>,
     pub last_pull_at: Option<String>,
@@ -291,6 +295,10 @@ struct WarpBannerSummaryAccumulator {
     current_five_star_pity: i64,
     four_star_count: i64,
     five_star_count: i64,
+    four_star_pity_total: i64,
+    five_star_pity_total: i64,
+    last_four_star_pity: Option<i64>,
+    last_five_star_pity: Option<i64>,
     last_four_star_name: Option<String>,
     last_five_star_name: Option<String>,
     last_pull_at: Option<String>,
@@ -970,12 +978,18 @@ fn build_warp_banner_summaries(
         summary.last_item_rarity = Some(pull.rarity);
 
         if pull.rarity == 5 {
+            let five_star_pity = summary.current_five_star_pity;
             summary.five_star_count += 1;
+            summary.five_star_pity_total += five_star_pity;
+            summary.last_five_star_pity = Some(five_star_pity);
             summary.last_five_star_name = Some(pull.item_name);
             summary.current_four_star_pity = 0;
             summary.current_five_star_pity = 0;
         } else if pull.rarity == 4 {
+            let four_star_pity = summary.current_four_star_pity;
             summary.four_star_count += 1;
+            summary.four_star_pity_total += four_star_pity;
+            summary.last_four_star_pity = Some(four_star_pity);
             summary.last_four_star_name = Some(pull.item_name);
             summary.current_four_star_pity = 0;
         }
@@ -2289,6 +2303,10 @@ impl WarpBannerSummaryAccumulator {
             current_five_star_pity: self.current_five_star_pity,
             four_star_count: self.four_star_count,
             five_star_count: self.five_star_count,
+            four_star_pity_total: self.four_star_pity_total,
+            five_star_pity_total: self.five_star_pity_total,
+            last_four_star_pity: self.last_four_star_pity,
+            last_five_star_pity: self.last_five_star_pity,
             last_four_star_name: self.last_four_star_name,
             last_five_star_name: self.last_five_star_name,
             last_pull_at: self.last_pull_at,
@@ -2874,6 +2892,8 @@ mod tests {
         assert_eq!(summaries.len(), 2);
         assert_eq!(character_event.total_pulls, 3);
         assert_eq!(character_event.five_star_count, 1);
+        assert_eq!(character_event.five_star_pity_total, 3);
+        assert_eq!(character_event.last_five_star_pity, Some(3));
         assert_eq!(
             character_event.last_five_star_name,
             Some("Sparkle".to_string())
@@ -2881,6 +2901,8 @@ mod tests {
         assert_eq!(character_event.current_five_star_pity, 0);
         assert_eq!(standard.total_pulls, 2);
         assert_eq!(standard.four_star_count, 1);
+        assert_eq!(standard.four_star_pity_total, 2);
+        assert_eq!(standard.last_four_star_pity, Some(2));
         assert_eq!(standard.current_four_star_pity, 0);
         assert_eq!(standard.current_five_star_pity, 2);
         assert_eq!(standard.last_item_name, Some("Pela".to_string()));

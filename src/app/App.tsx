@@ -59,6 +59,7 @@ import {
   listWarpPulls,
   type WarpBannerSummary,
 } from '../features/persistence/data/warp-pull-history'
+import { BannerStatsPanel } from '../features/warp-history/components/BannerStatsPanel'
 import { BannerSummaryGrid } from '../features/warp-history/components/BannerSummaryGrid'
 import { BannerTabs } from '../features/warp-history/components/BannerTabs'
 import { PityOverview } from '../features/warp-history/components/PityOverview'
@@ -128,9 +129,27 @@ export function App() {
     () => annotatePityAtPull(persistedPulls),
     [persistedPulls],
   )
+  const activeBannerSummary = useMemo(
+    () =>
+      bannerSummaries.find(
+        (summary) => summary.bannerType === activeBannerType,
+      ),
+    [activeBannerType, bannerSummaries],
+  )
   const pitySummary = useMemo(
-    () => calculatePitySummary(timelinePulls),
-    [timelinePulls],
+    () =>
+      activeBannerSummary
+        ? {
+            totalPulls: activeBannerSummary.totalPulls,
+            currentFourStarPity: activeBannerSummary.currentFourStarPity,
+            currentFiveStarPity: activeBannerSummary.currentFiveStarPity,
+            fourStarCount: activeBannerSummary.fourStarCount,
+            fiveStarCount: activeBannerSummary.fiveStarCount,
+            lastFourStarName: activeBannerSummary.lastFourStarName,
+            lastFiveStarName: activeBannerSummary.lastFiveStarName,
+          }
+        : calculatePitySummary(timelinePulls),
+    [activeBannerSummary, timelinePulls],
   )
   const backupDeleting = deletingBackupFileName !== undefined
   const backupRestoring = restoringBackupFileName !== undefined
@@ -956,6 +975,10 @@ export function App() {
                 onBannerTypeChange={handleBannerTypeChange}
               />
               <PityOverview summary={pitySummary} />
+              <BannerStatsPanel
+                bannerType={activeBannerType}
+                summary={activeBannerSummary}
+              />
               <WarpTimeline pulls={timelinePulls} />
             </div>
 

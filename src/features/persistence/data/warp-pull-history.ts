@@ -21,6 +21,10 @@ export type WarpBannerSummary = {
   currentFiveStarPity: number
   fourStarCount: number
   fiveStarCount: number
+  fourStarPityTotal: number
+  fiveStarPityTotal: number
+  lastFourStarPity?: number
+  lastFiveStarPity?: number
   lastFourStarName?: string
   lastFiveStarName?: string
   lastPullAt?: string
