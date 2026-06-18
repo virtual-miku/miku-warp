@@ -1,4 +1,4 @@
-import { FileInput, History, RotateCcw } from 'lucide-react'
+import { FileInput, FolderSearch, History, RotateCcw } from 'lucide-react'
 import { AppButton } from '../../../shared/ui/AppButton'
 import type {
   GameHistorySourceScanResult,
@@ -13,11 +13,15 @@ import {
 type ImportPanelProps = {
   gameHistoryImportError?: string
   gameHistoryImportResult?: ImportGameHistoryResult
+  gameHistoryPathError?: string
   gameHistoryScan?: GameHistorySourceScanResult
+  gameInstallPath: string
   isGameHistoryImporting: boolean
+  isGamePathSelecting: boolean
   isGameHistoryScanning: boolean
   manualImportPreview: ManualImportPreview
   onImportGameHistory: () => void
+  onSelectGamePath: () => void
   onScanGameHistory: () => void
   onOpenManualImport: () => void
 }
@@ -25,17 +29,24 @@ type ImportPanelProps = {
 export function ImportPanel({
   gameHistoryImportError,
   gameHistoryImportResult,
+  gameHistoryPathError,
   gameHistoryScan,
+  gameInstallPath,
   isGameHistoryImporting,
+  isGamePathSelecting,
   isGameHistoryScanning,
   manualImportPreview,
   onImportGameHistory,
+  onSelectGamePath,
   onScanGameHistory,
   onOpenManualImport,
 }: ImportPanelProps) {
   const status = getManualImportStatus(manualImportPreview)
   const gameHistoryTitle =
     gameHistoryScan?.matchedCachePath ?? gameHistoryScan?.urlPreview
+  const hasGameHistoryMessage = Boolean(
+    gameHistoryPathError || gameHistoryImportError || gameHistoryImportResult,
+  )
 
   return (
     <section className="tool-panel" id="import" aria-label="Import sources">
@@ -52,6 +63,27 @@ export function ImportPanel({
           <AppButton icon={FileInput} onClick={onOpenManualImport}>
             Open
           </AppButton>
+        </div>
+        <div className="game-path-field">
+          <div className="game-path-heading">
+            <strong>Game folder</strong>
+            <AppButton
+              disabled={
+                isGamePathSelecting ||
+                isGameHistoryScanning ||
+                isGameHistoryImporting
+              }
+              icon={FolderSearch}
+              onClick={onSelectGamePath}
+              variant="ghost"
+            >
+              {isGamePathSelecting ? 'Opening' : 'Browse'}
+            </AppButton>
+          </div>
+          <span className="game-path-value" title={gameInstallPath}>
+            {gameInstallPath}
+          </span>
+          <small>Choose the folder containing StarRail_Data.</small>
         </div>
         <div className="tool-row">
           <div>
@@ -106,20 +138,27 @@ export function ImportPanel({
             {isGameHistoryImporting ? 'Importing' : 'Import'}
           </AppButton>
         </div>
-        {gameHistoryImportError || gameHistoryImportResult ? (
+        {hasGameHistoryMessage ? (
           <div
             className={[
               'backup-message',
-              gameHistoryImportError ? 'backup-message-error' : undefined,
+              gameHistoryPathError || gameHistoryImportError
+                ? 'backup-message-error'
+                : undefined,
             ]
               .filter(Boolean)
               .join(' ')}
           >
             <strong>
-              {gameHistoryImportError ? 'Game import failed' : 'Game import saved'}
+              {gameHistoryPathError
+                ? 'Folder selection failed'
+                : gameHistoryImportError
+                  ? 'Game import failed'
+                  : 'Game import saved'}
             </strong>
             <p>
-              {gameHistoryImportError ??
+              {gameHistoryPathError ??
+                gameHistoryImportError ??
                 formatGameHistoryImportDetail(gameHistoryImportResult)}
             </p>
           </div>

@@ -102,8 +102,10 @@ fn get_cloud_backup_policy(app: tauri::AppHandle) -> Result<database::CloudBacku
 }
 
 #[tauri::command]
-fn scan_game_history_source() -> game_history::GameHistorySourceScanResult {
-    game_history::scan_game_history_source()
+fn scan_game_history_source(
+    input: game_history::ScanGameHistorySourceInput,
+) -> game_history::GameHistorySourceScanResult {
+    game_history::scan_game_history_source(input.game_path.as_deref())
 }
 
 #[tauri::command]
@@ -112,7 +114,10 @@ fn import_game_history(
     input: game_history::ImportGameHistoryInput,
 ) -> Result<game_history::ImportGameHistoryResult, String> {
     let max_pages_per_banner = game_history::max_pages_per_banner(input.max_pages_per_banner);
-    let fetched_history = game_history::fetch_game_history_from_cache(Some(max_pages_per_banner))?;
+    let fetched_history = game_history::fetch_game_history_from_cache(
+        input.game_path.as_deref(),
+        Some(max_pages_per_banner),
+    )?;
     let game_history::FetchedGameHistory {
         cache_path,
         endpoint_host,
@@ -279,6 +284,7 @@ fn restore_backup_snapshot(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(

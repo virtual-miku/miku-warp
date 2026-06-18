@@ -24,7 +24,12 @@ export type GameHistoryImportAccountInput = {
 
 export type ImportGameHistoryPayload = {
   account: GameHistoryImportAccountInput
+  gamePath?: string
   maxPagesPerBanner?: number
+}
+
+export type ScanGameHistorySourcePayload = {
+  gamePath?: string
 }
 
 export type ImportGameHistoryResult = {
@@ -42,8 +47,10 @@ export type ImportGameHistoryResult = {
   detectedUid?: string
 }
 
-export function scanGameHistorySource() {
-  return invokeTauri<GameHistorySourceScanResult>('scan_game_history_source')
+export function scanGameHistorySource(payload: ScanGameHistorySourcePayload) {
+  return invokeTauri<GameHistorySourceScanResult>('scan_game_history_source', {
+    input: payload,
+  })
 }
 
 export function importGameHistory(payload: ImportGameHistoryPayload) {

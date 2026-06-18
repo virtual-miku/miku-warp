@@ -31,6 +31,13 @@ const GAME_HISTORY_GACHA_TYPES: [(&str, &str); 6] = [
 pub struct ImportGameHistoryInput {
     pub account: GameHistoryAccountInput,
     pub max_pages_per_banner: Option<usize>,
+    pub game_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScanGameHistorySourceInput {
+    pub game_path: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -136,14 +143,15 @@ struct GachaLogRecord {
     id: String,
 }
 
-pub fn scan_game_history_source() -> GameHistorySourceScanResult {
-    scan_game_history_source_from_roots(candidate_game_roots())
+pub fn scan_game_history_source(game_path: Option<&str>) -> GameHistorySourceScanResult {
+    scan_game_history_source_from_roots(candidate_game_roots(game_path))
 }
 
 pub fn fetch_game_history_from_cache(
+    game_path: Option<&str>,
     max_pages_per_banner: Option<usize>,
 ) -> Result<FetchedGameHistory, String> {
-    let source = find_game_history_source()?;
+    let source = find_game_history_source(game_path)?;
     fetch_game_history(&source, max_pages_per_banner)
 }
 
@@ -217,14 +225,13 @@ fn scan_game_history_source_from_roots(
         matched_cache_path: None,
         url_preview: None,
         endpoint_host: None,
-        detail:
-            "Game cache was not found. Set WARP_TRACKER_HSR_GAME_PATH or GAME_PATH to your Star Rail game folder."
-                .to_string(),
+        detail: "Game cache was not found. Choose the game folder that contains StarRail_Data."
+            .to_string(),
     }
 }
 
-fn find_game_history_source() -> Result<GameHistorySource, String> {
-    let candidate_roots = candidate_game_roots();
+fn find_game_history_source(game_path: Option<&str>) -> Result<GameHistorySource, String> {
+    let candidate_roots = candidate_game_roots(game_path);
     let cache_files = find_cache_files(&candidate_roots);
 
     for cache_file in cache_files.iter().take(MAX_CACHE_FILES) {
@@ -256,7 +263,7 @@ fn find_game_history_source() -> Result<GameHistorySource, String> {
 
     if cache_files.is_empty() {
         return Err(
-            "Game cache was not found. Set WARP_TRACKER_HSR_GAME_PATH or GAME_PATH to your Star Rail game folder."
+            "Game cache was not found. Choose the game folder that contains StarRail_Data."
                 .to_string(),
         );
     }
@@ -455,8 +462,13 @@ fn compare_gacha_id(left: &str, right: &str) -> std::cmp::Ordering {
     }
 }
 
-fn candidate_game_roots() -> Vec<PathBuf> {
+fn candidate_game_roots(game_path: Option<&str>) -> Vec<PathBuf> {
     let mut roots = Vec::new();
+
+    if let Some(game_path) = game_path.map(str::trim).filter(|value| !value.is_empty()) {
+        push_unique_path(&mut roots, PathBuf::from(game_path));
+        return roots;
+    }
 
     for key in ["WARP_TRACKER_HSR_GAME_PATH", "GAME_PATH"] {
         if let Ok(value) = env::var(key) {
@@ -719,6 +731,15 @@ mod tests {
         assert!(result.url_preview.is_none());
 
         let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn uses_selected_game_path_without_scanning_other_roots() {
+        let selected_path = create_temp_root("selected-game-path");
+
+        let roots = candidate_game_roots(Some(&path_to_label(&selected_path)));
+
+        assert_eq!(roots, vec![selected_path]);
     }
 
     fn write_cache_file(root: &Path, content: &str) -> PathBuf {

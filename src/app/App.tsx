@@ -59,6 +59,11 @@ import {
   type ImportGameHistoryResult,
   type GameHistorySourceScanResult,
 } from '../features/persistence/data/game-history-source'
+import {
+  loadGameInstallPath,
+  saveGameInstallPath,
+  selectGameInstallPath,
+} from '../features/persistence/data/game-install-path'
 import { syncWarpItemCatalog } from '../features/persistence/data/warp-item-catalog-sync'
 import {
   listWarpBannerSummaries,
@@ -124,7 +129,10 @@ export function App() {
   const [gameHistoryImportResult, setGameHistoryImportResult] =
     useState<ImportGameHistoryResult>()
   const [gameHistoryImportError, setGameHistoryImportError] = useState<string>()
+  const [gameHistoryPathError, setGameHistoryPathError] = useState<string>()
   const [gameHistoryScanning, setGameHistoryScanning] = useState(false)
+  const [gamePathSelecting, setGamePathSelecting] = useState(false)
+  const [gameInstallPath, setGameInstallPath] = useState(loadGameInstallPath)
   const [activeAccount, setActiveAccount] =
     useState<ManualImportAccountInput>(defaultAccount)
   const [cloudBackupStatus, setCloudBackupStatus] =
@@ -373,9 +381,10 @@ export function App() {
     }
 
     setGameHistoryScanning(true)
+    setGameHistoryPathError(undefined)
 
     try {
-      const result = await scanGameHistorySource()
+      const result = await scanGameHistorySource({ gamePath: gameInstallPath })
       setGameHistoryScan(result)
     } catch (error) {
       setGameHistoryScan({
@@ -387,7 +396,37 @@ export function App() {
     } finally {
       setGameHistoryScanning(false)
     }
-  }, [gameHistoryScanning])
+  }, [gameHistoryScanning, gameInstallPath])
+
+  const handleSelectGamePath = useCallback(async () => {
+    if (gamePathSelecting || gameHistoryScanning || gameHistoryImporting) {
+      return
+    }
+
+    setGamePathSelecting(true)
+    setGameHistoryPathError(undefined)
+
+    try {
+      const selectedPath = await selectGameInstallPath(gameInstallPath)
+
+      if (selectedPath) {
+        setGameInstallPath(selectedPath)
+        saveGameInstallPath(selectedPath)
+        setGameHistoryScan(undefined)
+        setGameHistoryImportResult(undefined)
+        setGameHistoryImportError(undefined)
+      }
+    } catch (error) {
+      setGameHistoryPathError(getErrorMessage(error))
+    } finally {
+      setGamePathSelecting(false)
+    }
+  }, [
+    gameHistoryImporting,
+    gameHistoryScanning,
+    gameInstallPath,
+    gamePathSelecting,
+  ])
 
   const handleImportGameHistory = useCallback(async () => {
     if (gameHistoryImporting) {
@@ -402,6 +441,7 @@ export function App() {
       await syncWarpItemCatalog(itemCatalog)
       const result = await importGameHistory({
         account: activeAccount,
+        gamePath: gameInstallPath,
         maxPagesPerBanner: 200,
       })
       setGameHistoryImportResult(result)
@@ -425,7 +465,12 @@ export function App() {
     } finally {
       setGameHistoryImporting(false)
     }
-  }, [activeAccount, activeBannerType, gameHistoryImporting])
+  }, [
+    activeAccount,
+    activeBannerType,
+    gameHistoryImporting,
+    gameInstallPath,
+  ])
 
   const handleBannerTypeChange = (bannerType: BannerType) => {
     if (bannerType === activeBannerType) {
@@ -1061,11 +1106,15 @@ export function App() {
               <ImportPanel
                 gameHistoryImportError={gameHistoryImportError}
                 gameHistoryImportResult={gameHistoryImportResult}
+                gameHistoryPathError={gameHistoryPathError}
                 gameHistoryScan={gameHistoryScan}
+                gameInstallPath={gameInstallPath}
                 isGameHistoryImporting={gameHistoryImporting}
                 isGameHistoryScanning={gameHistoryScanning}
+                isGamePathSelecting={gamePathSelecting}
                 manualImportPreview={manualImportPreview}
                 onImportGameHistory={handleImportGameHistory}
+                onSelectGamePath={handleSelectGamePath}
                 onScanGameHistory={handleScanGameHistorySource}
                 onOpenManualImport={() => setManualImportOpen(true)}
               />
