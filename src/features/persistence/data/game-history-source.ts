@@ -15,6 +15,39 @@ export type GameHistorySourceScanResult = {
   detail: string
 }
 
+export type GameHistoryImportAccountInput = {
+  id: string
+  uid: string
+  region?: string
+  nickname?: string
+}
+
+export type ImportGameHistoryPayload = {
+  account: GameHistoryImportAccountInput
+  maxPagesPerBanner?: number
+}
+
+export type ImportGameHistoryResult = {
+  accountId: string
+  uid: string
+  importBatchId: string
+  recordsFound: number
+  recordsInserted: number
+  recordsSkipped: number
+  duplicateRecords: number
+  bannerCount: number
+  pagesFetched: number
+  sourceCachePath: string
+  endpointHost?: string
+  detectedUid?: string
+}
+
 export function scanGameHistorySource() {
   return invokeTauri<GameHistorySourceScanResult>('scan_game_history_source')
+}
+
+export function importGameHistory(payload: ImportGameHistoryPayload) {
+  return invokeTauri<ImportGameHistoryResult>('import_game_history', {
+    input: payload,
+  })
 }

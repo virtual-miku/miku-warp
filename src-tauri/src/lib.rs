@@ -107,6 +107,74 @@ fn scan_game_history_source() -> game_history::GameHistorySourceScanResult {
 }
 
 #[tauri::command]
+fn import_game_history(
+    app: tauri::AppHandle,
+    input: game_history::ImportGameHistoryInput,
+) -> Result<game_history::ImportGameHistoryResult, String> {
+    let max_pages_per_banner = game_history::max_pages_per_banner(input.max_pages_per_banner);
+    let fetched_history = game_history::fetch_game_history_from_cache(Some(max_pages_per_banner))?;
+    let game_history::FetchedGameHistory {
+        cache_path,
+        endpoint_host,
+        pages_fetched,
+        records_found,
+        detected_uid,
+        pulls,
+        ..
+    } = fetched_history;
+    let mut account = database::ManualImportAccountInput {
+        id: input.account.id,
+        uid: input.account.uid,
+        region: input.account.region,
+        nickname: input.account.nickname,
+    };
+
+    if let Some(uid) = detected_uid.as_ref().filter(|uid| !uid.trim().is_empty()) {
+        account.id = format!("account-{uid}");
+        account.uid = uid.clone();
+    }
+
+    let account_id = account.id.clone();
+    let uid = account.uid.clone();
+    let save_result = database::save_game_history_import(
+        &app,
+        database::SaveGameHistoryImportInput {
+            account,
+            records_found,
+            source_cache_path: Some(cache_path.clone()),
+            source_endpoint_host: endpoint_host.clone(),
+            pulls: pulls
+                .into_iter()
+                .map(|pull| database::SaveGameHistoryPullInput {
+                    banner_type: pull.banner_type,
+                    item_source_id: pull.item_source_id,
+                    gacha_id: pull.gacha_id,
+                    pulled_at: pull.pulled_at,
+                    pulled_at_timezone: pull.pulled_at_timezone,
+                    sequence_in_timestamp_group: pull.sequence_in_timestamp_group,
+                    raw_item_name: pull.raw_item_name,
+                })
+                .collect(),
+        },
+    )?;
+
+    Ok(game_history::ImportGameHistoryResult {
+        account_id,
+        uid,
+        import_batch_id: save_result.import_batch_id,
+        records_found: save_result.records_found,
+        records_inserted: save_result.records_inserted,
+        records_skipped: save_result.records_skipped,
+        duplicate_records: save_result.duplicate_records,
+        banner_count: save_result.banner_count,
+        pages_fetched,
+        source_cache_path: cache_path,
+        endpoint_host,
+        detected_uid,
+    })
+}
+
+#[tauri::command]
 fn update_cloud_backup_policy(
     app: tauri::AppHandle,
     input: database::UpdateCloudBackupPolicyInput,
@@ -229,6 +297,7 @@ pub fn run() {
             get_cloud_backup_status,
             get_cloud_backup_policy,
             get_database_status,
+            import_game_history,
             list_warp_banner_summaries,
             list_google_drive_backup_snapshots,
             list_backup_snapshots,

@@ -1,6 +1,9 @@
 import { FileInput, History, RotateCcw } from 'lucide-react'
 import { AppButton } from '../../../shared/ui/AppButton'
-import type { GameHistorySourceScanResult } from '../../persistence/data/game-history-source'
+import type {
+  GameHistorySourceScanResult,
+  ImportGameHistoryResult,
+} from '../../persistence/data/game-history-source'
 import type { ManualImportPreview } from '../domain/manual-note-parser'
 import {
   getManualImportStatus,
@@ -8,17 +11,25 @@ import {
 } from '../domain/manual-import-preview'
 
 type ImportPanelProps = {
+  gameHistoryImportError?: string
+  gameHistoryImportResult?: ImportGameHistoryResult
   gameHistoryScan?: GameHistorySourceScanResult
+  isGameHistoryImporting: boolean
   isGameHistoryScanning: boolean
   manualImportPreview: ManualImportPreview
+  onImportGameHistory: () => void
   onScanGameHistory: () => void
   onOpenManualImport: () => void
 }
 
 export function ImportPanel({
+  gameHistoryImportError,
+  gameHistoryImportResult,
   gameHistoryScan,
+  isGameHistoryImporting,
   isGameHistoryScanning,
   manualImportPreview,
+  onImportGameHistory,
   onScanGameHistory,
   onOpenManualImport,
 }: ImportPanelProps) {
@@ -77,6 +88,42 @@ export function ImportPanel({
             {getGameHistoryScanStatusLabel(gameHistoryScan)}
           </span>
         </div>
+        <div className="tool-row">
+          <div>
+            <strong>Game import</strong>
+            <span>
+              {formatGameHistoryImportMeta(
+                gameHistoryImportResult,
+                isGameHistoryImporting,
+              )}
+            </span>
+          </div>
+          <AppButton
+            disabled={isGameHistoryImporting || isGameHistoryScanning}
+            icon={History}
+            onClick={onImportGameHistory}
+          >
+            {isGameHistoryImporting ? 'Importing' : 'Import'}
+          </AppButton>
+        </div>
+        {gameHistoryImportError || gameHistoryImportResult ? (
+          <div
+            className={[
+              'backup-message',
+              gameHistoryImportError ? 'backup-message-error' : undefined,
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          >
+            <strong>
+              {gameHistoryImportError ? 'Game import failed' : 'Game import saved'}
+            </strong>
+            <p>
+              {gameHistoryImportError ??
+                formatGameHistoryImportDetail(gameHistoryImportResult)}
+            </p>
+          </div>
+        ) : null}
         <div className="tool-row">
           <div>
             <strong>Restore</strong>
@@ -140,4 +187,35 @@ function getGameHistoryScanStatusLabel(
   }
 
   return 'Not found'
+}
+
+function formatGameHistoryImportMeta(
+  result: ImportGameHistoryResult | undefined,
+  isImporting: boolean,
+) {
+  if (isImporting) {
+    return 'Fetching game history'
+  }
+
+  if (!result) {
+    return 'Not imported'
+  }
+
+  return `${result.recordsInserted} new, ${result.duplicateRecords} duplicates`
+}
+
+function formatGameHistoryImportDetail(
+  result: ImportGameHistoryResult | undefined,
+) {
+  if (!result) {
+    return ''
+  }
+
+  return [
+    `${result.recordsInserted} inserted, ${result.recordsSkipped} skipped, ${result.duplicateRecords} duplicates.`,
+    `${result.pagesFetched} pages fetched for UID ${result.uid}.`,
+    result.endpointHost ? `Endpoint: ${result.endpointHost}` : undefined,
+  ]
+    .filter(Boolean)
+    .join('\n')
 }

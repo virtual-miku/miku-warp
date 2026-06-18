@@ -102,6 +102,37 @@ pub struct SaveManualImportDraftResult {
     pub banner_count: usize,
 }
 
+#[derive(Debug)]
+pub struct SaveGameHistoryImportInput {
+    pub account: ManualImportAccountInput,
+    pub records_found: usize,
+    pub source_cache_path: Option<String>,
+    pub source_endpoint_host: Option<String>,
+    pub pulls: Vec<SaveGameHistoryPullInput>,
+}
+
+#[derive(Debug)]
+pub struct SaveGameHistoryPullInput {
+    pub banner_type: String,
+    pub item_source_id: Option<String>,
+    pub gacha_id: String,
+    pub pulled_at: String,
+    pub pulled_at_timezone: Option<String>,
+    pub sequence_in_timestamp_group: i64,
+    pub raw_item_name: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveGameHistoryImportResult {
+    pub import_batch_id: String,
+    pub records_found: usize,
+    pub records_inserted: usize,
+    pub records_skipped: usize,
+    pub duplicate_records: usize,
+    pub banner_count: usize,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListWarpPullsInput {
@@ -453,6 +484,16 @@ pub fn save_manual_import_draft(
     save_manual_import_draft_to_database(&mut connection, &draft)
 }
 
+pub fn save_game_history_import(
+    app: &AppHandle,
+    input: SaveGameHistoryImportInput,
+) -> Result<SaveGameHistoryImportResult, String> {
+    let database_path = resolve_database_path(app)?;
+    let mut connection = open_database(&database_path)?;
+
+    save_game_history_import_to_database(&mut connection, &input)
+}
+
 pub fn list_warp_pulls(
     app: &AppHandle,
     query: ListWarpPullsInput,
@@ -729,7 +770,7 @@ fn save_manual_import_draft_to_database(
 ) -> Result<SaveManualImportDraftResult, String> {
     validate_manual_import_draft(draft)?;
 
-    let import_batch_id = create_import_batch_id()?;
+    let import_batch_id = create_import_batch_id("manual-import")?;
     let banner_types = draft
         .pulls
         .iter()
@@ -754,6 +795,7 @@ fn save_manual_import_draft_to_database(
         &transaction,
         &import_batch_id,
         &draft.account.id,
+        "manual",
         batch_banner_type,
         draft.records_found,
     )?;
@@ -830,6 +872,123 @@ fn save_manual_import_draft_to_database(
     Ok(SaveManualImportDraftResult {
         import_batch_id,
         records_found: draft.records_found,
+        records_inserted,
+        records_skipped,
+        duplicate_records,
+        banner_count: banner_types.len(),
+    })
+}
+
+fn save_game_history_import_to_database(
+    connection: &mut Connection,
+    input: &SaveGameHistoryImportInput,
+) -> Result<SaveGameHistoryImportResult, String> {
+    validate_game_history_import(input)?;
+
+    let import_batch_id = create_import_batch_id("game-history-import")?;
+    let banner_types = input
+        .pulls
+        .iter()
+        .map(|pull| pull.banner_type.as_str())
+        .collect::<HashSet<_>>();
+    let batch_banner_type = if banner_types.len() == 1 {
+        banner_types.iter().next().copied()
+    } else {
+        None
+    };
+    let transaction = connection
+        .transaction()
+        .map_err(|error| format!("Failed to start game history import transaction: {error}"))?;
+
+    upsert_account(&transaction, &input.account)?;
+
+    for banner_type in &banner_types {
+        ensure_banner(&transaction, banner_type)?;
+    }
+
+    insert_import_batch(
+        &transaction,
+        &import_batch_id,
+        &input.account.id,
+        "game_history",
+        batch_banner_type,
+        input.records_found,
+    )?;
+
+    let mut records_inserted = 0;
+    let mut duplicate_records = 0;
+
+    {
+        let mut insert_pull_statement = transaction
+            .prepare(
+                "INSERT OR IGNORE INTO warp_pulls (
+                   id, account_id, banner_id, warp_item_id, pulled_at, pulled_at_timezone,
+                   gacha_id, source, source_import_id, source_line_number,
+                   sequence_in_timestamp_group, raw_item_name
+                 )
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 'game_history', ?8, ?9, ?10, ?11)",
+            )
+            .map_err(|error| {
+                format!("Failed to prepare game history pull insert statement: {error}")
+            })?;
+
+        for (index, pull) in input.pulls.iter().enumerate() {
+            let banner_id = banner_id_for_type(&pull.banner_type);
+            let warp_item_id = warp_item_id_for_game_history_pull(&transaction, pull)?;
+            let pull_id = game_history_pull_id(&input.account.id, &banner_id, &pull.gacha_id);
+            let source_line_number = i64::try_from(index + 1)
+                .map_err(|error| format!("Game history import is too large: {error}"))?;
+            let affected_rows = insert_pull_statement
+                .execute(params![
+                    pull_id,
+                    &input.account.id,
+                    banner_id,
+                    warp_item_id,
+                    &pull.pulled_at,
+                    pull.pulled_at_timezone.as_deref(),
+                    &pull.gacha_id,
+                    &import_batch_id,
+                    source_line_number,
+                    pull.sequence_in_timestamp_group,
+                    &pull.raw_item_name,
+                ])
+                .map_err(|error| {
+                    format!(
+                        "Failed to insert game history pull {} ({}) at {}: {error}",
+                        pull.raw_item_name, pull.gacha_id, pull.pulled_at
+                    )
+                })?;
+
+            if affected_rows == 1 {
+                records_inserted += 1;
+            } else {
+                duplicate_records += 1;
+            }
+        }
+    }
+
+    let records_skipped = input.records_found.saturating_sub(input.pulls.len()) + duplicate_records;
+    for banner_type in &banner_types {
+        let banner_id = banner_id_for_type(banner_type);
+        recompute_pity_for_account_banner(&transaction, &input.account.id, &banner_id)?;
+    }
+
+    update_import_batch_result(
+        &transaction,
+        &import_batch_id,
+        records_inserted,
+        records_skipped,
+    )?;
+
+    record_game_history_import_notes(&transaction, &import_batch_id, input)?;
+
+    transaction
+        .commit()
+        .map_err(|error| format!("Failed to commit game history import transaction: {error}"))?;
+
+    Ok(SaveGameHistoryImportResult {
+        import_batch_id,
+        records_found: input.records_found,
         records_inserted,
         records_skipped,
         duplicate_records,
@@ -2068,6 +2227,62 @@ fn validate_manual_import_draft(draft: &SaveManualImportDraftInput) -> Result<()
     Ok(())
 }
 
+fn validate_game_history_import(input: &SaveGameHistoryImportInput) -> Result<(), String> {
+    if input.account.id.trim().is_empty() {
+        return Err("Game history import account id cannot be empty.".to_string());
+    }
+
+    if input.account.uid.trim().is_empty() {
+        return Err("Game history import account uid cannot be empty.".to_string());
+    }
+
+    if input.records_found < input.pulls.len() {
+        return Err(
+            "Game history import records found cannot be lower than ready pulls.".to_string(),
+        );
+    }
+
+    for pull in &input.pulls {
+        validate_game_history_pull(pull)?;
+    }
+
+    Ok(())
+}
+
+fn validate_game_history_pull(pull: &SaveGameHistoryPullInput) -> Result<(), String> {
+    banner_label(&pull.banner_type)?;
+
+    if pull.gacha_id.trim().is_empty() {
+        return Err(format!(
+            "Game history pull {} at {} has an empty gacha id.",
+            pull.raw_item_name, pull.pulled_at
+        ));
+    }
+
+    if pull.pulled_at.trim().is_empty() {
+        return Err(format!(
+            "Game history pull {} has an empty timestamp.",
+            pull.raw_item_name
+        ));
+    }
+
+    if pull.sequence_in_timestamp_group < 1 {
+        return Err(format!(
+            "Game history pull {} at {} has invalid sequence.",
+            pull.raw_item_name, pull.pulled_at
+        ));
+    }
+
+    if pull.raw_item_name.trim().is_empty() {
+        return Err(format!(
+            "Game history pull {} at {} has an empty item name.",
+            pull.gacha_id, pull.pulled_at
+        ));
+    }
+
+    Ok(())
+}
+
 fn validate_manual_import_pull(pull: &SaveManualImportDraftPullInput) -> Result<(), String> {
     banner_label(&pull.banner_type)?;
 
@@ -2147,10 +2362,95 @@ fn ensure_banner(transaction: &Transaction<'_>, banner_type: &str) -> Result<Str
     Ok(banner_id)
 }
 
+fn warp_item_id_for_game_history_pull(
+    transaction: &Transaction<'_>,
+    pull: &SaveGameHistoryPullInput,
+) -> Result<String, String> {
+    if let Some(source_id) = pull
+        .item_source_id
+        .as_ref()
+        .filter(|source_id| !source_id.trim().is_empty())
+    {
+        let item_id = transaction
+            .query_row(
+                "SELECT id FROM warp_items WHERE source_id = ?1",
+                params![source_id],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(|error| {
+                format!(
+                    "Failed to look up catalog item {} by source id {}: {error}",
+                    pull.raw_item_name, source_id
+                )
+            })?;
+
+        if let Some(item_id) = item_id {
+            return Ok(item_id);
+        }
+    }
+
+    let item_id = transaction
+        .query_row(
+            "SELECT id FROM warp_items WHERE name = ?1",
+            params![&pull.raw_item_name],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| {
+            format!(
+                "Failed to look up catalog item {} by name: {error}",
+                pull.raw_item_name
+            )
+        })?;
+
+    item_id.ok_or_else(|| {
+        format!(
+            "Game history item {} is not in the local catalog. Sync the catalog before importing.",
+            pull.raw_item_name
+        )
+    })
+}
+
+fn record_game_history_import_notes(
+    transaction: &Transaction<'_>,
+    import_batch_id: &str,
+    input: &SaveGameHistoryImportInput,
+) -> Result<(), String> {
+    let notes = [
+        input
+            .source_endpoint_host
+            .as_ref()
+            .map(|host| format!("endpoint={host}")),
+        input
+            .source_cache_path
+            .as_ref()
+            .map(|path| format!("cache={path}")),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join("\n");
+
+    if notes.is_empty() {
+        return Ok(());
+    }
+
+    transaction
+        .execute(
+            "UPDATE import_batches SET notes = ?2 WHERE id = ?1",
+            params![import_batch_id, notes],
+        )
+        .map_err(|error| format!("Failed to record game history import notes: {error}"))?;
+
+    Ok(())
+}
+
 fn insert_import_batch(
     transaction: &Transaction<'_>,
     import_batch_id: &str,
     account_id: &str,
+    source: &str,
     banner_type: Option<&str>,
     records_found: usize,
 ) -> Result<(), String> {
@@ -2160,15 +2460,16 @@ fn insert_import_batch(
                id, account_id, source, banner_type, records_found, records_inserted,
                records_skipped, status
              )
-             VALUES (?1, ?2, 'manual', ?3, ?4, 0, 0, 'pending')",
+             VALUES (?1, ?2, ?3, ?4, ?5, 0, 0, 'pending')",
             params![
                 import_batch_id,
                 account_id,
+                source,
                 banner_type,
                 records_found as i64
             ],
         )
-        .map_err(|error| format!("Failed to insert manual import batch: {error}"))?;
+        .map_err(|error| format!("Failed to insert {source} import batch: {error}"))?;
 
     Ok(())
 }
@@ -2193,7 +2494,7 @@ fn update_import_batch_result(
                 records_skipped as i64,
             ],
         )
-        .map_err(|error| format!("Failed to update manual import batch result: {error}"))?;
+        .map_err(|error| format!("Failed to update import batch result: {error}"))?;
 
     Ok(())
 }
@@ -2214,13 +2515,13 @@ fn banner_label(banner_type: &str) -> Result<&'static str, String> {
     }
 }
 
-fn create_import_batch_id() -> Result<String, String> {
+fn create_import_batch_id(prefix: &str) -> Result<String, String> {
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|error| format!("System clock is before UNIX epoch: {error}"))?
         .as_nanos();
 
-    Ok(format!("manual-import-{timestamp}"))
+    Ok(format!("{prefix}-{timestamp}"))
 }
 
 fn create_cloud_backup_event_id() -> Result<String, String> {
@@ -2246,6 +2547,10 @@ fn manual_pull_id(
     format!(
         "manual:{account_id}:{banner_id}:{pulled_at}:{warp_item_id}:{sequence_in_timestamp_group}"
     )
+}
+
+fn game_history_pull_id(account_id: &str, banner_id: &str, gacha_id: &str) -> String {
+    format!("game-history:{account_id}:{banner_id}:{gacha_id}")
 }
 
 fn list_applied_migrations(connection: &Connection) -> Result<Vec<String>, String> {
@@ -2510,6 +2815,47 @@ mod tests {
         assert_eq!(count_table(&connection, "banners"), 1);
         assert_eq!(count_table(&connection, "import_batches"), 2);
         assert_eq!(count_table(&connection, "warp_pulls"), 2);
+    }
+
+    #[test]
+    fn saves_game_history_import_and_deduplicates_by_gacha_id() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+        upsert_warp_item_catalog(
+            &mut connection,
+            &[
+                catalog_item("character-1001", "1001", "Pela", "character", 4),
+                catalog_item("light-cone-2001", "2001", "Data Bank", "light_cone", 3),
+            ],
+        )
+        .expect("catalog sync");
+
+        let first = save_game_history_import_to_database(&mut connection, &game_history_import())
+            .expect("first game history import");
+        let second = save_game_history_import_to_database(&mut connection, &game_history_import())
+            .expect("second game history import");
+        let pulls = list_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: "account-800000001".to_string(),
+                banner_type: Some("character_event".to_string()),
+                limit: Some(10),
+            },
+        )
+        .expect("game history pulls can be listed");
+
+        assert_eq!(first.records_found, 2);
+        assert_eq!(first.records_inserted, 2);
+        assert_eq!(first.records_skipped, 0);
+        assert_eq!(first.duplicate_records, 0);
+        assert_eq!(second.records_inserted, 0);
+        assert_eq!(second.records_skipped, 2);
+        assert_eq!(second.duplicate_records, 2);
+        assert_eq!(count_table(&connection, "import_batches"), 2);
+        assert_eq!(count_table(&connection, "warp_pulls"), 2);
+        assert_eq!(pulls[0].item_name, "Pela");
+        assert_eq!(pulls[0].source, "game_history");
+        assert_eq!(pulls[0].pity_four_at_pull, Some(1));
     }
 
     #[test]
@@ -3059,6 +3405,59 @@ mod tests {
             pulled_at: "2025-07-11T11:20:01".to_string(),
             pulled_at_timezone: Some("Asia/Jakarta".to_string()),
             source_line_number: sequence_in_timestamp_group + 2,
+            sequence_in_timestamp_group,
+            raw_item_name: raw_item_name.to_string(),
+        }
+    }
+
+    fn game_history_import() -> SaveGameHistoryImportInput {
+        SaveGameHistoryImportInput {
+            account: ManualImportAccountInput {
+                id: "account-800000001".to_string(),
+                uid: "800000001".to_string(),
+                region: Some("asia".to_string()),
+                nickname: Some("Saki".to_string()),
+            },
+            records_found: 2,
+            source_cache_path: Some(
+                "C:\\Games\\StarRail_Data\\webCaches\\Cache_Data\\data_2".to_string(),
+            ),
+            source_endpoint_host: Some("public-operation-hkrpg-sg.hoyoverse.com".to_string()),
+            pulls: vec![
+                game_history_pull(
+                    "character_event",
+                    "1001",
+                    "game-gacha-1",
+                    "Pela",
+                    "2025-07-11T11:20:01",
+                    1,
+                ),
+                game_history_pull(
+                    "character_event",
+                    "2001",
+                    "game-gacha-2",
+                    "Data Bank",
+                    "2025-07-11T11:20:02",
+                    1,
+                ),
+            ],
+        }
+    }
+
+    fn game_history_pull(
+        banner_type: &str,
+        item_source_id: &str,
+        gacha_id: &str,
+        raw_item_name: &str,
+        pulled_at: &str,
+        sequence_in_timestamp_group: i64,
+    ) -> SaveGameHistoryPullInput {
+        SaveGameHistoryPullInput {
+            banner_type: banner_type.to_string(),
+            item_source_id: Some(item_source_id.to_string()),
+            gacha_id: gacha_id.to_string(),
+            pulled_at: pulled_at.to_string(),
+            pulled_at_timezone: None,
             sequence_in_timestamp_group,
             raw_item_name: raw_item_name.to_string(),
         }

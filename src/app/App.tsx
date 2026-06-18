@@ -54,7 +54,9 @@ import {
   type UploadCloudBackupSnapshotResult,
 } from '../features/persistence/data/cloud-backup-status'
 import {
+  importGameHistory,
   scanGameHistorySource,
+  type ImportGameHistoryResult,
   type GameHistorySourceScanResult,
 } from '../features/persistence/data/game-history-source'
 import { syncWarpItemCatalog } from '../features/persistence/data/warp-item-catalog-sync'
@@ -82,7 +84,7 @@ import { AppButton } from '../shared/ui/AppButton'
 import './App.css'
 
 const defaultBannerType = 'character_event' satisfies BannerType
-const activeAccount: ManualImportAccountInput = {
+const defaultAccount: ManualImportAccountInput = {
   id: 'account-800000000',
   uid: '800000000',
   region: 'asia',
@@ -118,7 +120,13 @@ export function App() {
   >([])
   const [gameHistoryScan, setGameHistoryScan] =
     useState<GameHistorySourceScanResult>()
+  const [gameHistoryImporting, setGameHistoryImporting] = useState(false)
+  const [gameHistoryImportResult, setGameHistoryImportResult] =
+    useState<ImportGameHistoryResult>()
+  const [gameHistoryImportError, setGameHistoryImportError] = useState<string>()
   const [gameHistoryScanning, setGameHistoryScanning] = useState(false)
+  const [activeAccount, setActiveAccount] =
+    useState<ManualImportAccountInput>(defaultAccount)
   const [cloudBackupStatus, setCloudBackupStatus] =
     useState<CloudBackupStatus>(() => createInitialGoogleDriveBackupStatus())
   const [cloudBackupPolicy, setCloudBackupPolicy] =
@@ -175,7 +183,7 @@ export function App() {
       bannerType: activeBannerType,
       limit: 100,
     })
-  }, [activeBannerType])
+  }, [activeAccount.id, activeBannerType])
 
   const refreshPersistedPulls = useCallback(async () => {
     try {
@@ -197,7 +205,7 @@ export function App() {
       setBannerSummaries([])
       return []
     }
-  }, [])
+  }, [activeAccount.id])
 
   const refreshWarpHistory = useCallback(async () => {
     await Promise.all([refreshPersistedPulls(), refreshBannerSummaries()])
@@ -277,7 +285,7 @@ export function App() {
     return () => {
       isActive = false
     }
-  }, [])
+  }, [activeAccount.id])
 
   useEffect(() => {
     let isActive = true
@@ -380,6 +388,44 @@ export function App() {
       setGameHistoryScanning(false)
     }
   }, [gameHistoryScanning])
+
+  const handleImportGameHistory = useCallback(async () => {
+    if (gameHistoryImporting) {
+      return
+    }
+
+    setGameHistoryImporting(true)
+    setGameHistoryImportError(undefined)
+    setGameHistoryImportResult(undefined)
+
+    try {
+      await syncWarpItemCatalog(itemCatalog)
+      const result = await importGameHistory({
+        account: activeAccount,
+        maxPagesPerBanner: 200,
+      })
+      setGameHistoryImportResult(result)
+      setActiveAccount({
+        ...activeAccount,
+        id: result.accountId,
+        uid: result.uid,
+      })
+      const [pulls, summaries] = await Promise.all([
+        listWarpPulls({
+          accountId: result.accountId,
+          bannerType: activeBannerType,
+          limit: 100,
+        }),
+        listWarpBannerSummaries({ accountId: result.accountId }),
+      ])
+      setPersistedPulls(pulls)
+      setBannerSummaries(summaries)
+    } catch (error) {
+      setGameHistoryImportError(getErrorMessage(error))
+    } finally {
+      setGameHistoryImporting(false)
+    }
+  }, [activeAccount, activeBannerType, gameHistoryImporting])
 
   const handleBannerTypeChange = (bannerType: BannerType) => {
     if (bannerType === activeBannerType) {
@@ -1013,9 +1059,13 @@ export function App() {
 
             <aside className="side-column" aria-label="Import and backup">
               <ImportPanel
+                gameHistoryImportError={gameHistoryImportError}
+                gameHistoryImportResult={gameHistoryImportResult}
                 gameHistoryScan={gameHistoryScan}
+                isGameHistoryImporting={gameHistoryImporting}
                 isGameHistoryScanning={gameHistoryScanning}
                 manualImportPreview={manualImportPreview}
+                onImportGameHistory={handleImportGameHistory}
                 onScanGameHistory={handleScanGameHistorySource}
                 onOpenManualImport={() => setManualImportOpen(true)}
               />
