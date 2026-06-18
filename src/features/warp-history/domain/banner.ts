@@ -1,5 +1,5 @@
 export const bannerDefinitions = [
-  { type: 'departure', label: 'Departure' },
+  { type: 'departure', label: 'Beginner (Departure)' },
   { type: 'standard', label: 'Standard' },
   { type: 'character_event', label: 'Character Event' },
   { type: 'light_cone_event', label: 'Light Cone Event' },
@@ -12,4 +12,3 @@ export type BannerType = (typeof bannerDefinitions)[number]['type']
 export function getBannerLabel(type: BannerType) {
   return bannerDefinitions.find((banner) => banner.type === type)?.label ?? type
 }
-

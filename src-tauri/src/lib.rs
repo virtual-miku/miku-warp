@@ -109,11 +109,21 @@ fn scan_game_history_source(
 }
 
 #[tauri::command]
-fn import_game_history(
+async fn import_game_history(
+    app: tauri::AppHandle,
+    input: game_history::ImportGameHistoryInput,
+) -> Result<game_history::ImportGameHistoryResult, String> {
+    tauri::async_runtime::spawn_blocking(move || import_game_history_blocking(app, input))
+        .await
+        .map_err(|error| format!("Game history import task failed: {error}"))?
+}
+
+fn import_game_history_blocking(
     app: tauri::AppHandle,
     input: game_history::ImportGameHistoryInput,
 ) -> Result<game_history::ImportGameHistoryResult, String> {
     let max_pages_per_banner = game_history::max_pages_per_banner(input.max_pages_per_banner);
+    let source_account_id = input.account.id.clone();
     let fetched_history = game_history::fetch_game_history_from_cache(
         input.game_path.as_deref(),
         Some(max_pages_per_banner),
@@ -145,6 +155,8 @@ fn import_game_history(
         &app,
         database::SaveGameHistoryImportInput {
             account,
+            merge_from_account_id: Some(source_account_id)
+                .filter(|source_id| source_id != &account_id),
             records_found,
             source_cache_path: Some(cache_path.clone()),
             source_endpoint_host: endpoint_host.clone(),
@@ -172,6 +184,8 @@ fn import_game_history(
         records_skipped: save_result.records_skipped,
         duplicate_records: save_result.duplicate_records,
         banner_count: save_result.banner_count,
+        manual_records_merged: save_result.manual_records_merged,
+        manual_records_matched: save_result.manual_records_matched,
         pages_fetched,
         source_cache_path: cache_path,
         endpoint_host,
@@ -213,11 +227,13 @@ fn get_database_status(app: tauri::AppHandle) -> Result<database::DatabaseStatus
 }
 
 #[tauri::command]
-fn sync_warp_item_catalog(
+async fn sync_warp_item_catalog(
     app: tauri::AppHandle,
     items: Vec<database::WarpItemCatalogInput>,
 ) -> Result<database::SyncWarpItemCatalogResult, String> {
-    database::sync_warp_item_catalog(&app, items)
+    tauri::async_runtime::spawn_blocking(move || database::sync_warp_item_catalog(&app, items))
+        .await
+        .map_err(|error| format!("Catalog sync task failed: {error}"))?
 }
 
 #[tauri::command]
@@ -232,7 +248,7 @@ fn save_manual_import_draft(
 fn list_warp_pulls(
     app: tauri::AppHandle,
     query: database::ListWarpPullsInput,
-) -> Result<Vec<database::WarpPullRow>, String> {
+) -> Result<database::ListWarpPullsResult, String> {
     database::list_warp_pulls(&app, query)
 }
 

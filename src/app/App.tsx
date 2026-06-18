@@ -70,11 +70,18 @@ import {
   listWarpPulls,
   type WarpBannerSummary,
 } from '../features/persistence/data/warp-pull-history'
+import {
+  loadActiveAccount,
+  saveActiveAccount,
+} from '../features/persistence/data/active-account'
 import { BannerStatsPanel } from '../features/warp-history/components/BannerStatsPanel'
 import { BannerSummaryGrid } from '../features/warp-history/components/BannerSummaryGrid'
 import { BannerTabs } from '../features/warp-history/components/BannerTabs'
 import { PityOverview } from '../features/warp-history/components/PityOverview'
-import { WarpTimeline } from '../features/warp-history/components/WarpTimeline'
+import {
+  WarpTimeline,
+  type TimelineRarityFilter,
+} from '../features/warp-history/components/WarpTimeline'
 import { itemCatalog } from '../features/warp-history/data/item-catalog'
 import {
   getBannerLabel,
@@ -89,6 +96,7 @@ import { AppButton } from '../shared/ui/AppButton'
 import './App.css'
 
 const defaultBannerType = 'character_event' satisfies BannerType
+const historyPageSize = 5
 const defaultAccount: ManualImportAccountInput = {
   id: 'account-800000000',
   uid: '800000000',
@@ -134,13 +142,19 @@ export function App() {
   const [gamePathSelecting, setGamePathSelecting] = useState(false)
   const [gameInstallPath, setGameInstallPath] = useState(loadGameInstallPath)
   const [activeAccount, setActiveAccount] =
-    useState<ManualImportAccountInput>(defaultAccount)
+    useState<ManualImportAccountInput>(() => loadActiveAccount(defaultAccount))
   const [cloudBackupStatus, setCloudBackupStatus] =
     useState<CloudBackupStatus>(() => createInitialGoogleDriveBackupStatus())
   const [cloudBackupPolicy, setCloudBackupPolicy] =
     useState<CloudBackupPolicy>(() => createInitialGoogleDriveBackupPolicy())
   const [manualNoteDraft, setManualNoteDraft] = useState(manualNoteSample)
   const [persistedPulls, setPersistedPulls] = useState<WarpPull[]>([])
+  const [historyTotalPulls, setHistoryTotalPulls] = useState(0)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyPage, setHistoryPage] = useState(1)
+  const [historySearchQuery, setHistorySearchQuery] = useState('')
+  const [historyRarityFilter, setHistoryRarityFilter] =
+    useState<TimelineRarityFilter>('all')
   const [bannerSummaries, setBannerSummaries] = useState<WarpBannerSummary[]>(
     [],
   )
@@ -189,16 +203,21 @@ export function App() {
     return listWarpPulls({
       accountId: activeAccount.id,
       bannerType: activeBannerType,
-      limit: 100,
+      limit: historyPageSize,
+      offset: (historyPage - 1) * historyPageSize,
+      rarity: historyRarityFilter === 'all' ? undefined : historyRarityFilter,
+      search: historySearchQuery,
     })
-  }, [activeAccount.id, activeBannerType])
+  }, [activeAccount.id, activeBannerType, historyPage, historyRarityFilter, historySearchQuery])
 
   const refreshPersistedPulls = useCallback(async () => {
     try {
       const pulls = await fetchPersistedPulls()
-      setPersistedPulls(pulls)
+      setPersistedPulls(pulls.pulls)
+      setHistoryTotalPulls(pulls.total)
     } catch {
       setPersistedPulls([])
+      setHistoryTotalPulls(0)
     }
   }, [fetchPersistedPulls])
 
@@ -259,21 +278,33 @@ export function App() {
     let isActive = true
 
     fetchPersistedPulls()
-      .then((pulls) => {
+      .then((result) => {
         if (isActive) {
-          setPersistedPulls(pulls)
+          setPersistedPulls(result.pulls)
+          setHistoryTotalPulls(result.total)
+
+          const pageCount = Math.max(1, Math.ceil(result.total / historyPageSize))
+          if (historyPage > pageCount) {
+            setHistoryPage(pageCount)
+          }
         }
       })
       .catch(() => {
         if (isActive) {
           setPersistedPulls([])
+          setHistoryTotalPulls(0)
+        }
+      })
+      .finally(() => {
+        if (isActive) {
+          setHistoryLoading(false)
         }
       })
 
     return () => {
       isActive = false
     }
-  }, [fetchPersistedPulls])
+  }, [fetchPersistedPulls, historyPage])
 
   useEffect(() => {
     let isActive = true
@@ -434,6 +465,7 @@ export function App() {
     }
 
     setGameHistoryImporting(true)
+    setHistoryLoading(true)
     setGameHistoryImportError(undefined)
     setGameHistoryImportResult(undefined)
 
@@ -445,31 +477,41 @@ export function App() {
         maxPagesPerBanner: 200,
       })
       setGameHistoryImportResult(result)
-      setActiveAccount({
+      const nextAccount = {
         ...activeAccount,
         id: result.accountId,
         uid: result.uid,
-      })
+      }
+      setActiveAccount(nextAccount)
+      saveActiveAccount(nextAccount)
       const [pulls, summaries] = await Promise.all([
         listWarpPulls({
           accountId: result.accountId,
           bannerType: activeBannerType,
-          limit: 100,
+          limit: historyPageSize,
+          offset: (historyPage - 1) * historyPageSize,
+          rarity: historyRarityFilter === 'all' ? undefined : historyRarityFilter,
+          search: historySearchQuery,
         }),
         listWarpBannerSummaries({ accountId: result.accountId }),
       ])
-      setPersistedPulls(pulls)
+      setPersistedPulls(pulls.pulls)
+      setHistoryTotalPulls(pulls.total)
       setBannerSummaries(summaries)
     } catch (error) {
       setGameHistoryImportError(getErrorMessage(error))
     } finally {
       setGameHistoryImporting(false)
+      setHistoryLoading(false)
     }
   }, [
     activeAccount,
     activeBannerType,
     gameHistoryImporting,
     gameInstallPath,
+    historyPage,
+    historyRarityFilter,
+    historySearchQuery,
   ])
 
   const handleBannerTypeChange = (bannerType: BannerType) => {
@@ -478,6 +520,8 @@ export function App() {
     }
 
     setActiveBannerType(bannerType)
+    setHistoryLoading(true)
+    setHistoryPage(1)
     setPersistedPulls([])
     setManualImportSaveNotice(undefined)
   }
@@ -1084,6 +1128,7 @@ export function App() {
 
           <BannerTabs
             activeBannerType={activeBannerType}
+            summaries={bannerSummaries}
             onBannerTypeChange={handleBannerTypeChange}
           />
 
@@ -1099,7 +1144,29 @@ export function App() {
                 bannerType={activeBannerType}
                 summary={activeBannerSummary}
               />
-              <WarpTimeline pulls={timelinePulls} />
+              <WarpTimeline
+                pulls={timelinePulls}
+                page={historyPage}
+                pageSize={historyPageSize}
+                rarityFilter={historyRarityFilter}
+                searchQuery={historySearchQuery}
+                totalPulls={historyTotalPulls}
+                isLoading={historyLoading}
+                onPageChange={(page) => {
+                  setHistoryLoading(true)
+                  setHistoryPage(page)
+                }}
+                onRarityFilterChange={(rarityFilter) => {
+                  setHistoryLoading(true)
+                  setHistoryRarityFilter(rarityFilter)
+                  setHistoryPage(1)
+                }}
+                onSearchQueryChange={(searchQuery) => {
+                  setHistoryLoading(true)
+                  setHistorySearchQuery(searchQuery)
+                  setHistoryPage(1)
+                }}
+              />
             </div>
 
             <aside className="side-column" aria-label="Import and backup">

@@ -6,6 +6,9 @@ export type ListWarpPullsInput = {
   accountId: string
   bannerType?: BannerType
   limit?: number
+  offset?: number
+  search?: string
+  rarity?: 3 | 4 | 5
 }
 
 export type ListWarpBannerSummariesInput = {
@@ -13,6 +16,11 @@ export type ListWarpBannerSummariesInput = {
 }
 
 export type PersistedWarpPull = WarpPull
+
+export type ListWarpPullsResult = {
+  pulls: PersistedWarpPull[]
+  total: number
+}
 
 export type WarpBannerSummary = {
   bannerType: BannerType
@@ -33,7 +41,7 @@ export type WarpBannerSummary = {
 }
 
 export function listWarpPulls(query: ListWarpPullsInput) {
-  return invokeTauri<PersistedWarpPull[]>('list_warp_pulls', { query })
+  return invokeTauri<ListWarpPullsResult>('list_warp_pulls', { query })
 }
 
 export function listWarpBannerSummaries(

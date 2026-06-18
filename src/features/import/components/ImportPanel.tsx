@@ -252,6 +252,12 @@ function formatGameHistoryImportDetail(
 
   return [
     `${result.recordsInserted} inserted, ${result.recordsSkipped} skipped, ${result.duplicateRecords} duplicates.`,
+    result.manualRecordsMerged > 0
+      ? `${result.manualRecordsMerged} manual records moved to UID ${result.uid}.`
+      : undefined,
+    result.manualRecordsMatched > 0
+      ? `${result.manualRecordsMatched} manual records matched with game history.`
+      : undefined,
     `${result.pagesFetched} pages fetched for UID ${result.uid}.`,
     result.endpointHost ? `Endpoint: ${result.endpointHost}` : undefined,
   ]

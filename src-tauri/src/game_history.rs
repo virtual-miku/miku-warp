@@ -61,6 +61,8 @@ pub struct ImportGameHistoryResult {
     pub records_skipped: usize,
     pub duplicate_records: usize,
     pub banner_count: usize,
+    pub manual_records_merged: usize,
+    pub manual_records_matched: usize,
     pub pages_fetched: usize,
     pub source_cache_path: String,
     pub endpoint_host: Option<String>,

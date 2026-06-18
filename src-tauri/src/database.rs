@@ -105,6 +105,7 @@ pub struct SaveManualImportDraftResult {
 #[derive(Debug)]
 pub struct SaveGameHistoryImportInput {
     pub account: ManualImportAccountInput,
+    pub merge_from_account_id: Option<String>,
     pub records_found: usize,
     pub source_cache_path: Option<String>,
     pub source_endpoint_host: Option<String>,
@@ -131,6 +132,8 @@ pub struct SaveGameHistoryImportResult {
     pub records_skipped: usize,
     pub duplicate_records: usize,
     pub banner_count: usize,
+    pub manual_records_merged: usize,
+    pub manual_records_matched: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -139,6 +142,16 @@ pub struct ListWarpPullsInput {
     pub account_id: String,
     pub banner_type: Option<String>,
     pub limit: Option<usize>,
+    pub offset: Option<usize>,
+    pub search: Option<String>,
+    pub rarity: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListWarpPullsResult {
+    pub pulls: Vec<WarpPullRow>,
+    pub total: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -309,6 +322,24 @@ struct ExistingWarpItem {
 struct WarpPullPityCandidate {
     id: String,
     rarity: i64,
+}
+
+#[derive(Default)]
+struct AccountHistoryMergeResult {
+    moved_pull_count: usize,
+    matched_game_history_count: usize,
+    affected_banner_ids: HashSet<String>,
+}
+
+struct GameHistoryDuplicateCandidate {
+    id: String,
+    banner_id: String,
+    warp_item_id: String,
+    pulled_at: String,
+    pulled_at_timezone: Option<String>,
+    gacha_id: String,
+    sequence_in_timestamp_group: i64,
+    raw_item_name: Option<String>,
 }
 
 struct WarpBannerSummaryCandidate {
@@ -497,7 +528,7 @@ pub fn save_game_history_import(
 pub fn list_warp_pulls(
     app: &AppHandle,
     query: ListWarpPullsInput,
-) -> Result<Vec<WarpPullRow>, String> {
+) -> Result<ListWarpPullsResult, String> {
     let database_path = resolve_database_path(app)?;
     let connection = open_database(&database_path)?;
 
@@ -901,9 +932,15 @@ fn save_game_history_import_to_database(
         .map_err(|error| format!("Failed to start game history import transaction: {error}"))?;
 
     upsert_account(&transaction, &input.account)?;
+    let account_merge_result = merge_source_account_history(
+        &transaction,
+        input.merge_from_account_id.as_deref(),
+        &input.account.id,
+    )?;
+    let mut affected_banner_ids = account_merge_result.affected_banner_ids.clone();
 
     for banner_type in &banner_types {
-        ensure_banner(&transaction, banner_type)?;
+        affected_banner_ids.insert(ensure_banner(&transaction, banner_type)?);
     }
 
     insert_import_batch(
@@ -917,6 +954,7 @@ fn save_game_history_import_to_database(
 
     let mut records_inserted = 0;
     let mut duplicate_records = 0;
+    let mut manual_records_matched = account_merge_result.matched_game_history_count;
 
     {
         let mut insert_pull_statement = transaction
@@ -935,6 +973,41 @@ fn save_game_history_import_to_database(
         for (index, pull) in input.pulls.iter().enumerate() {
             let banner_id = banner_id_for_type(&pull.banner_type);
             let warp_item_id = warp_item_id_for_game_history_pull(&transaction, pull)?;
+            let game_pull = GameHistoryDuplicateCandidate {
+                id: String::new(),
+                banner_id: banner_id.to_string(),
+                warp_item_id: warp_item_id.clone(),
+                pulled_at: pull.pulled_at.clone(),
+                pulled_at_timezone: pull.pulled_at_timezone.clone(),
+                gacha_id: pull.gacha_id.clone(),
+                sequence_in_timestamp_group: pull.sequence_in_timestamp_group,
+                raw_item_name: Some(pull.raw_item_name.clone()),
+            };
+
+            if game_history_gacha_exists(
+                &transaction,
+                &input.account.id,
+                &banner_id,
+                &pull.gacha_id,
+            )? {
+                duplicate_records += 1;
+                continue;
+            }
+
+            if let Some(manual_pull_id) = find_nearest_manual_pull_for_game_history(
+                &transaction,
+                &input.account.id,
+                &banner_id,
+                &pull.pulled_at,
+                pull.sequence_in_timestamp_group,
+            )? {
+                enrich_manual_pull_with_game_history(&transaction, &manual_pull_id, &game_pull)?;
+                duplicate_records += 1;
+                manual_records_matched += 1;
+                affected_banner_ids.insert(banner_id.to_string());
+                continue;
+            }
+
             let pull_id = game_history_pull_id(&input.account.id, &banner_id, &pull.gacha_id);
             let source_line_number = i64::try_from(index + 1)
                 .map_err(|error| format!("Game history import is too large: {error}"))?;
@@ -961,6 +1034,7 @@ fn save_game_history_import_to_database(
 
             if affected_rows == 1 {
                 records_inserted += 1;
+                affected_banner_ids.insert(banner_id.to_string());
             } else {
                 duplicate_records += 1;
             }
@@ -968,8 +1042,7 @@ fn save_game_history_import_to_database(
     }
 
     let records_skipped = input.records_found.saturating_sub(input.pulls.len()) + duplicate_records;
-    for banner_type in &banner_types {
-        let banner_id = banner_id_for_type(banner_type);
+    for banner_id in &affected_banner_ids {
         recompute_pity_for_account_banner(&transaction, &input.account.id, &banner_id)?;
     }
 
@@ -993,93 +1066,79 @@ fn save_game_history_import_to_database(
         records_skipped,
         duplicate_records,
         banner_count: banner_types.len(),
+        manual_records_merged: account_merge_result.moved_pull_count,
+        manual_records_matched,
     })
 }
 
 fn list_warp_pulls_from_database(
     connection: &Connection,
     query: &ListWarpPullsInput,
-) -> Result<Vec<WarpPullRow>, String> {
+) -> Result<ListWarpPullsResult, String> {
     validate_list_warp_pulls_query(query)?;
-
-    if let Some(banner_type) = &query.banner_type {
-        banner_label(banner_type)?;
-
-        let mut statement = connection
-            .prepare(
-                "SELECT id, banner_type, item_name, item_type, rarity, pulled_at, source,
-                        pity_4, pity_5, sequence_in_timestamp_group
-                 FROM (
-                   SELECT
-                     wp.id,
-                     b.banner_type,
-                     wi.name AS item_name,
-                     wi.item_type,
-                     wi.rarity,
-                     wp.pulled_at,
-                     wp.source,
-                     wp.pity_4,
-                     wp.pity_5,
-                     wp.sequence_in_timestamp_group
-                   FROM warp_pulls wp
-                   INNER JOIN banners b ON b.id = wp.banner_id
-                   INNER JOIN warp_items wi ON wi.id = wp.warp_item_id
-                   WHERE wp.account_id = ?1 AND b.banner_type = ?2
-                   ORDER BY wp.pulled_at DESC, wp.sequence_in_timestamp_group DESC, wp.id DESC
-                   LIMIT ?3
-                 )
-                 ORDER BY pulled_at ASC, sequence_in_timestamp_group ASC, id ASC",
-            )
-            .map_err(|error| format!("Failed to prepare warp pull query: {error}"))?;
-
-        let rows = statement
-            .query_map(
-                params![&query.account_id, banner_type, query_limit(query) as i64],
-                map_warp_pull_row,
-            )
-            .map_err(|error| format!("Failed to query warp pulls: {error}"))?;
-
-        return rows
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| format!("Failed to decode warp pull rows: {error}"));
-    }
+    let search = normalized_search_filter(query.search.as_deref());
+    let search_param = search.as_deref();
+    let limit = query_limit(query) as i64;
+    let offset = query_offset(query) as i64;
+    let total = connection
+        .query_row(
+            "SELECT COUNT(*)
+             FROM warp_pulls wp
+             INNER JOIN banners b ON b.id = wp.banner_id
+             INNER JOIN warp_items wi ON wi.id = wp.warp_item_id
+             WHERE wp.account_id = ?1
+               AND (?2 IS NULL OR b.banner_type = ?2)
+               AND (?3 IS NULL OR lower(wi.name) LIKE '%' || lower(?3) || '%')
+               AND (?4 IS NULL OR wi.rarity = ?4)",
+            params![
+                &query.account_id,
+                query.banner_type.as_deref(),
+                search_param,
+                query.rarity,
+            ],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|error| format!("Failed to count warp pulls: {error}"))?;
 
     let mut statement = connection
         .prepare(
-            "SELECT id, banner_type, item_name, item_type, rarity, pulled_at, source,
-                    pity_4, pity_5, sequence_in_timestamp_group
-             FROM (
-               SELECT
-                 wp.id,
-                 b.banner_type,
-                 wi.name AS item_name,
-                 wi.item_type,
-                 wi.rarity,
-                 wp.pulled_at,
-                 wp.source,
-                 wp.pity_4,
-                 wp.pity_5,
-                 wp.sequence_in_timestamp_group
-               FROM warp_pulls wp
-               INNER JOIN banners b ON b.id = wp.banner_id
-               INNER JOIN warp_items wi ON wi.id = wp.warp_item_id
-               WHERE wp.account_id = ?1
-               ORDER BY wp.pulled_at DESC, wp.sequence_in_timestamp_group DESC, wp.id DESC
-               LIMIT ?2
-             )
-             ORDER BY pulled_at ASC, sequence_in_timestamp_group ASC, id ASC",
+            "SELECT wp.id, b.banner_type, wi.name, wi.item_type, wi.rarity,
+                    wp.pulled_at, wp.source, wp.pity_4, wp.pity_5,
+                    wp.sequence_in_timestamp_group
+             FROM warp_pulls wp
+             INNER JOIN banners b ON b.id = wp.banner_id
+             INNER JOIN warp_items wi ON wi.id = wp.warp_item_id
+             WHERE wp.account_id = ?1
+               AND (?2 IS NULL OR b.banner_type = ?2)
+               AND (?3 IS NULL OR lower(wi.name) LIKE '%' || lower(?3) || '%')
+               AND (?4 IS NULL OR wi.rarity = ?4)
+             ORDER BY wp.pulled_at DESC, wp.sequence_in_timestamp_group DESC, wp.id DESC
+             LIMIT ?5 OFFSET ?6",
         )
         .map_err(|error| format!("Failed to prepare warp pull query: {error}"))?;
 
     let rows = statement
         .query_map(
-            params![&query.account_id, query_limit(query) as i64],
+            params![
+                &query.account_id,
+                query.banner_type.as_deref(),
+                search_param,
+                query.rarity,
+                limit,
+                offset,
+            ],
             map_warp_pull_row,
         )
         .map_err(|error| format!("Failed to query warp pulls: {error}"))?;
 
-    rows.collect::<Result<Vec<_>, _>>()
-        .map_err(|error| format!("Failed to decode warp pull rows: {error}"))
+    let pulls = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Failed to decode warp pull rows: {error}"))?;
+
+    Ok(ListWarpPullsResult {
+        pulls,
+        total: usize::try_from(total).unwrap_or(0),
+    })
 }
 
 fn list_warp_banner_summaries_from_database(
@@ -2060,6 +2119,10 @@ fn validate_list_warp_pulls_query(query: &ListWarpPullsInput) -> Result<(), Stri
         return Err("Warp pull query limit must be greater than zero.".to_string());
     }
 
+    if matches!(query.rarity, Some(rarity) if !matches!(rarity, 3 | 4 | 5)) {
+        return Err("Warp pull query rarity must be 3, 4, or 5.".to_string());
+    }
+
     Ok(())
 }
 
@@ -2074,7 +2137,18 @@ fn validate_list_warp_banner_summaries_query(
 }
 
 fn query_limit(query: &ListWarpPullsInput) -> usize {
-    query.limit.unwrap_or(100).clamp(1, 500)
+    query.limit.unwrap_or(5).clamp(1, 500)
+}
+
+fn query_offset(query: &ListWarpPullsInput) -> usize {
+    query.offset.unwrap_or(0).min(100_000)
+}
+
+fn normalized_search_filter(value: Option<&str>) -> Option<String> {
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| value.chars().take(80).collect())
 }
 
 fn map_warp_pull_row(row: &Row<'_>) -> rusqlite::Result<WarpPullRow> {
@@ -2341,6 +2415,228 @@ fn upsert_account(
         .map_err(|error| format!("Failed to upsert account {}: {error}", account.id))?;
 
     Ok(())
+}
+
+fn merge_source_account_history(
+    transaction: &Transaction<'_>,
+    source_account_id: Option<&str>,
+    target_account_id: &str,
+) -> Result<AccountHistoryMergeResult, String> {
+    let Some(source_account_id) = source_account_id
+        .map(str::trim)
+        .filter(|source_account_id| !source_account_id.is_empty())
+    else {
+        return Ok(AccountHistoryMergeResult::default());
+    };
+
+    if source_account_id == target_account_id {
+        return Ok(AccountHistoryMergeResult::default());
+    }
+
+    let source_exists = transaction
+        .query_row(
+            "SELECT 1 FROM accounts WHERE id = ?1",
+            params![source_account_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()
+        .map_err(|error| format!("Failed to check source account {source_account_id}: {error}"))?;
+
+    if source_exists.is_none() {
+        return Ok(AccountHistoryMergeResult::default());
+    }
+
+    let mut merge_result = AccountHistoryMergeResult::default();
+
+    for game_pull in game_history_pulls_for_account(transaction, target_account_id)? {
+        if let Some(manual_pull_id) = find_nearest_manual_pull_for_game_history(
+            transaction,
+            source_account_id,
+            &game_pull.banner_id,
+            &game_pull.pulled_at,
+            game_pull.sequence_in_timestamp_group,
+        )? {
+            enrich_manual_pull_with_game_history(transaction, &manual_pull_id, &game_pull)?;
+            transaction
+                .execute(
+                    "DELETE FROM warp_pulls WHERE id = ?1",
+                    params![&game_pull.id],
+                )
+                .map_err(|error| {
+                    format!(
+                        "Failed to remove duplicate game history pull {}: {error}",
+                        game_pull.id
+                    )
+                })?;
+            merge_result
+                .affected_banner_ids
+                .insert(game_pull.banner_id.clone());
+            merge_result.matched_game_history_count += 1;
+        }
+    }
+
+    for banner_id in banner_ids_for_account(transaction, source_account_id)? {
+        merge_result.affected_banner_ids.insert(banner_id);
+    }
+
+    merge_result.moved_pull_count = transaction
+        .execute(
+            "UPDATE warp_pulls SET account_id = ?1 WHERE account_id = ?2",
+            params![target_account_id, source_account_id],
+        )
+        .map_err(|error| {
+            format!(
+                "Failed to move pulls from account {source_account_id} to {target_account_id}: {error}"
+            )
+        })?;
+
+    transaction
+        .execute(
+            "UPDATE import_batches SET account_id = ?1 WHERE account_id = ?2",
+            params![target_account_id, source_account_id],
+        )
+        .map_err(|error| {
+            format!(
+                "Failed to move import batches from account {source_account_id} to {target_account_id}: {error}"
+            )
+        })?;
+
+    transaction
+        .execute(
+            "DELETE FROM accounts WHERE id = ?1",
+            params![source_account_id],
+        )
+        .map_err(|error| format!("Failed to remove merged account {source_account_id}: {error}"))?;
+
+    Ok(merge_result)
+}
+
+fn game_history_pulls_for_account(
+    transaction: &Transaction<'_>,
+    account_id: &str,
+) -> Result<Vec<GameHistoryDuplicateCandidate>, String> {
+    let mut statement = transaction
+        .prepare(
+            "SELECT id, banner_id, warp_item_id, pulled_at, pulled_at_timezone, gacha_id,
+                    sequence_in_timestamp_group, raw_item_name
+             FROM warp_pulls
+             WHERE account_id = ?1 AND source = 'game_history' AND gacha_id IS NOT NULL
+             ORDER BY pulled_at ASC, sequence_in_timestamp_group ASC, id ASC",
+        )
+        .map_err(|error| format!("Failed to prepare game history duplicate query: {error}"))?;
+    let rows = statement
+        .query_map(params![account_id], |row| {
+            Ok(GameHistoryDuplicateCandidate {
+                id: row.get(0)?,
+                banner_id: row.get(1)?,
+                warp_item_id: row.get(2)?,
+                pulled_at: row.get(3)?,
+                pulled_at_timezone: row.get(4)?,
+                gacha_id: row.get(5)?,
+                sequence_in_timestamp_group: row.get(6)?,
+                raw_item_name: row.get(7)?,
+            })
+        })
+        .map_err(|error| format!("Failed to query game history duplicate rows: {error}"))?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Failed to decode game history duplicate rows: {error}"))
+}
+
+fn find_nearest_manual_pull_for_game_history(
+    transaction: &Transaction<'_>,
+    account_id: &str,
+    banner_id: &str,
+    pulled_at: &str,
+    sequence_in_timestamp_group: i64,
+) -> Result<Option<String>, String> {
+    transaction
+        .query_row(
+            "SELECT id
+             FROM warp_pulls
+             WHERE account_id = ?1
+               AND banner_id = ?2
+               AND source = 'manual'
+               AND gacha_id IS NULL
+               AND sequence_in_timestamp_group = ?3
+               AND ABS(strftime('%s', pulled_at) - strftime('%s', ?4)) <= 7200
+             ORDER BY ABS(strftime('%s', pulled_at) - strftime('%s', ?4)) ASC,
+                      pulled_at ASC,
+                      id ASC
+             LIMIT 1",
+            params![
+                account_id,
+                banner_id,
+                sequence_in_timestamp_group,
+                pulled_at,
+            ],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| format!("Failed to match manual pull for game history: {error}"))
+}
+
+fn enrich_manual_pull_with_game_history(
+    transaction: &Transaction<'_>,
+    manual_pull_id: &str,
+    game_pull: &GameHistoryDuplicateCandidate,
+) -> Result<(), String> {
+    transaction
+        .execute(
+            "UPDATE warp_pulls
+             SET warp_item_id = ?2,
+                 pulled_at = ?3,
+                 pulled_at_timezone = COALESCE(?4, pulled_at_timezone),
+                 gacha_id = ?5,
+                 sequence_in_timestamp_group = ?6,
+                 raw_item_name = COALESCE(?7, raw_item_name)
+             WHERE id = ?1",
+            params![
+                manual_pull_id,
+                &game_pull.warp_item_id,
+                &game_pull.pulled_at,
+                game_pull.pulled_at_timezone.as_deref(),
+                &game_pull.gacha_id,
+                game_pull.sequence_in_timestamp_group,
+                game_pull.raw_item_name.as_deref(),
+            ],
+        )
+        .map_err(|error| format!("Failed to enrich manual pull {manual_pull_id}: {error}"))?;
+
+    Ok(())
+}
+
+fn game_history_gacha_exists(
+    transaction: &Transaction<'_>,
+    account_id: &str,
+    banner_id: &str,
+    gacha_id: &str,
+) -> Result<bool, String> {
+    transaction
+        .query_row(
+            "SELECT 1 FROM warp_pulls
+             WHERE account_id = ?1 AND banner_id = ?2 AND gacha_id = ?3",
+            params![account_id, banner_id, gacha_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .optional()
+        .map(|value| value.is_some())
+        .map_err(|error| format!("Failed to check game history duplicate {gacha_id}: {error}"))
+}
+
+fn banner_ids_for_account(
+    transaction: &Transaction<'_>,
+    account_id: &str,
+) -> Result<Vec<String>, String> {
+    let mut statement = transaction
+        .prepare("SELECT DISTINCT banner_id FROM warp_pulls WHERE account_id = ?1")
+        .map_err(|error| format!("Failed to prepare account banner query: {error}"))?;
+    let rows = statement
+        .query_map(params![account_id], |row| row.get::<_, String>(0))
+        .map_err(|error| format!("Failed to query account banners: {error}"))?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Failed to decode account banners: {error}"))
 }
 
 fn ensure_banner(transaction: &Transaction<'_>, banner_type: &str) -> Result<String, String> {
@@ -2840,9 +3136,13 @@ mod tests {
                 account_id: "account-800000001".to_string(),
                 banner_type: Some("character_event".to_string()),
                 limit: Some(10),
+                offset: None,
+                search: None,
+                rarity: None,
             },
         )
-        .expect("game history pulls can be listed");
+        .expect("game history pulls can be listed")
+        .pulls;
 
         assert_eq!(first.records_found, 2);
         assert_eq!(first.records_inserted, 2);
@@ -2853,9 +3153,72 @@ mod tests {
         assert_eq!(second.duplicate_records, 2);
         assert_eq!(count_table(&connection, "import_batches"), 2);
         assert_eq!(count_table(&connection, "warp_pulls"), 2);
-        assert_eq!(pulls[0].item_name, "Pela");
-        assert_eq!(pulls[0].source, "game_history");
-        assert_eq!(pulls[0].pity_four_at_pull, Some(1));
+        assert_eq!(pulls[1].item_name, "Pela");
+        assert_eq!(pulls[1].source, "game_history");
+        assert_eq!(pulls[1].pity_four_at_pull, Some(1));
+    }
+
+    #[test]
+    fn merges_placeholder_manual_history_into_detected_game_account() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+        upsert_warp_item_catalog(
+            &mut connection,
+            &[
+                catalog_item("character-1001", "1001", "Pela", "character", 4),
+                catalog_item("light-cone-2001", "2001", "Data Bank", "light_cone", 3),
+            ],
+        )
+        .expect("catalog sync");
+
+        save_game_history_import_to_database(&mut connection, &game_history_import())
+            .expect("existing game import");
+        save_manual_import_draft_to_database(&mut connection, &manual_import_draft())
+            .expect("placeholder manual import");
+
+        let mut merged_import = game_history_import();
+        merged_import.merge_from_account_id = Some("account-1".to_string());
+        let result = save_game_history_import_to_database(&mut connection, &merged_import)
+            .expect("merged game import");
+        let pulls = list_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: "account-800000001".to_string(),
+                banner_type: Some("character_event".to_string()),
+                limit: Some(10),
+                offset: None,
+                search: None,
+                rarity: None,
+            },
+        )
+        .expect("merged pulls can be listed")
+        .pulls;
+        let source_account_rows: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM accounts WHERE id = 'account-1'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("source account count");
+        let game_history_rows: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM warp_pulls WHERE account_id = 'account-800000001' AND source = 'game_history'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("game row count");
+
+        assert_eq!(result.records_inserted, 0);
+        assert_eq!(result.duplicate_records, 2);
+        assert_eq!(result.manual_records_merged, 2);
+        assert_eq!(result.manual_records_matched, 2);
+        assert_eq!(source_account_rows, 0);
+        assert_eq!(game_history_rows, 0);
+        assert_eq!(pulls.len(), 2);
+        assert!(pulls.iter().all(|pull| pull.source == "manual"));
+        assert!(pulls
+            .iter()
+            .any(|pull| pull.item_name == "Pela" && pull.pity_four_at_pull == Some(1)));
     }
 
     #[test]
@@ -2892,7 +3255,7 @@ mod tests {
             snapshot["schemaVersion"].as_i64(),
             Some(BACKUP_SCHEMA_VERSION)
         );
-        assert_eq!(snapshot["accounts"][0]["uid"].as_str(), Some("800000001"));
+        assert_eq!(snapshot["accounts"][0]["uid"].as_str(), Some("800000000"));
         assert_eq!(snapshot["warpPulls"].as_array().map(Vec::len), Some(2));
         assert_eq!(snapshots.len(), 1);
         assert_eq!(snapshots[0].warp_pulls, 2);
@@ -2979,9 +3342,13 @@ mod tests {
                 account_id: "account-1".to_string(),
                 banner_type: Some("character_event".to_string()),
                 limit: Some(10),
+                offset: None,
+                search: None,
+                rarity: None,
             },
         )
-        .expect("restored pulls can be listed");
+        .expect("restored pulls can be listed")
+        .pulls;
 
         assert_eq!(first_restore.accounts, 1);
         assert_eq!(first_restore.warp_pulls, 2);
@@ -2993,8 +3360,11 @@ mod tests {
         assert_eq!(count_table(&target_connection, "accounts"), 1);
         assert_eq!(count_table(&target_connection, "import_batches"), 1);
         assert_eq!(count_table(&target_connection, "warp_pulls"), 2);
-        assert_eq!(restored_pulls[0].item_name, "Pela");
-        assert_eq!(restored_pulls[0].pity_four_at_pull, Some(1));
+        let restored_pela = restored_pulls
+            .iter()
+            .find(|pull| pull.item_name == "Pela")
+            .expect("Pela is restored");
+        assert_eq!(restored_pela.pity_four_at_pull, Some(1));
 
         std::fs::remove_dir_all(backup_directory).ok();
     }
@@ -3169,22 +3539,26 @@ mod tests {
                 account_id: "account-1".to_string(),
                 banner_type: Some("character_event".to_string()),
                 limit: Some(10),
+                offset: None,
+                search: None,
+                rarity: None,
             },
         )
-        .expect("saved pulls can be listed");
+        .expect("saved pulls can be listed")
+        .pulls;
 
         assert_eq!(pulls.len(), 2);
         assert_eq!(pulls[0].banner_type, "character_event");
-        assert_eq!(pulls[0].item_name, "Pela");
-        assert_eq!(pulls[0].item_type, "character");
-        assert_eq!(pulls[0].rarity, 4);
+        assert_eq!(pulls[0].item_name, "Data Bank");
+        assert_eq!(pulls[0].item_type, "light_cone");
+        assert_eq!(pulls[0].rarity, 3);
         assert_eq!(pulls[0].source, "manual");
-        assert_eq!(pulls[0].pity_four_at_pull, Some(1));
+        assert_eq!(pulls[0].pity_four_at_pull, None);
         assert_eq!(pulls[0].pity_five_at_pull, None);
-        assert_eq!(pulls[1].item_name, "Data Bank");
-        assert_eq!(pulls[1].item_type, "light_cone");
-        assert_eq!(pulls[1].rarity, 3);
-        assert_eq!(pulls[1].pity_four_at_pull, None);
+        assert_eq!(pulls[1].item_name, "Pela");
+        assert_eq!(pulls[1].item_type, "character");
+        assert_eq!(pulls[1].rarity, 4);
+        assert_eq!(pulls[1].pity_four_at_pull, Some(1));
         assert_eq!(pulls[1].pity_five_at_pull, None);
     }
 
@@ -3280,19 +3654,89 @@ mod tests {
                 account_id: "account-1".to_string(),
                 banner_type: Some("character_event".to_string()),
                 limit: Some(10),
+                offset: None,
+                search: None,
+                rarity: None,
             },
         )
-        .expect("saved pulls can be listed");
+        .expect("saved pulls can be listed")
+        .pulls;
 
-        assert_eq!(pulls[0].item_name, "Data Bank");
-        assert_eq!(pulls[0].pity_four_at_pull, None);
-        assert_eq!(pulls[0].pity_five_at_pull, None);
+        assert_eq!(pulls[2].item_name, "Data Bank");
+        assert_eq!(pulls[2].pity_four_at_pull, None);
+        assert_eq!(pulls[2].pity_five_at_pull, None);
         assert_eq!(pulls[1].item_name, "Pela");
         assert_eq!(pulls[1].pity_four_at_pull, Some(2));
         assert_eq!(pulls[1].pity_five_at_pull, None);
-        assert_eq!(pulls[2].item_name, "Sparkle");
-        assert_eq!(pulls[2].pity_four_at_pull, Some(1));
-        assert_eq!(pulls[2].pity_five_at_pull, Some(3));
+        assert_eq!(pulls[0].item_name, "Sparkle");
+        assert_eq!(pulls[0].pity_four_at_pull, Some(1));
+        assert_eq!(pulls[0].pity_five_at_pull, Some(3));
+    }
+
+    #[test]
+    fn paginates_and_filters_warp_pull_history() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+        upsert_warp_item_catalog(
+            &mut connection,
+            &[
+                catalog_item("light-cone-2001", "2001", "Data Bank", "light_cone", 3),
+                catalog_item("character-1001", "1001", "Pela", "character", 4),
+                catalog_item("character-1002", "1002", "Sparkle", "character", 5),
+            ],
+        )
+        .expect("catalog sync");
+        let draft = manual_import_draft_with_pulls(vec![
+            manual_import_pull("character_event", "light-cone-2001", "Data Bank", 1),
+            manual_import_pull("character_event", "character-1001", "Pela", 2),
+            manual_import_pull("character_event", "character-1002", "Sparkle", 3),
+        ]);
+        save_manual_import_draft_to_database(&mut connection, &draft).expect("manual import");
+
+        let first_page = list_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: "account-1".to_string(),
+                banner_type: Some("character_event".to_string()),
+                limit: Some(2),
+                offset: Some(0),
+                search: None,
+                rarity: None,
+            },
+        )
+        .expect("first page");
+        let second_page = list_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: "account-1".to_string(),
+                banner_type: Some("character_event".to_string()),
+                limit: Some(2),
+                offset: Some(2),
+                search: None,
+                rarity: None,
+            },
+        )
+        .expect("second page");
+        let filtered = list_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: "account-1".to_string(),
+                banner_type: Some("character_event".to_string()),
+                limit: Some(5),
+                offset: Some(0),
+                search: Some("pela".to_string()),
+                rarity: Some(4),
+            },
+        )
+        .expect("filtered page");
+
+        assert_eq!(first_page.total, 3);
+        assert_eq!(first_page.pulls.len(), 2);
+        assert_eq!(first_page.pulls[0].item_name, "Sparkle");
+        assert_eq!(second_page.pulls.len(), 1);
+        assert_eq!(second_page.pulls[0].item_name, "Data Bank");
+        assert_eq!(filtered.total, 1);
+        assert_eq!(filtered.pulls[0].item_name, "Pela");
     }
 
     #[test]
@@ -3306,6 +3750,9 @@ mod tests {
                 account_id: " ".to_string(),
                 banner_type: None,
                 limit: Some(10),
+                offset: None,
+                search: None,
+                rarity: None,
             },
         );
         let zero_limit_result = list_warp_pulls_from_database(
@@ -3314,6 +3761,9 @@ mod tests {
                 account_id: "account-1".to_string(),
                 banner_type: None,
                 limit: Some(0),
+                offset: None,
+                search: None,
+                rarity: None,
             },
         );
         let unsupported_banner_result = list_warp_pulls_from_database(
@@ -3322,6 +3772,9 @@ mod tests {
                 account_id: "account-1".to_string(),
                 banner_type: Some("unknown".to_string()),
                 limit: Some(10),
+                offset: None,
+                search: None,
+                rarity: None,
             },
         );
 
@@ -3380,7 +3833,7 @@ mod tests {
         SaveManualImportDraftInput {
             account: ManualImportAccountInput {
                 id: "account-1".to_string(),
-                uid: "800000001".to_string(),
+                uid: "800000000".to_string(),
                 region: Some("asia".to_string()),
                 nickname: Some("Saki".to_string()),
             },
@@ -3418,6 +3871,7 @@ mod tests {
                 region: Some("asia".to_string()),
                 nickname: Some("Saki".to_string()),
             },
+            merge_from_account_id: None,
             records_found: 2,
             source_cache_path: Some(
                 "C:\\Games\\StarRail_Data\\webCaches\\Cache_Data\\data_2".to_string(),
@@ -3437,8 +3891,8 @@ mod tests {
                     "2001",
                     "game-gacha-2",
                     "Data Bank",
-                    "2025-07-11T11:20:02",
-                    1,
+                    "2025-07-11T11:20:01",
+                    2,
                 ),
             ],
         }

@@ -41,6 +41,8 @@ export type ImportGameHistoryResult = {
   recordsSkipped: number
   duplicateRecords: number
   bannerCount: number
+  manualRecordsMerged: number
+  manualRecordsMatched: number
   pagesFetched: number
   sourceCachePath: string
   endpointHost?: string

@@ -19,6 +19,15 @@ export function BannerSummaryGrid({
   const summaryByBanner = new Map(
     summaries.map((summary) => [summary.bannerType, summary]),
   )
+  const visibleBanners = bannerDefinitions.filter((banner) => {
+    const summary = summaryByBanner.get(banner.type)
+
+    return (
+      banner.type !== 'departure' ||
+      banner.type === activeBannerType ||
+      (summary?.totalPulls ?? 0) > 0
+    )
+  })
 
   return (
     <section className="banner-summary-panel" aria-label="Banner summary">
@@ -27,7 +36,7 @@ export function BannerSummaryGrid({
         <span>{summaries.length} active banners</span>
       </header>
       <div className="banner-summary-grid">
-        {bannerDefinitions.map((banner) => {
+        {visibleBanners.map((banner) => {
           const summary = summaryByBanner.get(banner.type)
           const isActive = activeBannerType === banner.type
 
