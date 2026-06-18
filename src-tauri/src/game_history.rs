@@ -13,6 +13,7 @@ const CACHE_FILE_NAME: &str = "data_2";
 const MAX_CACHE_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_SCAN_DEPTH: usize = 8;
 const MAX_CACHE_FILES: usize = 24;
+const ACTIVE_CACHE_FILES_TO_CHECK: usize = 1;
 const DEFAULT_MAX_PAGES_PER_BANNER: usize = 50;
 const MAX_PAGES_PER_BANNER: usize = 200;
 const GAME_HISTORY_PAGE_SIZE: usize = 20;
@@ -171,7 +172,7 @@ fn scan_game_history_source_from_roots(
     let cache_files = find_cache_files(&candidate_roots);
     let mut cache_files_checked = 0;
 
-    for cache_file in cache_files.iter().take(MAX_CACHE_FILES) {
+    for cache_file in cache_files.iter().take(ACTIVE_CACHE_FILES_TO_CHECK) {
         cache_files_checked += 1;
 
         if !is_scan_safe_cache_file(cache_file) {
@@ -234,7 +235,7 @@ fn find_game_history_source(game_path: Option<&str>) -> Result<GameHistorySource
     let candidate_roots = candidate_game_roots(game_path);
     let cache_files = find_cache_files(&candidate_roots);
 
-    for cache_file in cache_files.iter().take(MAX_CACHE_FILES) {
+    for cache_file in cache_files.iter().take(ACTIVE_CACHE_FILES_TO_CHECK) {
         if !is_scan_safe_cache_file(cache_file) {
             continue;
         }
@@ -342,13 +343,19 @@ fn fetch_gacha_log_page(url: &str) -> Result<Vec<GachaLogRecord>, String> {
         .map_err(|error| format!("Failed to decode game history response: {error}"))?;
 
     if payload.retcode != 0 {
-        return Err(format!(
-            "Game history endpoint returned {}: {}",
-            payload.retcode, payload.message
-        ));
+        return Err(format_gacha_log_error(payload.retcode, &payload.message));
     }
 
     Ok(payload.data.map(|data| data.list).unwrap_or_default())
+}
+
+fn format_gacha_log_error(retcode: i64, message: &str) -> String {
+    if retcode == -101 || message.to_ascii_lowercase().contains("authkey timeout") {
+        return "Game history authorization expired (-101). Open Warp > View Details > Records in Honkai: Star Rail, wait until the records finish loading, then return here and press Scan before Import."
+            .to_string();
+    }
+
+    format!("Game history endpoint returned {retcode}: {message}")
 }
 
 fn build_gacha_log_url(
@@ -512,7 +519,19 @@ fn find_cache_files(roots: &[PathBuf]) -> Vec<PathBuf> {
         }
     }
 
+    cache_files.sort_by(|left, right| {
+        cache_modified_at(right)
+            .cmp(&cache_modified_at(left))
+            .then_with(|| right.cmp(left))
+    });
+
     cache_files
+}
+
+fn cache_modified_at(path: &Path) -> Option<std::time::SystemTime> {
+    fs::metadata(path)
+        .ok()
+        .and_then(|metadata| metadata.modified().ok())
 }
 
 fn find_cache_files_in(
@@ -573,6 +592,8 @@ fn is_scan_safe_cache_file(path: &Path) -> bool {
 }
 
 fn extract_history_url(text: &str) -> Option<String> {
+    let mut latest_url = None;
+
     for (marker_index, _) in text.match_indices(HISTORY_URL_MARKER) {
         let Some(start) = text[..marker_index].rfind("https://") else {
             continue;
@@ -582,11 +603,11 @@ fn extract_history_url(text: &str) -> Option<String> {
         let url = &tail[..end];
 
         if url.contains(AUTHKEY_MARKER) {
-            return Some(url.to_string());
+            latest_url = Some(url.to_string());
         }
     }
 
-    None
+    latest_url
 }
 
 fn is_url_delimiter(character: char) -> bool {
@@ -651,6 +672,31 @@ mod tests {
             url,
             "https://example.test/getGachaLog?authkey=abc123&lang=en-us"
         );
+    }
+
+    #[test]
+    fn selects_last_history_url_from_active_cache() {
+        let text = concat!(
+            "https://example.test/getGachaLog?authkey=expired-key&lang=en-us ",
+            "cached response data ",
+            "https://example.test/getGachaLog?authkey=current-key&lang=en-us"
+        );
+
+        let url = extract_history_url(text).expect("latest history url");
+
+        assert_eq!(
+            url,
+            "https://example.test/getGachaLog?authkey=current-key&lang=en-us"
+        );
+    }
+
+    #[test]
+    fn explains_how_to_refresh_expired_game_authorization() {
+        let error = format_gacha_log_error(-101, "authkey timeout");
+
+        assert!(error.contains("authorization expired"));
+        assert!(error.contains("View Details > Records"));
+        assert!(!error.contains("authkey timeout"));
     }
 
     #[test]
