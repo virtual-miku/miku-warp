@@ -272,6 +272,7 @@ pub struct WarpPullRow {
     pub item_name: String,
     pub item_type: String,
     pub rarity: i64,
+    pub icon_path: Option<String>,
     pub pulled_at: String,
     pub source: String,
     pub pity_four_at_pull: Option<i64>,
@@ -1103,7 +1104,7 @@ fn list_warp_pulls_from_database(
     let mut statement = connection
         .prepare(
             "SELECT wp.id, b.banner_type, wi.name, wi.item_type, wi.rarity,
-                    wp.pulled_at, wp.source, wp.pity_4, wp.pity_5,
+                    wi.icon_path, wp.pulled_at, wp.source, wp.pity_4, wp.pity_5,
                     wp.sequence_in_timestamp_group
              FROM warp_pulls wp
              INNER JOIN banners b ON b.id = wp.banner_id
@@ -2158,10 +2159,11 @@ fn map_warp_pull_row(row: &Row<'_>) -> rusqlite::Result<WarpPullRow> {
         item_name: row.get(2)?,
         item_type: row.get(3)?,
         rarity: row.get(4)?,
-        pulled_at: row.get(5)?,
-        source: row.get(6)?,
-        pity_four_at_pull: row.get(7)?,
-        pity_five_at_pull: row.get(8)?,
+        icon_path: row.get(5)?,
+        pulled_at: row.get(6)?,
+        source: row.get(7)?,
+        pity_four_at_pull: row.get(8)?,
+        pity_five_at_pull: row.get(9)?,
     })
 }
 

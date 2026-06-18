@@ -12,9 +12,9 @@ export type WarpPull = {
   itemName: string
   itemType: WarpItemType
   rarity: Rarity
+  iconPath?: string
   pulledAt: string
   source: WarpPullSource
   pityFourAtPull?: number
   pityFiveAtPull?: number
 }
-

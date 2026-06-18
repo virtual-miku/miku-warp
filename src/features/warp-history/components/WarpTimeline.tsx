@@ -1,4 +1,7 @@
+import { useMemo, useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { getCatalogAssetUrl } from '../data/catalog-assets'
+import { itemCatalog } from '../data/item-catalog'
 import type { WarpPull } from '../domain/warp-pull'
 
 type WarpTimelineProps = {
@@ -67,26 +70,7 @@ export function WarpTimeline({
       </div>
       <div className="warp-list">
         {pulls.length > 0 ? (
-          pulls.map((pull) => (
-            <article className="warp-row" key={pull.id}>
-              <div className={`warp-rarity warp-rarity-${pull.rarity}`}>
-                {pull.rarity}
-              </div>
-              <div>
-                <span className="warp-item-name">{pull.itemName}</span>
-                <span className="warp-item-meta">
-                  {formatItemType(pull.itemType)}
-                </span>
-              </div>
-              <time className="warp-time" dateTime={pull.pulledAt}>
-                {formatPullTime(pull.pulledAt)}
-              </time>
-              <div className="warp-pity">
-                <strong>{formatPityAtPull(pull)}</strong>
-                <span>{formatSource(pull.source)}</span>
-              </div>
-            </article>
-          ))
+          pulls.map((pull) => <WarpHistoryRow key={pull.id} pull={pull} />)
         ) : (
           <div className="warp-empty">
             <strong>
@@ -126,6 +110,67 @@ export function WarpTimeline({
         </div>
       </footer>
     </section>
+  )
+}
+
+function WarpHistoryRow({ pull }: { pull: WarpPull }) {
+  const catalogItem = useMemo(
+    () =>
+      itemCatalog.find(
+        (item) =>
+          item.name === pull.itemName &&
+          item.itemType === pull.itemType &&
+          item.rarity === pull.rarity,
+      ),
+    [pull.itemName, pull.itemType, pull.rarity],
+  )
+
+  return (
+    <article className="warp-row">
+      <WarpHistoryItemIcon
+        iconPath={pull.iconPath ?? catalogItem?.iconPath}
+        rarity={pull.rarity}
+      />
+      <div>
+        <span className={`warp-item-name warp-item-name-${pull.rarity}`}>
+          {pull.itemName}
+        </span>
+        <span className="warp-item-meta">{formatItemType(pull.itemType)}</span>
+      </div>
+      <time className="warp-time" dateTime={pull.pulledAt}>
+        {formatPullTime(pull.pulledAt)}
+      </time>
+      <div className="warp-pity">
+        <strong>{formatPityAtPull(pull)}</strong>
+        <span>{formatSource(pull.source)}</span>
+      </div>
+    </article>
+  )
+}
+
+function WarpHistoryItemIcon({
+  iconPath,
+  rarity,
+}: {
+  iconPath?: string
+  rarity: WarpPull['rarity']
+}) {
+  const [hasImageError, setHasImageError] = useState(false)
+  const iconUrl = getCatalogAssetUrl(iconPath)
+
+  return (
+    <div className={`warp-item-icon warp-item-icon-${rarity}`}>
+      {iconUrl && !hasImageError ? (
+        <img
+          alt=""
+          loading="lazy"
+          src={iconUrl}
+          onError={() => setHasImageError(true)}
+        />
+      ) : (
+        <span>{rarity}</span>
+      )}
+    </div>
   )
 }
 

@@ -7,6 +7,7 @@ import {
   Save,
   X,
 } from 'lucide-react'
+import { getCatalogAssetUrl } from '../../warp-history/data/catalog-assets'
 import { itemCatalogMetadata } from '../../warp-history/data/item-catalog'
 import type { ManualImportPreview } from '../domain/manual-note-parser'
 import {
@@ -383,18 +384,6 @@ function ManualPreviewItemIcon({ pull }: { pull: ManualImportPreviewRow }) {
       )}
     </div>
   )
-}
-
-function getCatalogAssetUrl(path?: string) {
-  if (!path) {
-    return undefined
-  }
-
-  if (/^https?:\/\//.test(path)) {
-    return path
-  }
-
-  return `/${path.replace(/^\/+/, '')}`
 }
 
 function formatPreviewPity(pull: ManualImportPreviewRow) {
