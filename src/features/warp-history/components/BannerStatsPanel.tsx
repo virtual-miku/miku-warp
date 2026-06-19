@@ -90,5 +90,5 @@ function formatAveragePity(
     return '-'
   }
 
-  return `Pity ${(total / count).toFixed(1)}`
+  return `Pity ${Math.round(total / count)}`
 }
