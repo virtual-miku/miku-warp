@@ -283,7 +283,7 @@ fn cloud_backup_status(
             false,
             true,
             true,
-            "Token stored securely",
+            "Connected",
             "Google Drive is connected. Local snapshots can be uploaded to the app data folder.".to_string(),
         ),
         Ok(None) => create_status(
@@ -294,7 +294,7 @@ fn cloud_backup_status(
             false,
             false,
             "Not connected",
-            "Secure token storage is ready. The next step is the Google OAuth connect flow.".to_string(),
+            String::new(),
         ),
     }
 }
@@ -510,26 +510,31 @@ fn complete_google_oauth_flow(
     webbrowser::open(&authorization_url)
         .map_err(|error| format!("Failed to open system browser for Google OAuth: {error}"))?;
 
-    let authorization_code = wait_for_authorization_code(listener, &state)?;
-    let token_response = exchange_authorization_code(
-        client_id,
-        &redirect_uri,
-        &code_verifier,
-        &authorization_code,
-    )?;
-    let refresh_token = token_response.refresh_token.ok_or_else(|| {
-        "Google did not return a refresh token. Try disconnecting the app from your Google account, then connect again.".to_string()
-    })?;
+    wait_for_authorization_code(listener, &state, |authorization_code| {
+        let token_response = exchange_authorization_code(
+            client_id,
+            &redirect_uri,
+            &code_verifier,
+            &authorization_code,
+        )?;
+        let refresh_token = token_response.refresh_token.ok_or_else(|| {
+            "Google did not return a refresh token. Try disconnecting the app from your Google account, then connect again.".to_string()
+        })?;
 
-    secret_store
-        .write_secret(GOOGLE_DRIVE_REFRESH_TOKEN_KEY, &refresh_token)
-        .map_err(secret_store_error_message)
+        secret_store
+            .write_secret(GOOGLE_DRIVE_REFRESH_TOKEN_KEY, &refresh_token)
+            .map_err(secret_store_error_message)
+    })
 }
 
-fn wait_for_authorization_code(
+fn wait_for_authorization_code<F>(
     listener: TcpListener,
     expected_state: &str,
-) -> Result<String, String> {
+    mut complete_authorization: F,
+) -> Result<(), String>
+where
+    F: FnMut(String) -> Result<(), String>,
+{
     listener
         .set_nonblocking(true)
         .map_err(|error| format!("Failed to prepare OAuth callback listener: {error}"))?;
@@ -544,13 +549,14 @@ fn wait_for_authorization_code(
                     .read(&mut buffer)
                     .map_err(|error| format!("Failed to read OAuth callback: {error}"))?;
                 let request = String::from_utf8_lossy(&buffer[..bytes_read]);
-                let code_result = parse_oauth_callback_request(&request, expected_state);
-                let response = oauth_callback_response(code_result.is_ok());
+                let flow_result = parse_oauth_callback_request(&request, expected_state)
+                    .and_then(&mut complete_authorization);
+                let response = oauth_callback_response(flow_result.is_ok());
                 stream.write_all(response.as_bytes()).map_err(|error| {
                     format!("Failed to finish OAuth callback response: {error}")
                 })?;
 
-                return code_result;
+                return flow_result;
             }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 std::thread::sleep(Duration::from_millis(100));
@@ -800,6 +806,7 @@ mod tests {
         assert!(status.can_connect);
         assert!(!status.can_disconnect);
         assert_eq!(status.label, "Not connected");
+        assert!(status.detail.is_empty());
     }
 
     #[test]
@@ -815,7 +822,7 @@ mod tests {
             status.connection_status,
             CloudBackupConnectionStatus::Connected
         );
-        assert_eq!(status.label, "Token stored securely");
+        assert_eq!(status.label, "Connected");
         assert!(status.can_disconnect);
         assert!(status.can_upload);
     }
