@@ -93,6 +93,7 @@ import {
   WarpTimeline,
   type TimelineRarityFilter,
 } from '../features/warp-history/components/WarpTimeline'
+import { WarpResultGallery } from '../features/warp-history/components/WarpResultGallery'
 import { itemCatalog } from '../features/warp-history/data/item-catalog'
 import {
   getBannerFilterLabel,
@@ -288,6 +289,16 @@ export function App() {
           }
         : calculatePitySummary(timelinePulls),
     [activeBannerSummary, timelinePulls],
+  )
+  const warpResultRefreshKey = useMemo(
+    () =>
+      bannerSummaries
+        .map(
+          (summary) =>
+            `${summary.bannerType}:${summary.totalPulls}:${summary.lastPullAt ?? ''}:${summary.lastItemName ?? ''}`,
+        )
+        .join('|'),
+    [bannerSummaries],
   )
   const backupDeleting = deletingBackupFileName !== undefined
   const backupRestoring = restoringBackupFileName !== undefined
@@ -1869,10 +1880,9 @@ export function App() {
           {activeView === 'dashboard' ? (
             <>
               <header className="workspace-header">
-            <div>
-              <span className="eyebrow">Selected banner</span>
-              <h1>{getBannerFilterLabel(activeBannerType)}</h1>
-            </div>
+                <div>
+                  <h1>{getBannerFilterLabel(activeBannerType)}</h1>
+                </div>
               </header>
 
               <BannerTabs
@@ -1938,6 +1948,11 @@ export function App() {
                 }}
                 onTogglePullSelection={handleToggleHistoryPullSelection}
               />
+              <WarpResultGallery
+                accountId={activeAccount.id}
+                bannerType={activeBannerType}
+                refreshKey={warpResultRefreshKey}
+              />
             </div>
 
             <aside className="side-column" aria-label="Import and backup">
@@ -2002,7 +2017,6 @@ export function App() {
             <>
               <header className="workspace-header">
                 <div>
-                  <span className="eyebrow">Selected UID</span>
                   <h1>Trash</h1>
                 </div>
               </header>
@@ -2179,10 +2193,10 @@ function formatHistoryDeleteDescription(
   }
 
   if (confirmation.kind === 'selected') {
-    return `${confirmation.totalPulls} selected history items will be moved to Trash for UID ${confirmation.uid}. Their banner pity will be recalculated, and they can be restored for six months.`
+    return `${confirmation.totalPulls} selected history items will be moved to Trash for UID ${confirmation.uid}. Their banner pity will be recalculated, and they can be restored for 6 months.`
   }
 
-  return `All ${confirmation.totalPulls} history records for UID ${confirmation.uid} will be moved to Trash. Other UIDs will not be affected, and these items can be restored for six months.`
+  return `All ${confirmation.totalPulls} history records for UID ${confirmation.uid} will be moved to Trash. Other UIDs will not be affected, and these items can be restored for 6 months.`
 }
 
 function formatBackupConfirmationDescription(

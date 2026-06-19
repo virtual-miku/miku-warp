@@ -17,6 +17,12 @@
   --warning: #b45309;
   --warning-bg: #fff2d5;
   --danger: #b42318;
+  --status-good: #18764d;
+  --status-average: #805c0a;
+  --status-poor: #b42318;
+  --status-good-bg: #23845a;
+  --status-average-bg: #8c6510;
+  --status-poor-bg: #ae4343;
   --rarity-3: #687482;
   --rarity-3-bg: #edf0f2;
   --rarity-4: #7c3bb8;
@@ -86,6 +92,9 @@ button {
     --warning: #f6b94a;
     --warning-bg: #44351a;
     --danger: #ff8a7a;
+    --status-good: #78d6a3;
+    --status-average: #f3cf70;
+    --status-poor: #ff8585;
     --rarity-3: #b7c0c8;
     --rarity-3-bg: #34383c;
     --rarity-4: #d3a5ff;

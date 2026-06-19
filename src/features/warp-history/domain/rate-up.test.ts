@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getNextRateUpChance } from './rate-up'
+import { getNextRateUpChance, getRateUpWinRateTone } from './rate-up'
 
 describe('getNextRateUpChance', () => {
   it('returns the character event base chance after a limited 5-star', () => {
@@ -27,5 +27,12 @@ describe('getNextRateUpChance', () => {
 
   it('does not claim a rate-up chance for Standard', () => {
     expect(getNextRateUpChance('standard', 'Himeko')).toEqual({ detail: '' })
+  })
+
+  it('maps win-rate thirds to clear performance tones', () => {
+    expect(getRateUpWinRateTone(33)).toBe('poor')
+    expect(getRateUpWinRateTone(34)).toBe('average')
+    expect(getRateUpWinRateTone(66)).toBe('average')
+    expect(getRateUpWinRateTone(67)).toBe('good')
   })
 })

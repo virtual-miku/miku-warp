@@ -40,7 +40,7 @@ export function TrashPanel({
       <header className="panel-header">
         <div>
           <h2>Deleted history</h2>
-          <span>Items are removed permanently after six months.</span>
+          <span>Items are removed permanently after 6 months.</span>
         </div>
       </header>
 
@@ -66,7 +66,7 @@ export function TrashPanel({
         ) : (
           <div className="warp-empty">
             <strong>{isLoading ? 'Loading Trash' : 'Trash is empty'}</strong>
-            <span>Deleted warp records will stay here for six months.</span>
+            <span>Deleted warp records will stay here for 6 months.</span>
           </div>
         )}
       </div>

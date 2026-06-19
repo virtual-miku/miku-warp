@@ -387,17 +387,17 @@
 
 .banner-detail-item strong.pity-level-low,
 .warp-pity strong.pity-level-low {
-  color: #78d6a3;
+  color: var(--status-good);
 }
 
 .banner-detail-item strong.pity-level-medium,
 .warp-pity strong.pity-level-medium {
-  color: #f3cf70;
+  color: var(--status-average);
 }
 
 .banner-detail-item strong.pity-level-high,
 .warp-pity strong.pity-level-high {
-  color: #ff8585;
+  color: var(--status-poor);
 }
 
 .banner-detail-detail {
@@ -412,6 +412,122 @@
 .banner-detail-gold {
   color: var(--rarity-5);
   font-weight: 800;
+}
+
+.banner-detail-item strong.rate-up-score-good,
+.rate-up-wins {
+  color: var(--status-good);
+}
+
+.banner-detail-item strong.rate-up-score-average {
+  color: var(--status-average);
+}
+
+.banner-detail-item strong.rate-up-score-poor,
+.rate-up-losses {
+  color: var(--status-poor);
+}
+
+.rate-up-wins,
+.rate-up-losses {
+  font-weight: 800;
+}
+
+.warp-result-gallery {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.warp-result-gallery-body {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  padding: 16px;
+}
+
+.warp-result-grid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(62px, 1fr));
+  gap: 14px 10px;
+}
+
+.warp-result-item {
+  position: relative;
+  width: 58px;
+  height: 58px;
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  overflow: visible;
+  border: 2px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--panel-bg);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.warp-result-item-5 {
+  border-color: color-mix(in srgb, var(--rarity-5) 65%, var(--border));
+}
+
+.warp-result-item-4 {
+  border-color: color-mix(in srgb, var(--rarity-4) 65%, var(--border));
+}
+
+.warp-result-item img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: hidden;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.warp-result-pity {
+  position: absolute;
+  right: -5px;
+  bottom: -3px;
+  min-width: 25px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border: 2px solid var(--surface);
+  border-radius: 10px;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.warp-result-pity.pity-level-low {
+  background: var(--status-good-bg);
+}
+
+.warp-result-pity.pity-level-medium {
+  background: var(--status-average-bg);
+}
+
+.warp-result-pity.pity-level-high {
+  background: var(--status-poor-bg);
+}
+
+.warp-result-empty {
+  min-height: 72px;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.warp-result-expand {
+  border-radius: 50%;
 }
 
 .history-panel,

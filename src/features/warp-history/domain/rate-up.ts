@@ -6,6 +6,20 @@ export type NextRateUpChance = {
   itemName?: string
 }
 
+export type RateUpWinRateTone = 'poor' | 'average' | 'good'
+
+export function getRateUpWinRateTone(winRate: number): RateUpWinRateTone {
+  if (winRate >= 67) {
+    return 'good'
+  }
+
+  if (winRate >= 34) {
+    return 'average'
+  }
+
+  return 'poor'
+}
+
 export function getNextRateUpChance(
   bannerType: BannerType,
   lastFiveStarName?: string,

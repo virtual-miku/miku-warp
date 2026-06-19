@@ -8,6 +8,7 @@ import type { WarpBannerSummary } from '../../persistence/data/warp-pull-history
 import { getPityLevelClass } from '../domain/pity-level'
 import {
   getNextRateUpChance,
+  getRateUpWinRateTone,
   type NextRateUpChance,
 } from '../domain/rate-up'
 
@@ -92,14 +93,30 @@ function RateUpWinRateItem({ summary }: { summary?: WarpBannerSummary }) {
   const wins = summary?.rateUpWins ?? 0
   const losses = summary?.rateUpLosses ?? 0
   const attempts = wins + losses
+  const winRate = attempts > 0 ? Math.round((wins / attempts) * 100) : undefined
 
   return (
     <StatItem
       label="Rate-up win rate"
-      value={attempts > 0 ? `${Math.round((wins / attempts) * 100)}%` : '-'}
+      value={winRate === undefined ? '-' : `${winRate}%`}
+      valueClassName={
+        winRate === undefined
+          ? undefined
+          : `rate-up-score-${getRateUpWinRateTone(winRate)}`
+      }
       detail={
         attempts > 0
-          ? `${wins} ${wins === 1 ? 'win' : 'wins'} · ${losses} ${losses === 1 ? 'loss' : 'losses'}`
+          ? (
+              <>
+                <span className="rate-up-wins">
+                  {wins} {wins === 1 ? 'win' : 'wins'}
+                </span>
+                {' · '}
+                <span className="rate-up-losses">
+                  {losses} {losses === 1 ? 'loss' : 'losses'}
+                </span>
+              </>
+            )
           : 'No recorded rate-up result yet'
       }
     />
