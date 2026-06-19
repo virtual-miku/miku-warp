@@ -14,14 +14,15 @@ Desktop UI for the Honkai: Star Rail warp tracker.
 ## Google Drive backup
 
 Miku Warp uses Google Drive's app data folder for cloud backup. Create an OAuth
-Client ID with application type **Desktop app**. Do not use a Web application
-client, because Google's token endpoint will require a client secret for that
-client type.
+Client ID with application type **Desktop app**. Google may also show a Client
+Secret for that desktop client. If Google requires it during token exchange, set
+the Client Secret alongside the Client ID.
 
 For local development:
 
 ```powershell
 $env:MIKU_WARP_GOOGLE_CLIENT_ID="your-desktop-client-id.apps.googleusercontent.com"
+$env:MIKU_WARP_GOOGLE_CLIENT_SECRET="your-desktop-client-secret"
 npm run desktop
 ```
 
@@ -30,6 +31,7 @@ Client ID is bundled into the desktop app:
 
 ```powershell
 $env:MIKU_WARP_GOOGLE_CLIENT_ID="your-desktop-client-id.apps.googleusercontent.com"
+$env:MIKU_WARP_GOOGLE_CLIENT_SECRET="your-desktop-client-secret"
 npm run desktop:build
 ```
 

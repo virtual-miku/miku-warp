@@ -13,6 +13,10 @@ const GOOGLE_DRIVE_APP_DATA_SCOPE: &str = "https://www.googleapis.com/auth/drive
 const GOOGLE_OAUTH_CLIENT_ID_ENV: &str = "MIKU_WARP_GOOGLE_CLIENT_ID";
 const LEGACY_GOOGLE_OAUTH_CLIENT_ID_ENV: &str = "WARP_TRACKER_GOOGLE_CLIENT_ID";
 const BUNDLED_GOOGLE_OAUTH_CLIENT_ID: Option<&str> = option_env!("MIKU_WARP_GOOGLE_CLIENT_ID");
+const GOOGLE_OAUTH_CLIENT_SECRET_ENV: &str = "MIKU_WARP_GOOGLE_CLIENT_SECRET";
+const LEGACY_GOOGLE_OAUTH_CLIENT_SECRET_ENV: &str = "WARP_TRACKER_GOOGLE_CLIENT_SECRET";
+const BUNDLED_GOOGLE_OAUTH_CLIENT_SECRET: Option<&str> =
+    option_env!("MIKU_WARP_GOOGLE_CLIENT_SECRET");
 const KEYRING_SERVICE_NAME: &str = "app.warptracker.desktop.google-drive";
 const GOOGLE_DRIVE_REFRESH_TOKEN_KEY: &str = "google-drive-refresh-token";
 const GOOGLE_AUTHORIZATION_ENDPOINT: &str = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -126,6 +130,7 @@ pub struct KeyringSecretStore;
 #[derive(Debug, PartialEq, Eq)]
 struct GoogleOAuthClientConfig {
     client_id: Option<String>,
+    client_secret: Option<String>,
 }
 
 impl KeyringSecretStore {
@@ -172,7 +177,11 @@ pub fn connect_google_drive_backup() -> Result<CloudBackupStatus, String> {
         .clone()
         .ok_or_else(google_drive_unavailable_message)?;
 
-    complete_google_oauth_flow(&secret_store, &client_id)?;
+    complete_google_oauth_flow(
+        &secret_store,
+        &client_id,
+        oauth_config.client_secret.as_deref(),
+    )?;
 
     Ok(cloud_backup_status(&secret_store, oauth_config))
 }
@@ -200,7 +209,11 @@ pub fn upload_google_drive_backup_snapshot(
         .client_id
         .as_deref()
         .ok_or_else(google_drive_unavailable_message)?;
-    let access_token = refresh_google_access_token(&secret_store, client_id)?;
+    let access_token = refresh_google_access_token(
+        &secret_store,
+        client_id,
+        oauth_config.client_secret.as_deref(),
+    )?;
     let remote_file = upload_backup_snapshot_to_drive(file_name, bytes, &access_token)?;
     let remote_file_id = remote_file
         .id
@@ -224,7 +237,11 @@ pub fn list_google_drive_backup_snapshots() -> Result<Vec<CloudBackupSnapshotSum
         .client_id
         .as_deref()
         .ok_or_else(google_drive_unavailable_message)?;
-    let access_token = refresh_google_access_token(&secret_store, client_id)?;
+    let access_token = refresh_google_access_token(
+        &secret_store,
+        client_id,
+        oauth_config.client_secret.as_deref(),
+    )?;
 
     list_backup_snapshots_from_drive(&access_token)
 }
@@ -238,7 +255,11 @@ pub fn download_google_drive_backup_snapshot(
         .client_id
         .as_deref()
         .ok_or_else(google_drive_unavailable_message)?;
-    let access_token = refresh_google_access_token(&secret_store, client_id)?;
+    let access_token = refresh_google_access_token(
+        &secret_store,
+        client_id,
+        oauth_config.client_secret.as_deref(),
+    )?;
     let bytes = download_backup_snapshot_from_drive(remote_file_id, &access_token)?;
 
     Ok(DownloadCloudBackupSnapshotResult {
@@ -302,17 +323,24 @@ fn cloud_backup_status(
 fn refresh_google_access_token(
     secret_store: &impl SecretStore,
     client_id: &str,
+    client_secret: Option<&str>,
 ) -> Result<String, String> {
     let refresh_token = secret_store
         .read_secret(GOOGLE_DRIVE_REFRESH_TOKEN_KEY)
         .map_err(secret_store_error_message)?
         .ok_or_else(|| "Connect Google Drive before uploading cloud backups.".to_string())?;
+    let mut form = vec![
+        ("client_id", client_id),
+        ("grant_type", "refresh_token"),
+        ("refresh_token", refresh_token.as_str()),
+    ];
+
+    if let Some(client_secret) = client_secret {
+        form.push(("client_secret", client_secret));
+    }
+
     let token_response = ureq::post(GOOGLE_TOKEN_ENDPOINT)
-        .send_form(&[
-            ("client_id", client_id),
-            ("grant_type", "refresh_token"),
-            ("refresh_token", &refresh_token),
-        ])
+        .send_form(&form)
         .map_err(|error| google_token_request_error("refresh Google Drive access token", error))?
         .into_json::<GoogleTokenResponse>()
         .map_err(|error| format!("Failed to read Google Drive access token response: {error}"))?;
@@ -493,6 +521,7 @@ fn create_drive_multipart_boundary() -> String {
 fn complete_google_oauth_flow(
     secret_store: &impl SecretStore,
     client_id: &str,
+    client_secret: Option<&str>,
 ) -> Result<(), String> {
     let listener = TcpListener::bind("127.0.0.1:0")
         .map_err(|error| format!("Failed to start local OAuth callback listener: {error}"))?;
@@ -513,6 +542,7 @@ fn complete_google_oauth_flow(
     wait_for_authorization_code(listener, &state, |authorization_code| {
         let token_response = exchange_authorization_code(
             client_id,
+            client_secret,
             &redirect_uri,
             &code_verifier,
             &authorization_code,
@@ -572,18 +602,25 @@ where
 
 fn exchange_authorization_code(
     client_id: &str,
+    client_secret: Option<&str>,
     redirect_uri: &str,
     code_verifier: &str,
     authorization_code: &str,
 ) -> Result<GoogleTokenResponse, String> {
+    let mut form = vec![
+        ("client_id", client_id),
+        ("code", authorization_code),
+        ("code_verifier", code_verifier),
+        ("grant_type", "authorization_code"),
+        ("redirect_uri", redirect_uri),
+    ];
+
+    if let Some(client_secret) = client_secret {
+        form.push(("client_secret", client_secret));
+    }
+
     ureq::post(GOOGLE_TOKEN_ENDPOINT)
-        .send_form(&[
-            ("client_id", client_id),
-            ("code", authorization_code),
-            ("code_verifier", code_verifier),
-            ("grant_type", "authorization_code"),
-            ("redirect_uri", redirect_uri),
-        ])
+        .send_form(&form)
         .map_err(|error| google_token_request_error("exchange Google OAuth code", error))?
         .into_json::<GoogleTokenResponse>()
         .map_err(|error| format!("Failed to read Google OAuth token response: {error}"))
@@ -705,7 +742,7 @@ fn humanize_google_token_error(detail: &str) -> String {
         .to_ascii_lowercase()
         .contains("client_secret is missing")
     {
-        return "This Google OAuth client looks like a Web application client. Create a Desktop app OAuth client in Google Cloud Console, then use that Client ID for Miku Warp.".to_string();
+        return "Google requires a Client Secret for this OAuth client. Add the Client Secret from Google Cloud Console to Miku Warp's build or development environment, then reconnect.".to_string();
     }
 
     detail.to_string()
@@ -758,6 +795,7 @@ fn create_status(
 fn read_google_oauth_client_config_from_environment() -> GoogleOAuthClientConfig {
     GoogleOAuthClientConfig {
         client_id: read_google_oauth_client_id_from_environment(),
+        client_secret: read_google_oauth_client_secret_from_environment(),
     }
 }
 
@@ -778,6 +816,26 @@ fn read_google_oauth_client_id_from_environment() -> Option<String> {
         BUNDLED_GOOGLE_OAUTH_CLIENT_ID
             .map(|client_id| client_id.trim().to_string())
             .filter(|client_id| !client_id.is_empty())
+    })
+}
+
+fn read_google_oauth_client_secret_from_environment() -> Option<String> {
+    let runtime_client_secret = [
+        GOOGLE_OAUTH_CLIENT_SECRET_ENV,
+        LEGACY_GOOGLE_OAUTH_CLIENT_SECRET_ENV,
+    ]
+    .into_iter()
+    .find_map(|env_key| {
+        env::var(env_key)
+            .ok()
+            .map(|client_secret| client_secret.trim().to_string())
+            .filter(|client_secret| !client_secret.is_empty())
+    });
+
+    runtime_client_secret.or_else(|| {
+        BUNDLED_GOOGLE_OAUTH_CLIENT_SECRET
+            .map(|client_secret| client_secret.trim().to_string())
+            .filter(|client_secret| !client_secret.is_empty())
     })
 }
 
@@ -948,7 +1006,7 @@ mod tests {
 
         assert_eq!(
             detail,
-            "This Google OAuth client looks like a Web application client. Create a Desktop app OAuth client in Google Cloud Console, then use that Client ID for Miku Warp."
+            "Google requires a Client Secret for this OAuth client. Add the Client Secret from Google Cloud Console to Miku Warp's build or development environment, then reconnect."
         );
     }
 
@@ -1179,6 +1237,7 @@ mod tests {
     fn oauth_config(client_id: Option<&str>) -> GoogleOAuthClientConfig {
         GoogleOAuthClientConfig {
             client_id: client_id.map(ToString::to_string),
+            client_secret: None,
         }
     }
 }
