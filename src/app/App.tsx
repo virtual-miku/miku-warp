@@ -154,6 +154,10 @@ type BackupConfirmation =
       snapshot: BackupSnapshotSummary
     }
   | {
+      kind: 'restore_cloud_snapshot'
+      snapshot: CloudBackupSnapshotInfo
+    }
+  | {
       kind: 'delete_snapshot'
       snapshot: BackupSnapshotSummary
     }
@@ -1588,7 +1592,7 @@ export function App() {
     refreshCloudBackupSnapshots,
   ])
 
-  const handleRestoreGoogleDriveBackup = useCallback(
+  const performRestoreGoogleDriveBackup = useCallback(
     async (snapshot: CloudBackupSnapshotInfo) => {
       if (
         backupDeleting ||
@@ -1602,14 +1606,6 @@ export function App() {
       }
 
       const { remoteFileId } = snapshot
-      const confirmed = window.confirm(
-        'Restore this cloud backup snapshot? Existing matching pulls will be skipped as duplicates.',
-      )
-
-      if (!confirmed) {
-        return
-      }
-
       setRestoringCloudBackupFileId(remoteFileId)
       setBackupNotice(undefined)
 
@@ -1646,6 +1642,31 @@ export function App() {
       refreshAccounts,
       refreshWarpHistory,
       scheduleAutoBackup,
+    ],
+  )
+
+  const handleRestoreGoogleDriveBackup = useCallback(
+    (snapshot: CloudBackupSnapshotInfo) => {
+      if (
+        backupDeleting ||
+        backupExporting ||
+        backupImporting ||
+        backupRestoring ||
+        cloudBackupBusy ||
+        cloudBackupStatus.connectionStatus !== 'connected'
+      ) {
+        return
+      }
+
+      setBackupConfirmation({ kind: 'restore_cloud_snapshot', snapshot })
+    },
+    [
+      backupDeleting,
+      backupExporting,
+      backupImporting,
+      backupRestoring,
+      cloudBackupBusy,
+      cloudBackupStatus.connectionStatus,
     ],
   )
 
@@ -1766,6 +1787,8 @@ export function App() {
 
     if (backupConfirmation.kind === 'restore_snapshot') {
       await performRestoreBackupSnapshot(backupConfirmation.snapshot.fileName)
+    } else if (backupConfirmation.kind === 'restore_cloud_snapshot') {
+      await performRestoreGoogleDriveBackup(backupConfirmation.snapshot)
     } else {
       await performDeleteBackupSnapshot(backupConfirmation.snapshot.fileName)
     }
@@ -1774,6 +1797,7 @@ export function App() {
   }, [
     backupConfirmation,
     performDeleteBackupSnapshot,
+    performRestoreGoogleDriveBackup,
     performRestoreBackupSnapshot,
   ])
 
@@ -2044,14 +2068,10 @@ export function App() {
         danger={backupConfirmation?.kind === 'delete_snapshot'}
         description={formatBackupConfirmationDescription(backupConfirmation)}
         isOpen={backupConfirmation !== undefined}
-        isPending={backupDeleting || backupRestoring}
+        isPending={backupDeleting || backupRestoring || cloudBackupRestoring}
         onCancel={() => setBackupConfirmation(undefined)}
         onConfirm={handleConfirmBackupAction}
-        title={
-          backupConfirmation?.kind === 'delete_snapshot'
-            ? 'Delete this backup?'
-            : 'Restore this backup?'
-        }
+        title={formatBackupConfirmationTitle(backupConfirmation)}
       />
       <ConfirmDialog
         confirmLabel="Restore item"
@@ -2172,6 +2192,10 @@ function formatBackupConfirmationDescription(
     return ''
   }
 
+  if (confirmation.kind === 'restore_cloud_snapshot') {
+    return 'This Google Drive autosave will be restored into the local database. Existing matching pulls will be skipped as duplicates.'
+  }
+
   const uidLabel = formatBackupUidLabel(confirmation.snapshot.uids)
 
   if (confirmation.kind === 'delete_snapshot') {
@@ -2179,6 +2203,20 @@ function formatBackupConfirmationDescription(
   }
 
   return `${confirmation.snapshot.fileName} contains ${uidLabel}. Its history will be merged into the local database, while matching records are skipped.`
+}
+
+function formatBackupConfirmationTitle(
+  confirmation: BackupConfirmation | undefined,
+) {
+  if (confirmation?.kind === 'delete_snapshot') {
+    return 'Delete this backup?'
+  }
+
+  if (confirmation?.kind === 'restore_cloud_snapshot') {
+    return 'Restore cloud backup?'
+  }
+
+  return 'Restore this backup?'
 }
 
 function formatBackupUidLabel(uids: string[]) {

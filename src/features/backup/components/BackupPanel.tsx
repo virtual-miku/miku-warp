@@ -209,12 +209,6 @@ export function BackupPanel({
         </div>
         {isGoogleDriveConnected ? (
           <div className="backup-snapshot-list" aria-label="Cloud backups">
-            <div className="backup-snapshot-row backup-snapshot-row-heading">
-              <div>
-                <strong>Cloud backup</strong>
-                <span>Latest autosave</span>
-              </div>
-            </div>
             {visibleCloudSnapshots.length > 0 ? (
               visibleCloudSnapshots.map((snapshot) => (
                 <div
@@ -222,14 +216,9 @@ export function BackupPanel({
                   key={snapshot.remoteFileId}
                 >
                   <div>
-                    <strong>
-                      {snapshot.remoteModifiedTime
-                        ? formatSnapshotTime(snapshot.remoteModifiedTime)
-                        : 'Time unavailable'}
-                    </strong>
-                    <span title={snapshot.fileName}>
+                    <strong title={snapshot.fileName}>
                       {formatCloudSnapshotSize(snapshot.size)}
-                    </span>
+                    </strong>
                   </div>
                   <div className="backup-snapshot-actions">
                     <AppButton
@@ -258,7 +247,6 @@ export function BackupPanel({
         <div className="tool-row">
           <div>
             <strong>Local backup</strong>
-            <span>Autosave plus manual JSON exports</span>
           </div>
           <div className="backup-action-group">
             <AppButton

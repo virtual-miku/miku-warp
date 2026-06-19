@@ -6,7 +6,7 @@ Desktop UI for the Honkai: Star Rail warp tracker.
 
 - `npm run dev`: run the Vite web UI.
 - `npm run build`: type-check and build the web UI.
-- `npm run catalog:update`: refresh generated item catalog from StarRailRes.
+- `npm run catalog:update`: refresh generated item catalog from [Mar-7th/StarRailRes](https://github.com/Mar-7th/StarRailRes).
 - `npm run lint`: run ESLint.
 - `npm run desktop`: run the Tauri desktop app.
 - `npm run desktop:build`: build the desktop app.

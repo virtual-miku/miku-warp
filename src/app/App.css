@@ -927,6 +927,10 @@
   border-bottom: 1px solid var(--border);
 }
 
+.backup-snapshot-row > div:first-child {
+  min-width: 0;
+}
+
 .backup-snapshot-row:last-child {
   border-bottom: 0;
 }
@@ -947,6 +951,7 @@
 .backup-snapshot-row strong {
   color: var(--text-strong);
   font-size: 12px;
+  white-space: nowrap;
 }
 
 .backup-snapshot-row span {
