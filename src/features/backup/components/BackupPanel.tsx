@@ -363,17 +363,16 @@ function getGoogleDriveActionLabel(
 
 function formatSnapshotTime(value: string) {
   const date = new Date(value)
-
-  return new Intl.DateTimeFormat('id-ID', {
+  const dateLabel = new Intl.DateTimeFormat('id-ID', {
     day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
     month: 'short',
-    second: '2-digit',
     year: 'numeric',
-  })
-    .format(date)
-    .replace(/\./g, ':')
+  }).format(date)
+  const timeLabel = [date.getHours(), date.getMinutes(), date.getSeconds()]
+    .map((part) => part.toString().padStart(2, '0'))
+    .join(':')
+
+  return `${dateLabel}, ${timeLabel}`
 }
 
 function formatBackupUids(uids: string[]) {

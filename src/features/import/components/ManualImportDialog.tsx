@@ -391,6 +391,10 @@ function formatPreviewPity(pull: ManualImportPreviewRow) {
     return `Pity ${pull.pityFiveAtPull}`
   }
 
+  if (pull.pityFourAtPull) {
+    return `Pity ${pull.pityFourAtPull}`
+  }
+
   return '-'
 }
 

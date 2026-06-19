@@ -139,6 +139,16 @@ type TrashDeleteConfirmation = {
   uid: string
 }
 
+type BackupConfirmation =
+  | {
+      kind: 'restore_latest' | 'restore_snapshot'
+      snapshot: BackupSnapshotSummary
+    }
+  | {
+      kind: 'delete_snapshot'
+      snapshot: BackupSnapshotSummary
+    }
+
 export function App() {
   const [activeView, setActiveView] = useState<AppView>('dashboard')
   const [activeBannerType, setActiveBannerType] =
@@ -155,6 +165,8 @@ export function App() {
   const [restoringCloudBackupFileId, setRestoringCloudBackupFileId] =
     useState<string>()
   const [backupNotice, setBackupNotice] = useState<BackupNotice>()
+  const [backupConfirmation, setBackupConfirmation] =
+    useState<BackupConfirmation>()
   const [cloudBackupConnecting, setCloudBackupConnecting] = useState(false)
   const [cloudBackupDisconnecting, setCloudBackupDisconnecting] =
     useState(false)
@@ -213,6 +225,8 @@ export function App() {
   const [permanentlyDeletingPullId, setPermanentlyDeletingPullId] =
     useState<string>()
   const [trashDeleteConfirmation, setTrashDeleteConfirmation] =
+    useState<TrashDeleteConfirmation>()
+  const [trashRestoreConfirmation, setTrashRestoreConfirmation] =
     useState<TrashDeleteConfirmation>()
   const manualImportPreview = useMemo(
     () => parseManualWarpNote(manualNoteDraft, itemCatalog),
@@ -843,7 +857,7 @@ export function App() {
     }
   }, [historyDeleteConfirmation, refreshAccounts, refreshWarpHistory])
 
-  const handleRestoreTrashPull = useCallback(
+  const performRestoreTrashPull = useCallback(
     async (pull: TrashedWarpPull) => {
       if (restoringTrashPullId || permanentlyDeletingPullId) {
         return
@@ -874,6 +888,35 @@ export function App() {
       restoringTrashPullId,
     ],
   )
+
+  const handleRequestRestoreTrashPull = useCallback(
+    (pull: TrashedWarpPull) => {
+      if (restoringTrashPullId || permanentlyDeletingPullId) {
+        return
+      }
+
+      setTrashRestoreConfirmation({
+        accountId: activeAccount.id,
+        pull,
+        uid: activeAccount.uid,
+      })
+    },
+    [
+      activeAccount.id,
+      activeAccount.uid,
+      permanentlyDeletingPullId,
+      restoringTrashPullId,
+    ],
+  )
+
+  const handleConfirmTrashRestore = useCallback(async () => {
+    if (!trashRestoreConfirmation) {
+      return
+    }
+
+    await performRestoreTrashPull(trashRestoreConfirmation.pull)
+    setTrashRestoreConfirmation(undefined)
+  }, [performRestoreTrashPull, trashRestoreConfirmation])
 
   const handleRequestPermanentTrashDelete = useCallback(
     (pull: TrashedWarpPull) => {
@@ -1430,7 +1473,7 @@ export function App() {
     refreshCloudBackupStatus,
   ])
 
-  const handleRestoreBackup = useCallback(async () => {
+  const performRestoreBackup = useCallback(async () => {
     if (backupDeleting || backupExporting || backupImporting || backupRestoring || cloudBackupBusy) {
       return
     }
@@ -1470,7 +1513,7 @@ export function App() {
     refreshWarpHistory,
   ])
 
-  const handleRestoreBackupSnapshot = useCallback(
+  const performRestoreBackupSnapshot = useCallback(
     async (fileName: string) => {
       if (backupDeleting || backupExporting || backupImporting || backupRestoring || cloudBackupBusy) {
         return
@@ -1512,17 +1555,9 @@ export function App() {
     ],
   )
 
-  const handleDeleteBackupSnapshot = useCallback(
+  const performDeleteBackupSnapshot = useCallback(
     async (fileName: string) => {
       if (backupDeleting || backupExporting || backupImporting || backupRestoring || cloudBackupBusy) {
-        return
-      }
-
-      const confirmed = window.confirm(
-        'Delete this local backup snapshot? This only removes the JSON backup file on this device.',
-      )
-
-      if (!confirmed) {
         return
       }
 
@@ -1557,6 +1592,64 @@ export function App() {
       refreshBackupSnapshots,
     ],
   )
+
+  const handleRestoreBackup = useCallback(() => {
+    const snapshot = backupSnapshots[0]
+    if (!snapshot || backupDeleting || backupRestoring || backupImporting) {
+      return
+    }
+
+    setBackupConfirmation({ kind: 'restore_latest', snapshot })
+  }, [backupDeleting, backupImporting, backupRestoring, backupSnapshots])
+
+  const handleRestoreBackupSnapshot = useCallback(
+    (fileName: string) => {
+      const snapshot = backupSnapshots.find(
+        (candidate) => candidate.fileName === fileName,
+      )
+      if (!snapshot || backupDeleting || backupRestoring || backupImporting) {
+        return
+      }
+
+      setBackupConfirmation({ kind: 'restore_snapshot', snapshot })
+    },
+    [backupDeleting, backupImporting, backupRestoring, backupSnapshots],
+  )
+
+  const handleDeleteBackupSnapshot = useCallback(
+    (fileName: string) => {
+      const snapshot = backupSnapshots.find(
+        (candidate) => candidate.fileName === fileName,
+      )
+      if (!snapshot || backupDeleting || backupRestoring || backupImporting) {
+        return
+      }
+
+      setBackupConfirmation({ kind: 'delete_snapshot', snapshot })
+    },
+    [backupDeleting, backupImporting, backupRestoring, backupSnapshots],
+  )
+
+  const handleConfirmBackupAction = useCallback(async () => {
+    if (!backupConfirmation) {
+      return
+    }
+
+    if (backupConfirmation.kind === 'restore_latest') {
+      await performRestoreBackup()
+    } else if (backupConfirmation.kind === 'restore_snapshot') {
+      await performRestoreBackupSnapshot(backupConfirmation.snapshot.fileName)
+    } else {
+      await performDeleteBackupSnapshot(backupConfirmation.snapshot.fileName)
+    }
+
+    setBackupConfirmation(undefined)
+  }, [
+    backupConfirmation,
+    performDeleteBackupSnapshot,
+    performRestoreBackup,
+    performRestoreBackupSnapshot,
+  ])
 
   return (
     <>
@@ -1772,7 +1865,7 @@ export function App() {
                   setTrashPage(page)
                 }}
                 onPermanentlyDelete={handleRequestPermanentTrashDelete}
-                onRestore={handleRestoreTrashPull}
+                onRestore={handleRequestRestoreTrashPull}
                 page={trashPage}
                 pageSize={trashPageSize}
                 pulls={trashedPulls}
@@ -1812,6 +1905,36 @@ export function App() {
             ? 'Move all history to Trash?'
             : 'Move selected history to Trash?'
         }
+      />
+      <ConfirmDialog
+        confirmLabel={
+          backupConfirmation?.kind === 'delete_snapshot'
+            ? 'Delete backup'
+            : 'Restore backup'
+        }
+        description={formatBackupConfirmationDescription(backupConfirmation)}
+        isOpen={backupConfirmation !== undefined}
+        isPending={backupDeleting || backupRestoring}
+        onCancel={() => setBackupConfirmation(undefined)}
+        onConfirm={handleConfirmBackupAction}
+        title={
+          backupConfirmation?.kind === 'delete_snapshot'
+            ? 'Delete this backup?'
+            : 'Restore this backup?'
+        }
+      />
+      <ConfirmDialog
+        confirmLabel="Restore item"
+        description={
+          trashRestoreConfirmation
+            ? `${trashRestoreConfirmation.pull.itemName} will return to UID ${trashRestoreConfirmation.uid} history, and its banner pity will be recalculated.`
+            : ''
+        }
+        isOpen={trashRestoreConfirmation !== undefined}
+        isPending={restoringTrashPullId !== undefined}
+        onCancel={() => setTrashRestoreConfirmation(undefined)}
+        onConfirm={handleConfirmTrashRestore}
+        title="Restore this history item?"
       />
       <ConfirmDialog
         confirmLabel="Delete permanently"
@@ -1878,6 +2001,34 @@ function formatHistoryDeleteDescription(
   }
 
   return `All ${confirmation.totalPulls} history records for UID ${confirmation.uid} will be moved to Trash. Other UIDs will not be affected, and these items can be restored for six months.`
+}
+
+function formatBackupConfirmationDescription(
+  confirmation: BackupConfirmation | undefined,
+) {
+  if (!confirmation) {
+    return ''
+  }
+
+  const uidLabel = formatBackupUidLabel(confirmation.snapshot.uids)
+
+  if (confirmation.kind === 'delete_snapshot') {
+    return `${confirmation.snapshot.fileName} (${uidLabel}) will be permanently deleted from this device. Current history will not be changed.`
+  }
+
+  return `${confirmation.snapshot.fileName} contains ${uidLabel}. Its history will be merged into the local database, while matching records are skipped.`
+}
+
+function formatBackupUidLabel(uids: string[]) {
+  if (uids.length === 0) {
+    return 'no identified UID'
+  }
+
+  if (uids.length === 1) {
+    return `UID ${uids[0]}`
+  }
+
+  return `UIDs ${uids.join(', ')}`
 }
 
 function formatCloudBackupUploadDetail(
