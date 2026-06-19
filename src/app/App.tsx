@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bell,
   LayoutDashboard,
@@ -40,6 +40,7 @@ import {
   type RestoreBackupSnapshotResult,
 } from '../features/persistence/data/backup-export'
 import {
+  cancelGoogleDriveBackupConnection,
   connectGoogleDriveBackup,
   disconnectGoogleDriveBackup,
   getCloudBackupPolicy,
@@ -170,8 +171,10 @@ export function App() {
   const [backupConfirmation, setBackupConfirmation] =
     useState<BackupConfirmation>()
   const [cloudBackupConnecting, setCloudBackupConnecting] = useState(false)
+  const [cloudBackupCancelling, setCloudBackupCancelling] = useState(false)
   const [cloudBackupDisconnecting, setCloudBackupDisconnecting] =
     useState(false)
+  const cloudBackupAuthAttemptRef = useRef(0)
   const [cloudBackupListing, setCloudBackupListing] = useState(false)
   const [cloudBackupPolicyUpdating, setCloudBackupPolicyUpdating] =
     useState(false)
@@ -272,6 +275,7 @@ export function App() {
   const cloudBackupRestoring = restoringCloudBackupFileId !== undefined
   const cloudBackupBusy =
     cloudBackupConnecting ||
+    cloudBackupCancelling ||
     cloudBackupDisconnecting ||
     cloudBackupListing ||
     cloudBackupPolicyUpdating ||
@@ -1206,6 +1210,8 @@ export function App() {
       return
     }
 
+    const authAttempt = cloudBackupAuthAttemptRef.current + 1
+    cloudBackupAuthAttemptRef.current = authAttempt
     setCloudBackupConnecting(true)
     setBackupNotice(undefined)
 
@@ -1216,7 +1222,13 @@ export function App() {
       const status = await waitForGoogleDriveAuthCompletion(
         refreshCloudBackupStatus,
         setCloudBackupStatus,
+        () => cloudBackupAuthAttemptRef.current === authAttempt,
       )
+
+      if (!status || cloudBackupAuthAttemptRef.current !== authAttempt) {
+        return
+      }
+
       setCloudBackupStatus(status)
 
       if (status.connectionStatus === 'connected') {
@@ -1239,6 +1251,10 @@ export function App() {
         })
       }
     } catch (error) {
+      if (cloudBackupAuthAttemptRef.current !== authAttempt) {
+        return
+      }
+
       const fallbackStatus = await refreshCloudBackupStatus()
       setBackupNotice({
         tone: 'error',
@@ -1246,7 +1262,9 @@ export function App() {
         detail: `${getErrorMessage(error)}\n${fallbackStatus.detail}`,
       })
     } finally {
-      setCloudBackupConnecting(false)
+      if (cloudBackupAuthAttemptRef.current === authAttempt) {
+        setCloudBackupConnecting(false)
+      }
     }
   }, [
     backupDeleting,
@@ -1256,6 +1274,46 @@ export function App() {
     cloudBackupBusy,
     cloudBackupStatus.canConnect,
     refreshCloudBackupSnapshots,
+    refreshCloudBackupStatus,
+  ])
+
+  const handleCancelGoogleDriveConnection = useCallback(async () => {
+    if (
+      cloudBackupCancelling ||
+      (!cloudBackupConnecting &&
+        cloudBackupStatus.connectionStatus !== 'connecting')
+    ) {
+      return
+    }
+
+    cloudBackupAuthAttemptRef.current += 1
+    setCloudBackupCancelling(true)
+    setBackupNotice(undefined)
+
+    try {
+      const status = await cancelGoogleDriveBackupConnection()
+      setCloudBackupStatus(status)
+      setBackupNotice({
+        tone: 'success',
+        title: 'Google Drive connection cancelled',
+        detail: 'You can start a new Google Drive connection now.',
+      })
+    } catch (error) {
+      const fallbackStatus = await refreshCloudBackupStatus()
+      setCloudBackupStatus(fallbackStatus)
+      setBackupNotice({
+        tone: 'error',
+        title: 'Could not cancel Google Drive connection',
+        detail: getErrorMessage(error),
+      })
+    } finally {
+      setCloudBackupConnecting(false)
+      setCloudBackupCancelling(false)
+    }
+  }, [
+    cloudBackupCancelling,
+    cloudBackupConnecting,
+    cloudBackupStatus.connectionStatus,
     refreshCloudBackupStatus,
   ])
 
@@ -1781,6 +1839,7 @@ export function App() {
                 cloudSnapshots={cloudBackupSnapshots}
                 cloudBackupStatus={cloudBackupStatus}
                 deletingFileName={deletingBackupFileName}
+                isCloudCancelling={cloudBackupCancelling}
                 isCloudConnecting={cloudBackupConnecting}
                 isCloudDisconnecting={cloudBackupDisconnecting}
                 isCloudListing={cloudBackupListing}
@@ -1797,6 +1856,7 @@ export function App() {
                 restoringFileName={restoringBackupFileName}
                 snapshots={backupSnapshots}
                 onAutoBackupPolicyChange={handleAutoBackupPolicyChange}
+                onCancelGoogleDrive={handleCancelGoogleDriveConnection}
                 onConnectGoogleDrive={handleConnectGoogleDrive}
                 onDeleteSnapshot={handleDeleteBackupSnapshot}
                 onDisconnectGoogleDrive={handleDisconnectGoogleDrive}
@@ -2017,8 +2077,18 @@ function formatCloudBackupUploadDetail(
 async function waitForGoogleDriveAuthCompletion(
   refreshStatus: () => Promise<CloudBackupStatus>,
   onStatus: (status: CloudBackupStatus) => void,
+  isActive: () => boolean,
 ) {
+  if (!isActive()) {
+    return undefined
+  }
+
   let status = await refreshStatus()
+
+  if (!isActive()) {
+    return undefined
+  }
+
   onStatus(status)
 
   for (let attempt = 0; attempt < 190; attempt += 1) {
@@ -2031,7 +2101,17 @@ async function waitForGoogleDriveAuthCompletion(
     }
 
     await delay(1000)
+
+    if (!isActive()) {
+      return undefined
+    }
+
     status = await refreshStatus()
+
+    if (!isActive()) {
+      return undefined
+    }
+
     onStatus(status)
   }
 

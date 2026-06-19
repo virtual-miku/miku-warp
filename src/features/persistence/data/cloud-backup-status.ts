@@ -54,6 +54,12 @@ export function connectGoogleDriveBackup() {
   return invokeTauri<CloudBackupStatus>('connect_google_drive_backup')
 }
 
+export function cancelGoogleDriveBackupConnection() {
+  return invokeTauri<CloudBackupStatus>(
+    'cancel_google_drive_backup_connection',
+  )
+}
+
 export function disconnectGoogleDriveBackup() {
   return invokeTauri<CloudBackupStatus>('disconnect_google_drive_backup')
 }

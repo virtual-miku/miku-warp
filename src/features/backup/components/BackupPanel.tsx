@@ -6,6 +6,7 @@ import {
   FileJson,
   Trash2,
   Upload,
+  X,
 } from 'lucide-react'
 import { AppButton } from '../../../shared/ui/AppButton'
 import {
@@ -39,6 +40,7 @@ type BackupPanelProps = {
   cloudBackupPolicy: CloudBackupPolicy
   cloudSnapshots: CloudBackupSnapshotInfo[]
   cloudBackupStatus: CloudBackupStatus
+  isCloudCancelling: boolean
   isCloudConnecting: boolean
   isCloudDisconnecting: boolean
   isCloudListing: boolean
@@ -56,6 +58,7 @@ type BackupPanelProps = {
   restoringFileName?: string
   snapshots: BackupSnapshotInfo[]
   onDeleteSnapshot: (fileName: string) => void
+  onCancelGoogleDrive: () => void
   onConnectGoogleDrive: () => void
   onDisconnectGoogleDrive: () => void
   onAutoBackupPolicyChange: (enabled: boolean) => void
@@ -71,6 +74,7 @@ export function BackupPanel({
   cloudBackupPolicy,
   cloudSnapshots,
   cloudBackupStatus,
+  isCloudCancelling,
   isCloudConnecting,
   isCloudDisconnecting,
   isCloudListing,
@@ -89,6 +93,7 @@ export function BackupPanel({
   snapshots,
   onDeleteSnapshot,
   onAutoBackupPolicyChange,
+  onCancelGoogleDrive,
   onConnectGoogleDrive,
   onDisconnectGoogleDrive,
   onRefreshGoogleDriveBackups,
@@ -98,8 +103,11 @@ export function BackupPanel({
   onImportBackupJson,
   onRestoreSnapshot,
 }: BackupPanelProps) {
+  const isGoogleDriveConnecting =
+    cloudBackupStatus.connectionStatus === 'connecting'
   const isCloudBusy =
     isCloudConnecting ||
+    isCloudCancelling ||
     isCloudDisconnecting ||
     isCloudListing ||
     isCloudPolicyUpdating ||
@@ -145,21 +153,32 @@ export function BackupPanel({
             ) : null}
             <AppButton
               disabled={
-                isBusy ||
-                (isGoogleDriveConnected
-                  ? !cloudBackupStatus.canDisconnect
-                  : !cloudBackupStatus.canConnect)
+                isGoogleDriveConnecting
+                  ? isCloudCancelling
+                  : isBusy ||
+                    (isGoogleDriveConnected
+                      ? !cloudBackupStatus.canDisconnect
+                      : !cloudBackupStatus.canConnect)
               }
-              icon={isGoogleDriveConnected ? LogOut : KeyRound}
+              icon={
+                isGoogleDriveConnecting
+                  ? X
+                  : isGoogleDriveConnected
+                    ? LogOut
+                    : KeyRound
+              }
               onClick={
-                isGoogleDriveConnected
-                  ? onDisconnectGoogleDrive
-                  : onConnectGoogleDrive
+                isGoogleDriveConnecting
+                  ? onCancelGoogleDrive
+                  : isGoogleDriveConnected
+                    ? onDisconnectGoogleDrive
+                    : onConnectGoogleDrive
               }
             >
               {getGoogleDriveActionLabel(
                 cloudBackupStatus,
-                isCloudConnecting,
+                isGoogleDriveConnecting,
+                isCloudCancelling,
                 isCloudDisconnecting,
               )}
             </AppButton>
@@ -333,10 +352,15 @@ export function BackupPanel({
 function getGoogleDriveActionLabel(
   status: CloudBackupStatus,
   isConnecting: boolean,
+  isCancelling: boolean,
   isDisconnecting: boolean,
 ) {
-  if (isConnecting) {
-    return 'Connecting'
+  if (isCancelling) {
+    return 'Cancelling'
+  }
+
+  if (status.connectionStatus === 'connecting') {
+    return 'Cancel'
   }
 
   if (isDisconnecting) {
@@ -347,16 +371,16 @@ function getGoogleDriveActionLabel(
     return 'Disconnect'
   }
 
-  if (status.connectionStatus === 'connecting') {
-    return 'Connecting'
-  }
-
   if (status.connectionStatus === 'connection_failed') {
     return 'Retry'
   }
 
   if (status.connectionStatus === 'needs_reauth') {
     return 'Re-login'
+  }
+
+  if (isConnecting) {
+    return 'Connecting'
   }
 
   return 'Connect'

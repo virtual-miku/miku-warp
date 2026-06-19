@@ -13,6 +13,11 @@ fn connect_google_drive_backup() -> Result<cloud_backup::CloudBackupStatus, Stri
 }
 
 #[tauri::command]
+fn cancel_google_drive_backup_connection() -> Result<cloud_backup::CloudBackupStatus, String> {
+    cloud_backup::cancel_google_drive_backup_connection()
+}
+
+#[tauri::command]
 fn disconnect_google_drive_backup() -> Result<cloud_backup::CloudBackupStatus, String> {
     cloud_backup::disconnect_google_drive_backup()
 }
@@ -373,6 +378,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            cancel_google_drive_backup_connection,
             connect_google_drive_backup,
             delete_account_warp_history,
             delete_backup_snapshot,

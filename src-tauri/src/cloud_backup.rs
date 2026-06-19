@@ -6,7 +6,8 @@ use sha2::{Digest, Sha256};
 use std::env;
 use std::io::{Read, Write};
 use std::net::TcpListener;
-use std::sync::{Mutex, OnceLock};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::{Duration, Instant};
 use url::Url;
@@ -138,8 +139,20 @@ struct GoogleOAuthClientConfig {
 #[derive(Debug, Clone)]
 enum GoogleDriveAuthFlowState {
     Idle,
-    InProgress { started_at: Instant },
-    Failed { detail: String },
+    InProgress {
+        session_id: String,
+        started_at: Instant,
+        cancellation: Arc<AtomicBool>,
+    },
+    Failed {
+        detail: String,
+    },
+}
+
+#[derive(Debug, Clone)]
+struct GoogleDriveAuthFlowSession {
+    session_id: String,
+    cancellation: Arc<AtomicBool>,
 }
 
 impl KeyringSecretStore {
@@ -211,9 +224,20 @@ pub fn connect_google_drive_backup() -> Result<CloudBackupStatus, String> {
     ))
 }
 
+pub fn cancel_google_drive_backup_connection() -> Result<CloudBackupStatus, String> {
+    let secret_store = KeyringSecretStore;
+
+    cancel_google_drive_auth_flow()?;
+    secret_store
+        .delete_secret(GOOGLE_DRIVE_REFRESH_TOKEN_KEY)
+        .map_err(secret_store_error_message)?;
+
+    Ok(get_cloud_backup_status())
+}
+
 pub fn disconnect_google_drive_backup() -> Result<CloudBackupStatus, String> {
     let secret_store = KeyringSecretStore;
-    set_google_drive_auth_flow_state(GoogleDriveAuthFlowState::Idle);
+    cancel_google_drive_auth_flow()?;
     secret_store
         .delete_secret(GOOGLE_DRIVE_REFRESH_TOKEN_KEY)
         .map_err(secret_store_error_message)?;
@@ -594,7 +618,11 @@ fn complete_google_oauth_flow(
     secret_store: &impl SecretStore,
     client_id: &str,
     client_secret: Option<&str>,
+    session_id: &str,
+    cancellation: &AtomicBool,
 ) -> Result<(), String> {
+    ensure_google_drive_auth_not_cancelled(cancellation)?;
+
     let listener = TcpListener::bind("127.0.0.1:0")
         .map_err(|error| format!("Failed to start local OAuth callback listener: {error}"))?;
     let local_port = listener
@@ -611,7 +639,8 @@ fn complete_google_oauth_flow(
     webbrowser::open(&authorization_url)
         .map_err(|error| format!("Failed to open system browser for Google OAuth: {error}"))?;
 
-    wait_for_authorization_code(listener, &state, |authorization_code| {
+    wait_for_authorization_code(listener, &state, cancellation, |authorization_code| {
+        ensure_google_drive_auth_not_cancelled(cancellation)?;
         let token_response = exchange_authorization_code(
             client_id,
             client_secret,
@@ -623,7 +652,13 @@ fn complete_google_oauth_flow(
             "Google did not return a refresh token. Try disconnecting the app from your Google account, then connect again.".to_string()
         })?;
 
-        write_and_verify_refresh_token(secret_store, &refresh_token)
+        ensure_google_drive_auth_not_cancelled(cancellation)?;
+        write_refresh_token_for_active_auth_session(
+            secret_store,
+            session_id,
+            cancellation,
+            &refresh_token,
+        )
     })
 }
 
@@ -631,44 +666,93 @@ fn start_google_oauth_flow_in_background(
     client_id: String,
     client_secret: Option<String>,
 ) -> Result<(), String> {
-    let started = mark_google_drive_auth_flow_in_progress()?;
-
-    if !started {
+    let Some(session) = begin_google_drive_auth_flow()? else {
         return Ok(());
-    }
+    };
+    let session_id = session.session_id.clone();
+    let cancellation = session.cancellation.clone();
 
     thread::spawn(move || {
         let secret_store = KeyringSecretStore;
-        let result =
-            complete_google_oauth_flow(&secret_store, &client_id, client_secret.as_deref());
+        let result = complete_google_oauth_flow(
+            &secret_store,
+            &client_id,
+            client_secret.as_deref(),
+            &session_id,
+            &cancellation,
+        );
 
-        match result {
-            Ok(()) => set_google_drive_auth_flow_state(GoogleDriveAuthFlowState::Idle),
-            Err(error) => {
-                set_google_drive_auth_flow_state(GoogleDriveAuthFlowState::Failed { detail: error })
-            }
-        }
+        finish_google_drive_auth_flow(&session_id, result);
     });
 
     Ok(())
 }
 
-fn mark_google_drive_auth_flow_in_progress() -> Result<bool, String> {
+fn begin_google_drive_auth_flow() -> Result<Option<GoogleDriveAuthFlowSession>, String> {
     let mut state = google_drive_auth_flow_state()
         .lock()
         .map_err(|error| format!("Failed to prepare Google Drive login state: {error}"))?;
 
-    if let GoogleDriveAuthFlowState::InProgress { started_at } = &*state {
+    if let GoogleDriveAuthFlowState::InProgress {
+        started_at,
+        cancellation,
+        ..
+    } = &*state
+    {
         if started_at.elapsed() < OAUTH_CALLBACK_TIMEOUT {
-            return Ok(false);
+            return Ok(None);
         }
+
+        cancellation.store(true, Ordering::Release);
     }
 
+    let session = GoogleDriveAuthFlowSession {
+        session_id: generate_oauth_random_token(),
+        cancellation: Arc::new(AtomicBool::new(false)),
+    };
     *state = GoogleDriveAuthFlowState::InProgress {
+        session_id: session.session_id.clone(),
         started_at: Instant::now(),
+        cancellation: session.cancellation.clone(),
     };
 
-    Ok(true)
+    Ok(Some(session))
+}
+
+fn cancel_google_drive_auth_flow() -> Result<bool, String> {
+    let mut state = google_drive_auth_flow_state()
+        .lock()
+        .map_err(|error| format!("Failed to cancel Google Drive login: {error}"))?;
+
+    if let GoogleDriveAuthFlowState::InProgress { cancellation, .. } = &*state {
+        cancellation.store(true, Ordering::Release);
+        *state = GoogleDriveAuthFlowState::Idle;
+        return Ok(true);
+    }
+
+    Ok(false)
+}
+
+fn finish_google_drive_auth_flow(session_id: &str, result: Result<(), String>) {
+    let Ok(mut state) = google_drive_auth_flow_state().lock() else {
+        return;
+    };
+    let is_active_session = matches!(
+        &*state,
+        GoogleDriveAuthFlowState::InProgress {
+            session_id: active_session_id,
+            ..
+        } if active_session_id == session_id
+    );
+
+    if !is_active_session {
+        return;
+    }
+
+    *state = match result {
+        Ok(()) => GoogleDriveAuthFlowState::Idle,
+        Err(detail) => GoogleDriveAuthFlowState::Failed { detail },
+    };
 }
 
 fn read_google_drive_auth_flow_state() -> GoogleDriveAuthFlowState {
@@ -678,12 +762,6 @@ fn read_google_drive_auth_flow_state() -> GoogleDriveAuthFlowState {
         .unwrap_or(GoogleDriveAuthFlowState::Failed {
             detail: "Failed to read Google Drive login state.".to_string(),
         })
-}
-
-fn set_google_drive_auth_flow_state(state: GoogleDriveAuthFlowState) {
-    if let Ok(mut auth_flow_state) = google_drive_auth_flow_state().lock() {
-        *auth_flow_state = state;
-    }
 }
 
 fn google_drive_auth_flow_state() -> &'static Mutex<GoogleDriveAuthFlowState> {
@@ -716,9 +794,36 @@ fn write_and_verify_refresh_token(
     }
 }
 
+fn write_refresh_token_for_active_auth_session(
+    secret_store: &impl SecretStore,
+    session_id: &str,
+    cancellation: &AtomicBool,
+    refresh_token: &str,
+) -> Result<(), String> {
+    ensure_google_drive_auth_not_cancelled(cancellation)?;
+    let state = google_drive_auth_flow_state()
+        .lock()
+        .map_err(|error| format!("Failed to verify active Google Drive login: {error}"))?;
+    let is_active_session = matches!(
+        &*state,
+        GoogleDriveAuthFlowState::InProgress {
+            session_id: active_session_id,
+            ..
+        } if active_session_id == session_id
+    );
+
+    if !is_active_session {
+        return Err("Google Drive connection was cancelled.".to_string());
+    }
+
+    ensure_google_drive_auth_not_cancelled(cancellation)?;
+    write_and_verify_refresh_token(secret_store, refresh_token)
+}
+
 fn wait_for_authorization_code<F>(
     listener: TcpListener,
     expected_state: &str,
+    cancellation: &AtomicBool,
     mut complete_authorization: F,
 ) -> Result<(), String>
 where
@@ -731,6 +836,8 @@ where
     let started_at = Instant::now();
 
     while started_at.elapsed() < OAUTH_CALLBACK_TIMEOUT {
+        ensure_google_drive_auth_not_cancelled(cancellation)?;
+
         match listener.accept() {
             Ok((mut stream, _address)) => {
                 let mut buffer = [0_u8; 4096];
@@ -757,6 +864,14 @@ where
     }
 
     Err("Google OAuth timed out before the browser returned an authorization code.".to_string())
+}
+
+fn ensure_google_drive_auth_not_cancelled(cancellation: &AtomicBool) -> Result<(), String> {
+    if cancellation.load(Ordering::Acquire) {
+        return Err("Google Drive connection was cancelled.".to_string());
+    }
+
+    Ok(())
 }
 
 fn exchange_authorization_code(
@@ -1110,7 +1225,9 @@ mod tests {
             &store,
             oauth_config(Some("client-id")),
             GoogleDriveAuthFlowState::InProgress {
+                session_id: "session-id".to_string(),
                 started_at: Instant::now(),
+                cancellation: Arc::new(AtomicBool::new(false)),
             },
         );
 
@@ -1143,6 +1260,20 @@ mod tests {
         assert_eq!(status.detail, "callback failed");
         assert!(status.can_connect);
         assert!(!status.can_upload);
+    }
+
+    #[test]
+    fn stops_waiting_for_oauth_callback_after_cancellation() {
+        let listener =
+            TcpListener::bind("127.0.0.1:0").expect("test callback listener can be created");
+        let cancellation = AtomicBool::new(true);
+
+        let error = wait_for_authorization_code(listener, "state-token", &cancellation, |_| {
+            panic!("cancelled flow must not complete authorization")
+        })
+        .expect_err("cancelled auth flow should stop");
+
+        assert!(error.contains("cancelled"));
     }
 
     #[test]
