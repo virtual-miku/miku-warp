@@ -109,7 +109,9 @@ export function BackupPanel({
     isCloudRestoring ||
     isCloudUploading
   const isBusy = isExporting || isImporting || isRestoring || isDeleting || isCloudBusy
-  const visibleSnapshots = snapshots.slice(0, 3)
+  const visibleSnapshots = snapshots
+    .filter((snapshot) => !snapshot.isAutoSave)
+    .slice(0, 3)
   const visibleCloudSnapshots = cloudSnapshots.slice(0, 1)
   const isGoogleDriveConnected =
     cloudBackupStatus.connectionStatus === 'connected'
@@ -218,9 +220,14 @@ export function BackupPanel({
                     key={snapshot.remoteFileId}
                   >
                     <div>
-                      <strong title={snapshot.fileName}>
-                        {formatBackupSizeKilobytes(snapshot.size)}
+                      <strong>
+                        {snapshot.remoteModifiedTime
+                          ? formatSnapshotTime(snapshot.remoteModifiedTime)
+                          : 'Time unavailable'}
                       </strong>
+                      <span title={snapshot.fileName}>
+                        {formatBackupSizeKilobytes(snapshot.size)}
+                      </span>
                     </div>
                     <div className="backup-snapshot-actions">
                       <AppButton
