@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Bell,
   LayoutDashboard,
+  Trash2,
 } from 'lucide-react'
 import {
   BackupPanel,
@@ -94,12 +95,20 @@ import {
   calculatePitySummary,
 } from '../features/warp-history/domain/pity'
 import type { WarpPull } from '../features/warp-history/domain/warp-pull'
+import { TrashPanel } from '../features/trash/components/TrashPanel'
+import {
+  listTrashedWarpPulls,
+  permanentlyDeleteTrashedWarpPull,
+  restoreTrashedWarpPull,
+  type TrashedWarpPull,
+} from '../features/trash/data/trash-history'
 import { ConfirmDialog } from '../shared/ui/ConfirmDialog'
 import './App.css'
 
 const defaultBannerType = 'character_event' satisfies BannerFilterType
 const defaultManualFallbackBannerType = 'character_event' satisfies BannerType
 const historyPageSize = 5
+const trashPageSize = 5
 const defaultAccount: ManualImportAccountInput = {
   id: 'account-800000000',
   uid: '800000000',
@@ -121,7 +130,16 @@ type HistoryDeleteConfirmation =
       uid: string
     }
 
+type AppView = 'dashboard' | 'trash'
+
+type TrashDeleteConfirmation = {
+  accountId: string
+  pull: TrashedWarpPull
+  uid: string
+}
+
 export function App() {
+  const [activeView, setActiveView] = useState<AppView>('dashboard')
   const [activeBannerType, setActiveBannerType] =
     useState<BannerFilterType>(defaultBannerType)
   const [manualImportOpen, setManualImportOpen] = useState(false)
@@ -181,6 +199,16 @@ export function App() {
   const [bannerSummaries, setBannerSummaries] = useState<WarpBannerSummary[]>(
     [],
   )
+  const [trashedPulls, setTrashedPulls] = useState<TrashedWarpPull[]>([])
+  const [trashTotalPulls, setTrashTotalPulls] = useState(0)
+  const [trashPage, setTrashPage] = useState(1)
+  const [trashLoading, setTrashLoading] = useState(false)
+  const [trashError, setTrashError] = useState<string>()
+  const [restoringTrashPullId, setRestoringTrashPullId] = useState<string>()
+  const [permanentlyDeletingPullId, setPermanentlyDeletingPullId] =
+    useState<string>()
+  const [trashDeleteConfirmation, setTrashDeleteConfirmation] =
+    useState<TrashDeleteConfirmation>()
   const manualImportPreview = useMemo(
     () => parseManualWarpNote(manualNoteDraft, itemCatalog),
     [manualNoteDraft],
@@ -299,6 +327,23 @@ export function App() {
     }
   }, [])
 
+  const refreshTrashedPulls = useCallback(async () => {
+    const result = await listTrashedWarpPulls(
+      activeAccount.id,
+      trashPageSize,
+      (trashPage - 1) * trashPageSize,
+    )
+    setTrashedPulls(result.pulls)
+    setTrashTotalPulls(result.total)
+
+    const pageCount = Math.max(1, Math.ceil(result.total / trashPageSize))
+    if (trashPage > pageCount) {
+      setTrashPage(pageCount)
+    }
+
+    return result
+  }, [activeAccount.id, trashPage])
+
   const refreshBackupSnapshots = useCallback(async () => {
     try {
       const snapshots = await listBackupSnapshots()
@@ -406,6 +451,47 @@ export function App() {
       isActive = false
     }
   }, [])
+
+  useEffect(() => {
+    if (activeView !== 'trash') {
+      return undefined
+    }
+
+    let isActive = true
+    listTrashedWarpPulls(
+      activeAccount.id,
+      trashPageSize,
+      (trashPage - 1) * trashPageSize,
+    )
+      .then((result) => {
+        if (!isActive) {
+          return
+        }
+
+        setTrashedPulls(result.pulls)
+        setTrashTotalPulls(result.total)
+        const pageCount = Math.max(1, Math.ceil(result.total / trashPageSize))
+        if (trashPage > pageCount) {
+          setTrashPage(pageCount)
+        }
+      })
+      .catch((error) => {
+        if (isActive) {
+          setTrashedPulls([])
+          setTrashTotalPulls(0)
+          setTrashError(getErrorMessage(error))
+        }
+      })
+      .finally(() => {
+        if (isActive) {
+          setTrashLoading(false)
+        }
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [activeAccount.id, activeView, trashPage])
 
   useEffect(() => {
     let isActive = true
@@ -609,6 +695,14 @@ export function App() {
     setManualImportSaveNotice(undefined)
   }
 
+  const handleViewChange = (view: AppView) => {
+    setActiveView(view)
+    setTrashError(undefined)
+    if (view === 'trash') {
+      setTrashLoading(true)
+    }
+  }
+
   const handleAccountChange = (accountId: string) => {
     const account = accounts.find((candidate) => candidate.id === accountId)
 
@@ -627,6 +721,10 @@ export function App() {
     saveActiveAccount(nextAccount)
     setHistoryLoading(true)
     setHistoryPage(1)
+    setTrashPage(1)
+    if (activeView === 'trash') {
+      setTrashLoading(true)
+    }
     setPersistedPulls([])
     setHistoryTotalPulls(0)
     setManualImportSaveNotice(undefined)
@@ -709,6 +807,84 @@ export function App() {
       setHistoryLoading(false)
     }
   }, [historyDeleteConfirmation, refreshAccounts, refreshWarpHistory])
+
+  const handleRestoreTrashPull = useCallback(
+    async (pull: TrashedWarpPull) => {
+      if (restoringTrashPullId || permanentlyDeletingPullId) {
+        return
+      }
+
+      setRestoringTrashPullId(pull.id)
+      setTrashError(undefined)
+
+      try {
+        await restoreTrashedWarpPull(activeAccount.id, pull.id)
+        await Promise.all([
+          refreshTrashedPulls(),
+          refreshWarpHistory(),
+          refreshAccounts(),
+        ])
+      } catch (error) {
+        setTrashError(getErrorMessage(error))
+      } finally {
+        setRestoringTrashPullId(undefined)
+      }
+    },
+    [
+      activeAccount.id,
+      permanentlyDeletingPullId,
+      refreshAccounts,
+      refreshTrashedPulls,
+      refreshWarpHistory,
+      restoringTrashPullId,
+    ],
+  )
+
+  const handleRequestPermanentTrashDelete = useCallback(
+    (pull: TrashedWarpPull) => {
+      if (restoringTrashPullId || permanentlyDeletingPullId) {
+        return
+      }
+
+      setTrashDeleteConfirmation({
+        accountId: activeAccount.id,
+        pull,
+        uid: activeAccount.uid,
+      })
+    },
+    [
+      activeAccount.id,
+      activeAccount.uid,
+      permanentlyDeletingPullId,
+      restoringTrashPullId,
+    ],
+  )
+
+  const handleConfirmPermanentTrashDelete = useCallback(async () => {
+    if (!trashDeleteConfirmation || permanentlyDeletingPullId) {
+      return
+    }
+
+    setPermanentlyDeletingPullId(trashDeleteConfirmation.pull.id)
+    setTrashError(undefined)
+
+    try {
+      await permanentlyDeleteTrashedWarpPull(
+        trashDeleteConfirmation.accountId,
+        trashDeleteConfirmation.pull.id,
+      )
+      setTrashDeleteConfirmation(undefined)
+      await refreshTrashedPulls()
+    } catch (error) {
+      setTrashError(getErrorMessage(error))
+    } finally {
+      setPermanentlyDeletingPullId(undefined)
+    }
+  }, [
+    permanentlyDeletingPullId,
+    refreshTrashedPulls,
+    trashDeleteConfirmation,
+  ])
 
   async function runAutoBackupAfterManualImport(insertedPulls: number) {
     if (!cloudBackupPolicy.autoBackupEnabled) {
@@ -1362,10 +1538,32 @@ export function App() {
           </div>
 
           <nav className="sidebar-nav" aria-label="Main navigation">
-            <a className="sidebar-link sidebar-link-active" href="#dashboard">
+            <button
+              aria-current={activeView === 'dashboard' ? 'page' : undefined}
+              className={
+                activeView === 'dashboard'
+                  ? 'sidebar-link sidebar-link-active'
+                  : 'sidebar-link'
+              }
+              onClick={() => handleViewChange('dashboard')}
+              type="button"
+            >
               <LayoutDashboard size={18} aria-hidden="true" />
               Dashboard
-            </a>
+            </button>
+            <button
+              aria-current={activeView === 'trash' ? 'page' : undefined}
+              className={
+                activeView === 'trash'
+                  ? 'sidebar-link sidebar-link-active'
+                  : 'sidebar-link'
+              }
+              onClick={() => handleViewChange('trash')}
+              type="button"
+            >
+              <Trash2 size={18} aria-hidden="true" />
+              Trash
+            </button>
           </nav>
 
           <section className="account-panel" aria-label="Selected account">
@@ -1390,20 +1588,22 @@ export function App() {
         </aside>
 
         <section className="workspace">
-          <header className="workspace-header">
+          {activeView === 'dashboard' ? (
+            <>
+              <header className="workspace-header">
             <div>
               <span className="eyebrow">Selected banner</span>
               <h1>{getBannerFilterLabel(activeBannerType)}</h1>
             </div>
-          </header>
+              </header>
 
-          <BannerTabs
-            activeBannerType={activeBannerType}
-            summaries={bannerSummaries}
-            onBannerTypeChange={handleBannerTypeChange}
-          />
+              <BannerTabs
+                activeBannerType={activeBannerType}
+                summaries={bannerSummaries}
+                onBannerTypeChange={handleBannerTypeChange}
+              />
 
-          <section className="content-grid">
+              <section className="content-grid">
             <div className="primary-column" id="dashboard">
               <BannerSummaryGrid
                 activeBannerType={activeBannerType}
@@ -1512,7 +1712,34 @@ export function App() {
                 </div>
               </section>
             </aside>
-          </section>
+              </section>
+            </>
+          ) : (
+            <>
+              <header className="workspace-header">
+                <div>
+                  <span className="eyebrow">Selected UID</span>
+                  <h1>Trash</h1>
+                </div>
+              </header>
+              <TrashPanel
+                deletingPullId={permanentlyDeletingPullId}
+                error={trashError}
+                isLoading={trashLoading}
+                onPageChange={(page) => {
+                  setTrashLoading(true)
+                  setTrashPage(page)
+                }}
+                onPermanentlyDelete={handleRequestPermanentTrashDelete}
+                onRestore={handleRestoreTrashPull}
+                page={trashPage}
+                pageSize={trashPageSize}
+                pulls={trashedPulls}
+                restoringPullId={restoringTrashPullId}
+                totalPulls={trashTotalPulls}
+              />
+            </>
+          )}
         </section>
       </main>
 
@@ -1531,8 +1758,8 @@ export function App() {
       <ConfirmDialog
         confirmLabel={
           historyDeleteConfirmation?.kind === 'all'
-            ? 'Delete all history'
-            : 'Delete item'
+            ? 'Move all to Trash'
+            : 'Move to Trash'
         }
         description={formatHistoryDeleteDescription(historyDeleteConfirmation)}
         isOpen={historyDeleteConfirmation !== undefined}
@@ -1541,9 +1768,22 @@ export function App() {
         onConfirm={handleConfirmHistoryDelete}
         title={
           historyDeleteConfirmation?.kind === 'all'
-            ? 'Delete all history?'
-            : 'Delete this history item?'
+            ? 'Move all history to Trash?'
+            : 'Move this item to Trash?'
         }
+      />
+      <ConfirmDialog
+        confirmLabel="Delete permanently"
+        description={
+          trashDeleteConfirmation
+            ? `${trashDeleteConfirmation.pull.itemName} will be permanently deleted from UID ${trashDeleteConfirmation.uid}. This action cannot be undone.`
+            : ''
+        }
+        isOpen={trashDeleteConfirmation !== undefined}
+        isPending={permanentlyDeletingPullId !== undefined}
+        onCancel={() => setTrashDeleteConfirmation(undefined)}
+        onConfirm={handleConfirmPermanentTrashDelete}
+        title="Delete permanently?"
       />
     </>
   )
@@ -1593,10 +1833,10 @@ function formatHistoryDeleteDescription(
   }
 
   if (confirmation.kind === 'pull') {
-    return `${confirmation.pull.itemName} will be removed from UID ${confirmation.uid}. Pity for this banner will be recalculated. This action cannot be undone.`
+    return `${confirmation.pull.itemName} will be moved to Trash for UID ${confirmation.uid}. Pity for this banner will be recalculated, and the item can be restored for six months.`
   }
 
-  return `All ${confirmation.totalPulls} history records for UID ${confirmation.uid} will be permanently removed. Other UIDs will not be affected.`
+  return `All ${confirmation.totalPulls} history records for UID ${confirmation.uid} will be moved to Trash. Other UIDs will not be affected, and these items can be restored for six months.`
 }
 
 function formatCloudBackupUploadDetail(

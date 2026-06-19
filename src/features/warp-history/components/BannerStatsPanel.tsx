@@ -1,4 +1,8 @@
-import { getBannerLabel, type BannerType } from '../domain/banner'
+import {
+  getBannerLabel,
+  getFiveStarHardPity,
+  type BannerType,
+} from '../domain/banner'
 import type { WarpBannerSummary } from '../../persistence/data/warp-pull-history'
 
 type BannerStatsPanelProps = {
@@ -27,7 +31,7 @@ export function BannerStatsPanel({
         />
         <StatItem
           label="Current 5-star pity"
-          value={summary?.currentFiveStarPity ?? 0}
+          value={`${summary?.currentFiveStarPity ?? 0}/${getFiveStarHardPity(bannerType)}`}
           detail={formatLastPity(
             summary?.lastFiveStarName,
             summary?.lastFiveStarPity,
@@ -35,7 +39,7 @@ export function BannerStatsPanel({
         />
         <StatItem
           label="Current 4-star pity"
-          value={summary?.currentFourStarPity ?? 0}
+          value={`${summary?.currentFourStarPity ?? 0}/10`}
           detail={formatLastPity(
             summary?.lastFourStarName,
             summary?.lastFourStarPity,
