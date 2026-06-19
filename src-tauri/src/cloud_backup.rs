@@ -674,6 +674,7 @@ fn google_token_request_error(action: &str, error: ureq::Error) -> String {
             let detail = parse_google_error_detail(&body)
                 .or_else(|| (!body.trim().is_empty()).then(|| body.trim().to_string()))
                 .unwrap_or_else(|| format!("HTTP {status}"));
+            let detail = humanize_google_token_error(&detail);
 
             format!("Failed to {action}: {detail}")
         }
@@ -697,6 +698,17 @@ fn parse_google_error_detail(body: &str) -> Option<String> {
     }
 
     (!parts.is_empty()).then(|| parts.join(": "))
+}
+
+fn humanize_google_token_error(detail: &str) -> String {
+    if detail
+        .to_ascii_lowercase()
+        .contains("client_secret is missing")
+    {
+        return "This Google OAuth client looks like a Web application client. Create a Desktop app OAuth client in Google Cloud Console, then use that Client ID for Miku Warp.".to_string();
+    }
+
+    detail.to_string()
 }
 
 fn escape_html(value: &str) -> String {
@@ -928,6 +940,16 @@ mod tests {
         );
 
         assert_eq!(detail, Some("invalid_grant: Bad Request".to_string()));
+    }
+
+    #[test]
+    fn explains_web_oauth_client_secret_errors() {
+        let detail = humanize_google_token_error("invalid_request: client_secret is missing");
+
+        assert_eq!(
+            detail,
+            "This Google OAuth client looks like a Web application client. Create a Desktop app OAuth client in Google Cloud Console, then use that Client ID for Miku Warp."
+        );
     }
 
     #[test]
