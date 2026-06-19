@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Bell,
-  Cloud,
-  Database,
   Download,
+  LayoutDashboard,
   RefreshCw,
   Settings,
-  Upload,
 } from 'lucide-react'
 import {
   BackupPanel,
@@ -1368,17 +1366,9 @@ export function App() {
           </div>
 
           <nav className="sidebar-nav" aria-label="Main navigation">
-            <a className="sidebar-link sidebar-link-active" href="#history">
-              <Database size={18} aria-hidden="true" />
-              History
-            </a>
-            <a className="sidebar-link" href="#import">
-              <Upload size={18} aria-hidden="true" />
-              Import
-            </a>
-            <a className="sidebar-link" href="#backup">
-              <Cloud size={18} aria-hidden="true" />
-              Backup
+            <a className="sidebar-link sidebar-link-active" href="#dashboard">
+              <LayoutDashboard size={18} aria-hidden="true" />
+              Dashboard
             </a>
           </nav>
 
@@ -1437,7 +1427,7 @@ export function App() {
           />
 
           <section className="content-grid">
-            <div className="primary-column" id="history">
+            <div className="primary-column" id="dashboard">
               <BannerSummaryGrid
                 activeBannerType={activeBannerType}
                 summaries={bannerSummaries}
