@@ -156,8 +156,24 @@ struct GoogleDriveAuthFlowSession {
 }
 
 impl KeyringSecretStore {
+    #[cfg(target_os = "windows")]
     fn entry(&self, key: &str) -> Result<Entry, SecretStoreError> {
-        Entry::new(KEYRING_SERVICE_NAME, key).map_err(to_secret_store_error)
+        let target = format!("{KEYRING_SERVICE_NAME}.{key}");
+        let credential = keyring::windows::WinCredential::new_with_target(
+            Some(&target),
+            KEYRING_SERVICE_NAME,
+            key,
+        )
+        .map_err(to_secret_store_error)?;
+
+        Ok(Entry::new_with_credential(Box::new(credential)))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn entry(&self, _key: &str) -> Result<Entry, SecretStoreError> {
+        Err(SecretStoreError::Unavailable(
+            "Secure token storage is not configured for this operating system.".to_string(),
+        ))
     }
 }
 

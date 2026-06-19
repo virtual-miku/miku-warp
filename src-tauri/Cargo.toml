@@ -25,7 +25,7 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 tauri = { version = "2.11.2", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
-keyring = "3.6.3"
+keyring = { version = "3.6.3", features = ["windows-native"] }
 ureq = { version = "2", features = ["json"] }
 rand = "0.8"
 sha2 = "0.10"
