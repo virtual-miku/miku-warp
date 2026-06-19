@@ -14,6 +14,7 @@ export type ExportBackupSnapshotResult = {
 export type BackupSnapshotSummary = ExportBackupSnapshotResult & {
   fileName: string
   isAutoSave: boolean
+  sizeBytes: number
   uids: string[]
 }
 

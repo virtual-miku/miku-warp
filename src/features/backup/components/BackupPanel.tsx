@@ -25,6 +25,7 @@ export type BackupSnapshotInfo = {
   exportedAt: string
   fileName: string
   isAutoSave: boolean
+  sizeBytes: number
   uids: string[]
   warpPulls: number
 }
@@ -127,184 +128,189 @@ export function BackupPanel({
         <h2>Backup</h2>
       </header>
       <div className="tool-panel-body">
-        <div className="tool-row">
-          <div>
-            <strong>Google Drive</strong>
-            <span title={cloudBackupStatus.detail}>
-              {cloudBackupStatus.label}
-            </span>
-          </div>
-          <div className="backup-action-group">
-            {isGoogleDriveConnected ? (
+        <div className="backup-section">
+          <div className="tool-row">
+            <div>
+              <strong>Google Drive</strong>
+              <span title={cloudBackupStatus.detail}>
+                {cloudBackupStatus.label}
+              </span>
+            </div>
+            <div className="backup-action-group">
+              {isGoogleDriveConnected ? (
+                <AppButton
+                  disabled={isBusy || !cloudBackupStatus.canUpload}
+                  icon={Upload}
+                  onClick={onUploadGoogleDriveBackup}
+                  variant="ghost"
+                >
+                  {isCloudUploading ? 'Uploading' : 'Upload'}
+                </AppButton>
+              ) : null}
               <AppButton
-                disabled={isBusy || !cloudBackupStatus.canUpload}
-                icon={Upload}
-                onClick={onUploadGoogleDriveBackup}
+                disabled={
+                  isGoogleDriveConnecting
+                    ? isCloudCancelling
+                    : isBusy ||
+                      (isGoogleDriveConnected
+                        ? !cloudBackupStatus.canDisconnect
+                        : !cloudBackupStatus.canConnect)
+                }
+                icon={
+                  isGoogleDriveConnecting
+                    ? X
+                    : isGoogleDriveConnected
+                      ? LogOut
+                      : KeyRound
+                }
+                onClick={
+                  isGoogleDriveConnecting
+                    ? onCancelGoogleDrive
+                    : isGoogleDriveConnected
+                      ? onDisconnectGoogleDrive
+                      : onConnectGoogleDrive
+                }
+              >
+                {getGoogleDriveActionLabel(
+                  cloudBackupStatus,
+                  isGoogleDriveConnecting,
+                  isCloudCancelling,
+                  isCloudDisconnecting,
+                )}
+              </AppButton>
+            </div>
+          </div>
+          {!isGoogleDriveConnected && cloudBackupStatus.detail ? (
+            <p className="backup-status-detail">{cloudBackupStatus.detail}</p>
+          ) : null}
+          <div className="backup-policy-row">
+            <div>
+              <strong>Auto backup</strong>
+              <span>
+                {getCloudBackupPolicyDetail(
+                  cloudBackupPolicy,
+                  cloudBackupStatus.canUpload,
+                )}
+              </span>
+            </div>
+            <button
+              aria-checked={cloudBackupPolicy.autoBackupEnabled}
+              aria-label="Auto backup to Google Drive"
+              className={`switch-control${
+                cloudBackupPolicy.autoBackupEnabled ? ' switch-control-on' : ''
+              }`}
+              disabled={autoBackupToggleDisabled}
+              onClick={() =>
+                onAutoBackupPolicyChange(!cloudBackupPolicy.autoBackupEnabled)
+              }
+              role="switch"
+              type="button"
+            >
+              <span aria-hidden="true" />
+            </button>
+          </div>
+          {isGoogleDriveConnected ? (
+            <div className="backup-snapshot-list" aria-label="Cloud backups">
+              {visibleCloudSnapshots.length > 0 ? (
+                visibleCloudSnapshots.map((snapshot) => (
+                  <div
+                    className="backup-snapshot-row"
+                    key={snapshot.remoteFileId}
+                  >
+                    <div>
+                      <strong title={snapshot.fileName}>
+                        {formatBackupSizeKilobytes(snapshot.size)}
+                      </strong>
+                    </div>
+                    <div className="backup-snapshot-actions">
+                      <AppButton
+                        disabled={isBusy}
+                        icon={RefreshCcw}
+                        onClick={() => onRestoreGoogleDriveBackup(snapshot)}
+                        variant="ghost"
+                      >
+                        {restoringCloudFileId === snapshot.remoteFileId
+                          ? 'Restoring'
+                          : 'Restore'}
+                      </AppButton>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="backup-snapshot-row">
+                  <div>
+                    <strong>No cloud autosave yet</strong>
+                    <span>It will upload after the next saved change</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
+
+        <div className="backup-section">
+          <div className="tool-row">
+            <div>
+              <strong>Local backup</strong>
+            </div>
+            <div className="backup-action-group">
+              <AppButton
+                disabled={isBusy}
+                icon={Cloud}
+                onClick={onExportBackup}
                 variant="ghost"
               >
-                {isCloudUploading ? 'Uploading' : 'Upload'}
+                {isExporting ? 'Exporting' : 'Export'}
               </AppButton>
-            ) : null}
-            <AppButton
-              disabled={
-                isGoogleDriveConnecting
-                  ? isCloudCancelling
-                  : isBusy ||
-                    (isGoogleDriveConnected
-                      ? !cloudBackupStatus.canDisconnect
-                      : !cloudBackupStatus.canConnect)
-              }
-              icon={
-                isGoogleDriveConnecting
-                  ? X
-                  : isGoogleDriveConnected
-                    ? LogOut
-                    : KeyRound
-              }
-              onClick={
-                isGoogleDriveConnecting
-                  ? onCancelGoogleDrive
-                  : isGoogleDriveConnected
-                    ? onDisconnectGoogleDrive
-                    : onConnectGoogleDrive
-              }
-            >
-              {getGoogleDriveActionLabel(
-                cloudBackupStatus,
-                isGoogleDriveConnecting,
-                isCloudCancelling,
-                isCloudDisconnecting,
-              )}
-            </AppButton>
+              <AppButton
+                disabled={isBusy}
+                icon={FileJson}
+                onClick={onImportBackupJson}
+                variant="ghost"
+              >
+                {isImporting ? 'Importing' : 'Import JSON'}
+              </AppButton>
+            </div>
           </div>
-        </div>
-        {!isGoogleDriveConnected && cloudBackupStatus.detail ? (
-          <p className="backup-status-detail">{cloudBackupStatus.detail}</p>
-        ) : null}
-        <div className="backup-policy-row">
-          <div>
-            <strong>Auto backup</strong>
-            <span>
-              {getCloudBackupPolicyDetail(
-                cloudBackupPolicy,
-                cloudBackupStatus.canUpload,
-              )}
-            </span>
-          </div>
-          <button
-            aria-checked={cloudBackupPolicy.autoBackupEnabled}
-            aria-label="Auto backup to Google Drive"
-            className={`switch-control${
-              cloudBackupPolicy.autoBackupEnabled ? ' switch-control-on' : ''
-            }`}
-            disabled={autoBackupToggleDisabled}
-            onClick={() =>
-              onAutoBackupPolicyChange(!cloudBackupPolicy.autoBackupEnabled)
-            }
-            role="switch"
-            type="button"
-          >
-            <span aria-hidden="true" />
-          </button>
-        </div>
-        {isGoogleDriveConnected ? (
-          <div className="backup-snapshot-list" aria-label="Cloud backups">
-            {visibleCloudSnapshots.length > 0 ? (
-              visibleCloudSnapshots.map((snapshot) => (
-                <div
-                  className="backup-snapshot-row"
-                  key={snapshot.remoteFileId}
-                >
+          {visibleSnapshots.length > 0 ? (
+            <div className="backup-snapshot-list" aria-label="Recent backups">
+              {visibleSnapshots.map((snapshot) => (
+                <div className="backup-snapshot-row" key={snapshot.fileName}>
                   <div>
-                    <strong title={snapshot.fileName}>
-                      {formatCloudSnapshotSize(snapshot.size)}
-                    </strong>
+                    <strong>{formatSnapshotTime(snapshot.exportedAt)}</strong>
+                    <span title={snapshot.fileName}>
+                      {formatBackupSizeKilobytes(snapshot.sizeBytes)}
+                    </span>
                   </div>
                   <div className="backup-snapshot-actions">
                     <AppButton
                       disabled={isBusy}
                       icon={RefreshCcw}
-                      onClick={() => onRestoreGoogleDriveBackup(snapshot)}
+                      onClick={() => onRestoreSnapshot(snapshot.fileName)}
                       variant="ghost"
                     >
-                      {restoringCloudFileId === snapshot.remoteFileId
+                      {restoringFileName === snapshot.fileName
                         ? 'Restoring'
                         : 'Restore'}
                     </AppButton>
+                    {!snapshot.isAutoSave ? (
+                      <AppButton
+                        disabled={isBusy}
+                        icon={Trash2}
+                        onClick={() => onDeleteSnapshot(snapshot.fileName)}
+                        variant="ghost"
+                      >
+                        {deletingFileName === snapshot.fileName
+                          ? 'Deleting'
+                          : 'Delete'}
+                      </AppButton>
+                    ) : null}
                   </div>
                 </div>
-              ))
-            ) : (
-              <div className="backup-snapshot-row">
-                <div>
-                  <strong>No cloud autosave yet</strong>
-                  <span>It will upload after the next saved change</span>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : null}
-        <div className="tool-row">
-          <div>
-            <strong>Local backup</strong>
-          </div>
-          <div className="backup-action-group">
-            <AppButton
-              disabled={isBusy}
-              icon={Cloud}
-              onClick={onExportBackup}
-              variant="ghost"
-            >
-              {isExporting ? 'Exporting' : 'Export'}
-            </AppButton>
-            <AppButton
-              disabled={isBusy}
-              icon={FileJson}
-              onClick={onImportBackupJson}
-              variant="ghost"
-            >
-              {isImporting ? 'Importing' : 'Import JSON'}
-            </AppButton>
-          </div>
+              ))}
+            </div>
+          ) : null}
         </div>
-        {visibleSnapshots.length > 0 ? (
-          <div className="backup-snapshot-list" aria-label="Recent backups">
-            {visibleSnapshots.map((snapshot) => (
-              <div className="backup-snapshot-row" key={snapshot.fileName}>
-                <div>
-                  <strong>{formatSnapshotTime(snapshot.exportedAt)}</strong>
-                  <span title={snapshot.fileName}>
-                    {formatBackupUids(snapshot.uids)}
-                  </span>
-                </div>
-                <div className="backup-snapshot-actions">
-                  <AppButton
-                    disabled={isBusy}
-                    icon={RefreshCcw}
-                    onClick={() => onRestoreSnapshot(snapshot.fileName)}
-                    variant="ghost"
-                  >
-                    {restoringFileName === snapshot.fileName
-                      ? 'Restoring'
-                      : 'Restore'}
-                  </AppButton>
-                  {!snapshot.isAutoSave ? (
-                    <AppButton
-                      disabled={isBusy}
-                      icon={Trash2}
-                      onClick={() => onDeleteSnapshot(snapshot.fileName)}
-                      variant="ghost"
-                    >
-                      {deletingFileName === snapshot.fileName
-                        ? 'Deleting'
-                        : 'Delete'}
-                    </AppButton>
-                  ) : null}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : null}
         {notice ? (
           <div
             className={`backup-message backup-message-${notice.tone}`}
@@ -370,18 +376,15 @@ function formatSnapshotTime(value: string) {
   return `${dateLabel}, ${timeLabel}`
 }
 
-function formatBackupUids(uids: string[]) {
-  if (uids.length === 0) {
-    return 'No UID in snapshot'
+function formatBackupSizeKilobytes(size: number | string | undefined) {
+  const parsedSize =
+    typeof size === 'number' ? size : Number.parseInt(size ?? '', 10)
+
+  if (!Number.isFinite(parsedSize) || parsedSize < 0) {
+    return 'Size unavailable'
   }
 
-  if (uids.length === 1) {
-    return `UID ${uids[0]}`
-  }
+  const kilobytes = Math.max(1, Math.round(parsedSize / 1024))
 
-  return `${uids.length} UIDs: ${uids.join(', ')}`
-}
-
-function formatCloudSnapshotSize(size: string | undefined) {
-  return size ? `${size} bytes` : 'Size unavailable'
+  return `${new Intl.NumberFormat('id-ID').format(kilobytes)} KB`
 }

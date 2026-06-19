@@ -241,6 +241,7 @@ pub struct BackupSnapshotSummary {
     pub file_name: String,
     pub exported_at: String,
     pub is_auto_save: bool,
+    pub size_bytes: u64,
     pub accounts: usize,
     pub banners: usize,
     pub warp_items: usize,
@@ -2795,6 +2796,9 @@ fn list_backup_snapshots_in_directory(
 fn read_backup_snapshot_summary(path: &Path) -> Result<BackupSnapshotSummary, String> {
     let payload = fs::read_to_string(path)
         .map_err(|error| format!("Failed to read backup snapshot: {error}"))?;
+    let size_bytes = fs::metadata(path)
+        .map_err(|error| format!("Failed to read backup snapshot metadata: {error}"))?
+        .len();
     let snapshot: BackupSnapshot = serde_json::from_str(&payload)
         .map_err(|error| format!("Failed to parse backup snapshot: {error}"))?;
 
@@ -2815,6 +2819,7 @@ fn read_backup_snapshot_summary(path: &Path) -> Result<BackupSnapshotSummary, St
         exported_at: snapshot.exported_at,
         is_auto_save: path.file_name().and_then(|file_name| file_name.to_str())
             == Some(AUTO_BACKUP_FILE_NAME),
+        size_bytes,
         accounts: snapshot.accounts.len(),
         banners: snapshot.banners.len(),
         warp_items: snapshot.warp_items.len(),
@@ -4162,6 +4167,7 @@ mod tests {
         assert_eq!(first.content_hash, second.content_hash);
         assert_eq!(snapshots.len(), 1);
         assert!(snapshots[0].is_auto_save);
+        assert!(snapshots[0].size_bytes > 0);
         assert_eq!(snapshots[0].warp_pulls, 2);
 
         std::fs::remove_dir_all(backup_directory).ok();
