@@ -51,7 +51,7 @@ export function createInitialGoogleDriveBackupStatus(): CloudBackupStatus {
     canUpload: false,
     label: getCloudBackupStatusLabel('not_configured'),
     detail:
-      'Google OAuth client and secure token storage must be configured before Drive backup can be enabled.',
+      'Google Drive backup is not available in this build. Local JSON backup still works.',
   }
 }
 
@@ -85,7 +85,7 @@ export function getCloudBackupStatusLabel(
 ) {
   switch (status) {
     case 'not_configured':
-      return 'OAuth setup required'
+      return 'Drive backup unavailable'
     case 'storage_unavailable':
       return 'Secure storage unavailable'
     case 'disconnected':

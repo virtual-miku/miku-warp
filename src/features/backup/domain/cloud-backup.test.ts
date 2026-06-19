@@ -19,11 +19,14 @@ describe('cloud backup status', () => {
     expect(status.canDisconnect).toBe(false)
     expect(status.canUpload).toBe(false)
     expect(status.scope).toBe(googleDriveAppDataScope)
+    expect(status.detail).toBe(
+      'Google Drive backup is not available in this build. Local JSON backup still works.',
+    )
   })
 
   it('labels every supported connection state', () => {
     expect(getCloudBackupStatusLabel('not_configured')).toBe(
-      'OAuth setup required',
+      'Drive backup unavailable',
     )
     expect(getCloudBackupStatusLabel('storage_unavailable')).toBe(
       'Secure storage unavailable',

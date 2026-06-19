@@ -12,6 +12,7 @@ use url::Url;
 const GOOGLE_DRIVE_APP_DATA_SCOPE: &str = "https://www.googleapis.com/auth/drive.appdata";
 const GOOGLE_OAUTH_CLIENT_ID_ENV: &str = "MIKU_WARP_GOOGLE_CLIENT_ID";
 const LEGACY_GOOGLE_OAUTH_CLIENT_ID_ENV: &str = "WARP_TRACKER_GOOGLE_CLIENT_ID";
+const BUNDLED_GOOGLE_OAUTH_CLIENT_ID: Option<&str> = option_env!("MIKU_WARP_GOOGLE_CLIENT_ID");
 const KEYRING_SERVICE_NAME: &str = "app.warptracker.desktop.google-drive";
 const GOOGLE_DRIVE_REFRESH_TOKEN_KEY: &str = "google-drive-refresh-token";
 const GOOGLE_AUTHORIZATION_ENDPOINT: &str = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -166,12 +167,10 @@ pub fn get_cloud_backup_status() -> CloudBackupStatus {
 pub fn connect_google_drive_backup() -> Result<CloudBackupStatus, String> {
     let secret_store = KeyringSecretStore;
     let oauth_config = read_google_oauth_client_config_from_environment();
-    let client_id = oauth_config.client_id.clone().ok_or_else(|| {
-        format!(
-            "Configure {} before connecting Google Drive.",
-            google_oauth_client_id_env_hint()
-        )
-    })?;
+    let client_id = oauth_config
+        .client_id
+        .clone()
+        .ok_or_else(google_drive_unavailable_message)?;
 
     complete_google_oauth_flow(&secret_store, &client_id)?;
 
@@ -197,12 +196,10 @@ pub fn upload_google_drive_backup_snapshot(
 ) -> Result<UploadCloudBackupSnapshotResult, String> {
     let secret_store = KeyringSecretStore;
     let oauth_config = read_google_oauth_client_config_from_environment();
-    let client_id = oauth_config.client_id.as_deref().ok_or_else(|| {
-        format!(
-            "Configure {} before uploading Google Drive backup.",
-            google_oauth_client_id_env_hint()
-        )
-    })?;
+    let client_id = oauth_config
+        .client_id
+        .as_deref()
+        .ok_or_else(google_drive_unavailable_message)?;
     let access_token = refresh_google_access_token(&secret_store, client_id)?;
     let remote_file = upload_backup_snapshot_to_drive(file_name, bytes, &access_token)?;
     let remote_file_id = remote_file
@@ -223,12 +220,10 @@ pub fn upload_google_drive_backup_snapshot(
 pub fn list_google_drive_backup_snapshots() -> Result<Vec<CloudBackupSnapshotSummary>, String> {
     let secret_store = KeyringSecretStore;
     let oauth_config = read_google_oauth_client_config_from_environment();
-    let client_id = oauth_config.client_id.as_deref().ok_or_else(|| {
-        format!(
-            "Configure {} before listing Google Drive backups.",
-            google_oauth_client_id_env_hint()
-        )
-    })?;
+    let client_id = oauth_config
+        .client_id
+        .as_deref()
+        .ok_or_else(google_drive_unavailable_message)?;
     let access_token = refresh_google_access_token(&secret_store, client_id)?;
 
     list_backup_snapshots_from_drive(&access_token)
@@ -239,12 +234,10 @@ pub fn download_google_drive_backup_snapshot(
 ) -> Result<DownloadCloudBackupSnapshotResult, String> {
     let secret_store = KeyringSecretStore;
     let oauth_config = read_google_oauth_client_config_from_environment();
-    let client_id = oauth_config.client_id.as_deref().ok_or_else(|| {
-        format!(
-            "Configure {} before restoring Google Drive backups.",
-            google_oauth_client_id_env_hint()
-        )
-    })?;
+    let client_id = oauth_config
+        .client_id
+        .as_deref()
+        .ok_or_else(google_drive_unavailable_message)?;
     let access_token = refresh_google_access_token(&secret_store, client_id)?;
     let bytes = download_backup_snapshot_from_drive(remote_file_id, &access_token)?;
 
@@ -280,11 +273,8 @@ fn cloud_backup_status(
             false,
             false,
             false,
-            "OAuth setup required",
-            format!(
-                "Secure token storage is ready. Configure {} before enabling Google Drive backup.",
-                google_oauth_client_id_env_hint()
-            ),
+            "Drive backup unavailable",
+            google_drive_unavailable_message(),
         ),
         Ok(Some(_token)) => create_status(
             CloudBackupConnectionStatus::Connected,
@@ -710,7 +700,7 @@ fn read_google_oauth_client_config_from_environment() -> GoogleOAuthClientConfig
 }
 
 fn read_google_oauth_client_id_from_environment() -> Option<String> {
-    [
+    let runtime_client_id = [
         GOOGLE_OAUTH_CLIENT_ID_ENV,
         LEGACY_GOOGLE_OAUTH_CLIENT_ID_ENV,
     ]
@@ -720,11 +710,17 @@ fn read_google_oauth_client_id_from_environment() -> Option<String> {
             .ok()
             .map(|client_id| client_id.trim().to_string())
             .filter(|client_id| !client_id.is_empty())
+    });
+
+    runtime_client_id.or_else(|| {
+        BUNDLED_GOOGLE_OAUTH_CLIENT_ID
+            .map(|client_id| client_id.trim().to_string())
+            .filter(|client_id| !client_id.is_empty())
     })
 }
 
-fn google_oauth_client_id_env_hint() -> String {
-    format!("{GOOGLE_OAUTH_CLIENT_ID_ENV} or {LEGACY_GOOGLE_OAUTH_CLIENT_ID_ENV}")
+fn google_drive_unavailable_message() -> String {
+    "Google Drive backup is not available in this build. Local JSON backup still works.".to_string()
 }
 
 fn to_secret_store_error(error: KeyringError) -> SecretStoreError {

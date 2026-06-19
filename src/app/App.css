@@ -250,7 +250,7 @@
   height: 28px;
   flex: 0 0 auto;
   object-fit: contain;
-  transform: translateY(1px);
+  transform: translateY(4px);
 }
 
 .pity-card span {
