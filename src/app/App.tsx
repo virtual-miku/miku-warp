@@ -100,6 +100,7 @@ import {
 } from '../features/warp-history/domain/pity'
 import type { WarpPull } from '../features/warp-history/domain/warp-pull'
 import { AppButton } from '../shared/ui/AppButton'
+import { ConfirmDialog } from '../shared/ui/ConfirmDialog'
 import './App.css'
 
 const defaultBannerType = 'character_event' satisfies BannerFilterType
@@ -111,6 +112,20 @@ const defaultAccount: ManualImportAccountInput = {
   region: 'asia',
   nickname: 'Trailblazer',
 }
+
+type HistoryDeleteConfirmation =
+  | {
+      accountId: string
+      kind: 'pull'
+      pull: WarpPull
+      uid: string
+    }
+  | {
+      accountId: string
+      kind: 'all'
+      totalPulls: number
+      uid: string
+    }
 
 export function App() {
   const [activeBannerType, setActiveBannerType] =
@@ -163,6 +178,8 @@ export function App() {
   const [historyLoading, setHistoryLoading] = useState(false)
   const [deletingHistoryPullId, setDeletingHistoryPullId] = useState<string>()
   const [deletingAllHistory, setDeletingAllHistory] = useState(false)
+  const [historyDeleteConfirmation, setHistoryDeleteConfirmation] =
+    useState<HistoryDeleteConfirmation>()
   const [historyPage, setHistoryPage] = useState(1)
   const [historySearchQuery, setHistorySearchQuery] = useState('')
   const [historyRarityFilter, setHistoryRarityFilter] =
@@ -622,49 +639,65 @@ export function App() {
   }
 
   const handleDeleteHistoryPull = useCallback(
-    async (pull: WarpPull) => {
+    (pull: WarpPull) => {
       if (deletingHistoryPullId || deletingAllHistory) {
         return
       }
 
-      const confirmed = window.confirm(
-        `Delete ${pull.itemName} from UID ${activeAccount.uid} history? This cannot be undone.`,
-      )
-
-      if (!confirmed) {
-        return
-      }
-
-      setDeletingHistoryPullId(pull.id)
-
-      try {
-        await deleteWarpPull(activeAccount.id, pull.id)
-        await refreshWarpHistory()
-        await refreshAccounts()
-      } finally {
-        setDeletingHistoryPullId(undefined)
-      }
+      setHistoryDeleteConfirmation({
+        accountId: activeAccount.id,
+        kind: 'pull',
+        pull,
+        uid: activeAccount.uid,
+      })
     },
     [
       activeAccount.id,
       activeAccount.uid,
       deletingAllHistory,
       deletingHistoryPullId,
-      refreshAccounts,
-      refreshWarpHistory,
     ],
   )
 
-  const handleDeleteAllHistory = useCallback(async () => {
+  const handleDeleteAllHistory = useCallback(() => {
     if (deletingAllHistory || deletingHistoryPullId || activeAccountPullCount === 0) {
       return
     }
 
-    const confirmed = window.confirm(
-      `Delete all ${activeAccountPullCount} local history records for UID ${activeAccount.uid}? This cannot be undone.`,
-    )
+    setHistoryDeleteConfirmation({
+      accountId: activeAccount.id,
+      kind: 'all',
+      totalPulls: activeAccountPullCount,
+      uid: activeAccount.uid,
+    })
+  }, [
+    activeAccount.id,
+    activeAccount.uid,
+    activeAccountPullCount,
+    deletingAllHistory,
+    deletingHistoryPullId,
+  ])
 
-    if (!confirmed) {
+  const handleConfirmHistoryDelete = useCallback(async () => {
+    if (!historyDeleteConfirmation) {
+      return
+    }
+
+    if (historyDeleteConfirmation.kind === 'pull') {
+      setDeletingHistoryPullId(historyDeleteConfirmation.pull.id)
+
+      try {
+        await deleteWarpPull(
+          historyDeleteConfirmation.accountId,
+          historyDeleteConfirmation.pull.id,
+        )
+        await refreshWarpHistory()
+        await refreshAccounts()
+        setHistoryDeleteConfirmation(undefined)
+      } finally {
+        setDeletingHistoryPullId(undefined)
+      }
+
       return
     }
 
@@ -672,23 +705,16 @@ export function App() {
     setHistoryLoading(true)
 
     try {
-      await deleteAccountWarpHistory(activeAccount.id)
+      await deleteAccountWarpHistory(historyDeleteConfirmation.accountId)
       setHistoryPage(1)
       await refreshWarpHistory()
       await refreshAccounts()
+      setHistoryDeleteConfirmation(undefined)
     } finally {
       setDeletingAllHistory(false)
       setHistoryLoading(false)
     }
-  }, [
-    activeAccount.id,
-    activeAccount.uid,
-    activeAccountPullCount,
-    deletingAllHistory,
-    deletingHistoryPullId,
-    refreshAccounts,
-    refreshWarpHistory,
-  ])
+  }, [historyDeleteConfirmation, refreshAccounts, refreshWarpHistory])
 
   async function runAutoBackupAfterManualImport(insertedPulls: number) {
     if (!cloudBackupPolicy.autoBackupEnabled) {
@@ -1532,6 +1558,23 @@ export function App() {
         preview={manualImportPreview}
         saveNotice={manualImportSaveNotice}
       />
+      <ConfirmDialog
+        confirmLabel={
+          historyDeleteConfirmation?.kind === 'all'
+            ? 'Delete all history'
+            : 'Delete item'
+        }
+        description={formatHistoryDeleteDescription(historyDeleteConfirmation)}
+        isOpen={historyDeleteConfirmation !== undefined}
+        isPending={deletingHistoryPullId !== undefined || deletingAllHistory}
+        onCancel={() => setHistoryDeleteConfirmation(undefined)}
+        onConfirm={handleConfirmHistoryDelete}
+        title={
+          historyDeleteConfirmation?.kind === 'all'
+            ? 'Delete all history?'
+            : 'Delete this history item?'
+        }
+      />
     </>
   )
 }
@@ -1570,6 +1613,20 @@ function formatAccountMeta(account: WarpAccount | undefined) {
   const pulls = account.totalPulls === 1 ? '1 pull' : `${account.totalPulls} pulls`
 
   return `${region.toUpperCase()} - ${pulls}`
+}
+
+function formatHistoryDeleteDescription(
+  confirmation: HistoryDeleteConfirmation | undefined,
+) {
+  if (!confirmation) {
+    return ''
+  }
+
+  if (confirmation.kind === 'pull') {
+    return `${confirmation.pull.itemName} will be removed from UID ${confirmation.uid}. Pity for this banner will be recalculated. This action cannot be undone.`
+  }
+
+  return `All ${confirmation.totalPulls} history records for UID ${confirmation.uid} will be permanently removed. Other UIDs will not be affected.`
 }
 
 function formatCloudBackupUploadDetail(

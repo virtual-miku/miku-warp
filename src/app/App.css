@@ -839,6 +839,17 @@
   color: var(--text-muted);
 }
 
+.app-button-danger {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: #ffffff;
+}
+
+.app-button-danger:hover {
+  border-color: var(--danger);
+  filter: brightness(0.94);
+}
+
 .status-pill {
   min-height: 24px;
   display: inline-flex;
@@ -910,6 +921,59 @@
   color: var(--text-strong);
   font-size: 20px;
   line-height: 1.2;
+}
+
+.confirm-dialog-backdrop {
+  z-index: 30;
+}
+
+.confirm-dialog {
+  width: min(440px, 100%);
+  padding: 20px;
+}
+
+.confirm-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.confirm-dialog-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
+.confirm-dialog-content {
+  padding: 18px 0 22px;
+}
+
+.confirm-dialog-content h2,
+.confirm-dialog-content p {
+  margin: 0;
+}
+
+.confirm-dialog-content h2 {
+  color: var(--text-strong);
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.confirm-dialog-content p {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .icon-button {
