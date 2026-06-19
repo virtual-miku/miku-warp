@@ -60,6 +60,9 @@ export type WarpBannerSummary = {
   fiveStarCount: number
   fourStarPityTotal: number
   fiveStarPityTotal: number
+  rateUpWins: number
+  rateUpLosses: number
+  nextFiveStarGuaranteed: boolean
   lastFourStarPity?: number
   lastFiveStarPity?: number
   lastFourStarName?: string

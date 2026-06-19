@@ -13,12 +13,12 @@ describe('getNextRateUpChance', () => {
   })
 
   it('returns guaranteed after a known standard-pool loss', () => {
-    expect(getNextRateUpChance('character_event', 'Yanqing')).toMatchObject({
+    expect(getNextRateUpChance('character_event', 'Yanqing', true)).toMatchObject({
       chance: 100,
       itemName: 'Yanqing',
     })
     expect(
-      getNextRateUpChance('light_cone_event', "But the Battle Isn't Over"),
+      getNextRateUpChance('light_cone_event', "But the Battle Isn't Over", true),
     ).toMatchObject({
       chance: 100,
       itemName: "But the Battle Isn't Over",

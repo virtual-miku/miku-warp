@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { CheckSquare, ChevronLeft, ChevronRight, Trash2, X } from 'lucide-react'
 import { getCatalogAssetUrl } from '../data/catalog-assets'
 import { itemCatalog } from '../data/item-catalog'
-import { getBannerLabel } from '../domain/banner'
+import { getBannerLabel, getFiveStarHardPity } from '../domain/banner'
+import { getPityLevelClass } from '../domain/pity-level'
 import type { WarpPull } from '../domain/warp-pull'
 
 type WarpTimelineProps = {
@@ -210,6 +211,7 @@ function WarpHistoryRow({
       ),
     [pull.itemName, pull.itemType, pull.rarity],
   )
+  const pity = getPityAtPull(pull)
 
   return (
     <article className={isSelecting ? 'warp-row warp-row-selecting' : 'warp-row'}>
@@ -240,7 +242,20 @@ function WarpHistoryRow({
         {formatPullTime(pull.pulledAt)}
       </time>
       <div className="warp-pity">
-        <strong>{formatPityAtPull(pull)}</strong>
+        <strong
+          className={
+            pity
+              ? getPityLevelClass(
+                  pity.value,
+                  pity.rarity === 5
+                    ? getFiveStarHardPity(pull.bannerType)
+                    : 10,
+                )
+              : undefined
+          }
+        >
+          {pity ? `Pity ${pity.value}` : '-'}
+        </strong>
       </div>
     </article>
   )
@@ -290,14 +305,14 @@ function formatItemType(value: WarpPull['itemType']) {
   return value === 'light_cone' ? 'Light Cone' : 'Character'
 }
 
-function formatPityAtPull(pull: WarpPull) {
+function getPityAtPull(pull: WarpPull) {
   if (pull.rarity === 5 && pull.pityFiveAtPull) {
-    return `Pity ${pull.pityFiveAtPull}`
+    return { rarity: 5 as const, value: pull.pityFiveAtPull }
   }
 
   if (pull.rarity >= 4 && pull.pityFourAtPull) {
-    return `Pity ${pull.pityFourAtPull}`
+    return { rarity: 4 as const, value: pull.pityFourAtPull }
   }
 
-  return '-'
+  return undefined
 }

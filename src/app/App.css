@@ -385,6 +385,21 @@
   line-height: 1.1;
 }
 
+.banner-detail-item strong.pity-level-low,
+.warp-pity strong.pity-level-low {
+  color: #78d6a3;
+}
+
+.banner-detail-item strong.pity-level-medium,
+.warp-pity strong.pity-level-medium {
+  color: #f3cf70;
+}
+
+.banner-detail-item strong.pity-level-high,
+.warp-pity strong.pity-level-high {
+  color: #ff8585;
+}
+
 .banner-detail-detail {
   margin: 0;
   color: var(--text-muted);

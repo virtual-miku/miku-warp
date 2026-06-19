@@ -414,6 +414,9 @@ pub struct WarpBannerSummaryRow {
     pub five_star_count: i64,
     pub four_star_pity_total: i64,
     pub five_star_pity_total: i64,
+    pub rate_up_wins: i64,
+    pub rate_up_losses: i64,
+    pub next_five_star_guaranteed: bool,
     pub last_four_star_pity: Option<i64>,
     pub last_five_star_pity: Option<i64>,
     pub last_four_star_name: Option<String>,
@@ -491,6 +494,9 @@ struct WarpBannerSummaryAccumulator {
     five_star_count: i64,
     four_star_pity_total: i64,
     five_star_pity_total: i64,
+    rate_up_wins: i64,
+    rate_up_losses: i64,
+    next_five_star_guaranteed: bool,
     last_four_star_pity: Option<i64>,
     last_five_star_pity: Option<i64>,
     last_four_star_name: Option<String>,
@@ -1791,6 +1797,7 @@ fn build_warp_banner_summaries(
         summary.last_item_rarity = Some(pull.rarity);
 
         if pull.rarity == 5 {
+            update_rate_up_outcome(summary, &pull.item_name);
             let five_star_pity = summary.current_five_star_pity;
             summary.five_star_count += 1;
             summary.five_star_pity_total += five_star_pity;
@@ -1812,6 +1819,51 @@ fn build_warp_banner_summaries(
         .into_values()
         .map(WarpBannerSummaryAccumulator::into_row)
         .collect()
+}
+
+fn update_rate_up_outcome(summary: &mut WarpBannerSummaryAccumulator, item_name: &str) {
+    if !is_rate_up_banner(&summary.banner_type) {
+        return;
+    }
+
+    if is_known_off_rate_item(&summary.banner_type, item_name) {
+        summary.rate_up_losses += 1;
+        summary.next_five_star_guaranteed = true;
+    } else if summary.next_five_star_guaranteed {
+        summary.next_five_star_guaranteed = false;
+    } else {
+        summary.rate_up_wins += 1;
+    }
+}
+
+fn is_rate_up_banner(banner_type: &str) -> bool {
+    matches!(
+        banner_type,
+        "character_event"
+            | "light_cone_event"
+            | "collaboration_character"
+            | "collaboration_light_cone"
+    )
+}
+
+fn is_known_off_rate_item(banner_type: &str, item_name: &str) -> bool {
+    if matches!(banner_type, "character_event" | "collaboration_character") {
+        return matches!(
+            item_name,
+            "Bailu" | "Bronya" | "Clara" | "Gepard" | "Himeko" | "Welt" | "Yanqing"
+        );
+    }
+
+    matches!(
+        item_name,
+        "But the Battle Isn't Over"
+            | "In the Name of the World"
+            | "Moment of Victory"
+            | "Night on the Milky Way"
+            | "Sleep Like the Dead"
+            | "Something Irreplaceable"
+            | "Time Waits for No One"
+    )
 }
 
 fn export_backup_snapshot_to_directory(
@@ -3773,6 +3825,9 @@ impl WarpBannerSummaryAccumulator {
             five_star_count: self.five_star_count,
             four_star_pity_total: self.four_star_pity_total,
             five_star_pity_total: self.five_star_pity_total,
+            rate_up_wins: self.rate_up_wins,
+            rate_up_losses: self.rate_up_losses,
+            next_five_star_guaranteed: self.next_five_star_guaranteed,
             last_four_star_pity: self.last_four_star_pity,
             last_five_star_pity: self.last_five_star_pity,
             last_four_star_name: self.last_four_star_name,
@@ -4889,6 +4944,55 @@ mod tests {
         assert_eq!(standard.current_four_star_pity, 0);
         assert_eq!(standard.current_five_star_pity, 2);
         assert_eq!(standard.last_item_name, Some("Pela".to_string()));
+    }
+
+    #[test]
+    fn summarizes_only_non_guaranteed_rate_up_wins() {
+        let summaries = build_warp_banner_summaries(vec![
+            WarpBannerSummaryCandidate {
+                banner_type: "character_event".to_string(),
+                item_name: "Sparkle".to_string(),
+                rarity: 5,
+                pulled_at: "2025-01-01T00:00:01Z".to_string(),
+            },
+            WarpBannerSummaryCandidate {
+                banner_type: "character_event".to_string(),
+                item_name: "Yanqing".to_string(),
+                rarity: 5,
+                pulled_at: "2025-01-01T00:00:02Z".to_string(),
+            },
+            WarpBannerSummaryCandidate {
+                banner_type: "character_event".to_string(),
+                item_name: "Acheron".to_string(),
+                rarity: 5,
+                pulled_at: "2025-01-01T00:00:03Z".to_string(),
+            },
+            WarpBannerSummaryCandidate {
+                banner_type: "character_event".to_string(),
+                item_name: "Firefly".to_string(),
+                rarity: 5,
+                pulled_at: "2025-01-01T00:00:04Z".to_string(),
+            },
+            WarpBannerSummaryCandidate {
+                banner_type: "standard".to_string(),
+                item_name: "Bronya".to_string(),
+                rarity: 5,
+                pulled_at: "2025-01-01T00:00:05Z".to_string(),
+            },
+        ]);
+        let character_event = summaries
+            .iter()
+            .find(|summary| summary.banner_type == "character_event")
+            .expect("character event summary");
+        let standard = summaries
+            .iter()
+            .find(|summary| summary.banner_type == "standard")
+            .expect("standard summary");
+
+        assert_eq!(character_event.rate_up_wins, 2);
+        assert_eq!(character_event.rate_up_losses, 1);
+        assert_eq!(standard.rate_up_wins, 0);
+        assert_eq!(standard.rate_up_losses, 0);
     }
 
     #[test]
