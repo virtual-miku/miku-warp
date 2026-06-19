@@ -1,7 +1,6 @@
 import {
   bannerDefinitions,
   type BannerFilterType,
-  getFiveStarHardPity,
   getBannerLabel,
 } from '../domain/banner'
 import type { WarpBannerSummary } from '../../persistence/data/warp-pull-history'
@@ -49,7 +48,6 @@ export function BannerSummaryGrid({
         >
           <span>All</span>
           <strong>{allSummary.totalPulls} <small>pulls</small></strong>
-          <span>{allSummary.fiveStarCount} 5★ obtained</span>
         </button>
         {visibleBanners.map((banner) => {
           const summary = summaryByBanner.get(banner.type)
@@ -69,7 +67,6 @@ export function BannerSummaryGrid({
             >
               <span>{getBannerLabel(banner.type)}</span>
               <strong>{summary?.totalPulls ?? 0} <small>pulls</small></strong>
-              <span>{formatFiveStarLine(banner.type, summary)}</span>
             </button>
           )
         })}
@@ -81,38 +78,14 @@ export function BannerSummaryGrid({
 function summarizeAllBanners(summaries: WarpBannerSummary[]) {
   return summaries.reduce<{
     totalPulls: number
-    fiveStarCount: number
-    lastItemName?: string
-    lastPullAt?: string
   }>(
     (result, summary) => {
-      const isLatest =
-        summary.lastPullAt &&
-        (!result.lastPullAt || summary.lastPullAt > result.lastPullAt)
-
       return {
         totalPulls: result.totalPulls + summary.totalPulls,
-        fiveStarCount: result.fiveStarCount + summary.fiveStarCount,
-        lastItemName: isLatest ? summary.lastItemName : result.lastItemName,
-        lastPullAt: isLatest ? summary.lastPullAt : result.lastPullAt,
       }
     },
     {
       totalPulls: 0,
-      fiveStarCount: 0,
-      lastItemName: undefined,
-      lastPullAt: undefined,
     },
   )
-}
-
-function formatFiveStarLine(
-  bannerType: Exclude<BannerFilterType, 'all'>,
-  summary: WarpBannerSummary | undefined,
-) {
-  if (!summary || summary.totalPulls === 0) {
-    return 'No pulls yet'
-  }
-
-  return `5★ pity ${summary.currentFiveStarPity}/${getFiveStarHardPity(bannerType)} - ${summary.fiveStarCount} obtained`
 }

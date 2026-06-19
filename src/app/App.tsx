@@ -79,7 +79,10 @@ import {
 import { BannerStatsPanel } from '../features/warp-history/components/BannerStatsPanel'
 import { BannerSummaryGrid } from '../features/warp-history/components/BannerSummaryGrid'
 import { BannerTabs } from '../features/warp-history/components/BannerTabs'
-import { PityOverview } from '../features/warp-history/components/PityOverview'
+import {
+  PityOverview,
+  StellarJadeOverview,
+} from '../features/warp-history/components/PityOverview'
 import {
   WarpTimeline,
   type TimelineRarityFilter,
@@ -1738,7 +1741,9 @@ export function App() {
                 summaries={bannerSummaries}
                 onBannerTypeChange={handleBannerTypeChange}
               />
-              {activeBannerType === 'all' ? null : (
+              {activeBannerType === 'all' ? (
+                <StellarJadeOverview totalPulls={activeAccountPullCount} />
+              ) : (
                 <>
                   <PityOverview
                     bannerType={activeBannerType}

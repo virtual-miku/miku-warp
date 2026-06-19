@@ -1,9 +1,6 @@
-import {
-  getBannerLabel,
-  getFiveStarHardPity,
-  type BannerType,
-} from '../domain/banner'
+import { getBannerLabel, type BannerType } from '../domain/banner'
 import type { WarpBannerSummary } from '../../persistence/data/warp-pull-history'
+import { getNextRateUpChance } from '../domain/rate-up'
 
 type BannerStatsPanelProps = {
   bannerType: BannerType
@@ -14,6 +11,11 @@ export function BannerStatsPanel({
   bannerType,
   summary,
 }: BannerStatsPanelProps) {
+  const nextRateUp = getNextRateUpChance(
+    bannerType,
+    summary?.lastFiveStarName,
+  )
+
   return (
     <section className="banner-detail-panel" aria-label="Banner statistics">
       <header className="panel-header">
@@ -27,14 +29,12 @@ export function BannerStatsPanel({
             summary?.fiveStarCount,
           )}
           detail={`Total 5★ obtained: ${summary?.fiveStarCount ?? 0}`}
+          detailClassName="banner-detail-gold"
         />
         <StatItem
-          label="Current 5★ pity"
-          value={`${summary?.currentFiveStarPity ?? 0}/${getFiveStarHardPity(bannerType)}`}
-          detail={formatLastPity(
-            summary?.lastFiveStarName,
-            summary?.lastFiveStarPity,
-          )}
+          label="Next 5★ rate-up"
+          value={nextRateUp.chance === undefined ? 'N/A' : `${nextRateUp.chance}%`}
+          detail={nextRateUp.detail}
         />
         <StatItem
           label="Current 4★ pity"
@@ -53,14 +53,15 @@ type StatItemProps = {
   label: string
   value: number | string
   detail: string
+  detailClassName?: string
 }
 
-function StatItem({ label, value, detail }: StatItemProps) {
+function StatItem({ label, value, detail, detailClassName }: StatItemProps) {
   return (
     <article className="banner-detail-item">
       <span>{label}</span>
       <strong>{value}</strong>
-      <span>{detail}</span>
+      <span className={detailClassName}>{detail}</span>
     </article>
   )
 }
@@ -73,7 +74,7 @@ function formatAveragePity(
     return '-'
   }
 
-  return `${(total / count).toFixed(1)} pity`
+  return `Pity ${(total / count).toFixed(1)}`
 }
 
 function formatLastPity(name: string | undefined, pity: number | undefined) {

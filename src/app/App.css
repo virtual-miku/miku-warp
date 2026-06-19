@@ -212,6 +212,10 @@
   gap: 12px;
 }
 
+.stellar-jade-overview {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .pity-card {
   min-height: 112px;
   padding: 16px;
@@ -269,10 +273,10 @@
 }
 
 .banner-summary-card {
-  min-height: 112px;
+  min-height: 76px;
   display: grid;
-  align-content: start;
-  gap: 4px;
+  align-content: center;
+  gap: 6px;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -351,6 +355,11 @@
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.banner-detail-item .banner-detail-gold {
+  color: var(--rarity-5);
+  font-weight: 800;
 }
 
 .banner-detail-item strong {

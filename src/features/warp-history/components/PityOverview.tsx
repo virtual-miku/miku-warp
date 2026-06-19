@@ -6,6 +6,10 @@ type PityOverviewProps = {
   summary: PitySummary
 }
 
+type StellarJadeOverviewProps = {
+  totalPulls: number
+}
+
 export function PityOverview({ bannerType, summary }: PityOverviewProps) {
   const fiveStarHardPity = getFiveStarHardPity(bannerType)
 
@@ -29,6 +33,21 @@ export function PityOverview({ bannerType, summary }: PityOverviewProps) {
         <span>Stellar Jade spent</span>
         <strong>{formatStellarJade(summary.totalPulls * 160)}</strong>
         <span>{summary.totalPulls} pulls × 160</span>
+      </article>
+    </section>
+  )
+}
+
+export function StellarJadeOverview({ totalPulls }: StellarJadeOverviewProps) {
+  return (
+    <section
+      className="pity-grid stellar-jade-overview"
+      aria-label="Stellar Jade overview"
+    >
+      <article className="pity-card pity-accent-teal">
+        <span>Stellar Jade spent</span>
+        <strong>{formatStellarJade(totalPulls * 160)}</strong>
+        <span>{totalPulls} pulls × 160</span>
       </article>
     </section>
   )
