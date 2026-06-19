@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
+import { CheckSquare, ChevronLeft, ChevronRight, Trash2, X } from 'lucide-react'
 import { getCatalogAssetUrl } from '../data/catalog-assets'
 import { itemCatalog } from '../data/item-catalog'
 import { getBannerLabel } from '../domain/banner'
@@ -14,14 +14,18 @@ type WarpTimelineProps = {
   totalPulls: number
   isLoading: boolean
   canDeleteAll: boolean
-  deletingPullId?: string
   isDeletingAll: boolean
+  isDeletingSelected: boolean
+  isSelecting: boolean
+  selectedPullIds: Set<string>
   showBannerLabel: boolean
   onPageChange: (page: number) => void
   onDeleteAll: () => void
-  onDeletePull: (pull: WarpPull) => void
+  onDeleteSelected: () => void
   onRarityFilterChange: (rarityFilter: TimelineRarityFilter) => void
+  onSelectionModeChange: (isSelecting: boolean) => void
   onSearchQueryChange: (searchQuery: string) => void
+  onTogglePullSelection: (pullId: string) => void
 }
 
 export type TimelineRarityFilter = 'all' | 5 | 4 | 3
@@ -35,30 +39,69 @@ export function WarpTimeline({
   totalPulls,
   isLoading,
   canDeleteAll,
-  deletingPullId,
   isDeletingAll,
+  isDeletingSelected,
+  isSelecting,
+  selectedPullIds,
   showBannerLabel,
   onPageChange,
   onDeleteAll,
-  onDeletePull,
+  onDeleteSelected,
   onRarityFilterChange,
+  onSelectionModeChange,
   onSearchQueryChange,
+  onTogglePullSelection,
 }: WarpTimelineProps) {
   const pageCount = Math.max(1, Math.ceil(totalPulls / pageSize))
+  const isDeleting = isDeletingAll || isDeletingSelected
   return (
     <section className="history-panel" aria-label="Warp history">
       <header className="panel-header">
         <h2>Warp history</h2>
         <div className="history-header-actions">
-          <button
-            className="history-delete-all-button"
-            disabled={!canDeleteAll || isLoading || isDeletingAll}
-            onClick={onDeleteAll}
-            type="button"
-          >
-            <Trash2 size={14} aria-hidden="true" />
-            {isDeletingAll ? 'Deleting' : 'Delete all'}
-          </button>
+          {isSelecting ? (
+            <>
+              <button
+                className="history-delete-all-button"
+                disabled={selectedPullIds.size === 0 || isLoading || isDeleting}
+                onClick={onDeleteSelected}
+                type="button"
+              >
+                <Trash2 size={14} aria-hidden="true" />
+                {isDeletingSelected
+                  ? 'Deleting'
+                  : `Delete selected (${selectedPullIds.size})`}
+              </button>
+              <button
+                className="history-delete-all-button"
+                disabled={!canDeleteAll || isLoading || isDeleting}
+                onClick={onDeleteAll}
+                type="button"
+              >
+                <Trash2 size={14} aria-hidden="true" />
+                {isDeletingAll ? 'Deleting' : 'Delete all'}
+              </button>
+              <button
+                className="history-select-button"
+                disabled={isDeleting}
+                onClick={() => onSelectionModeChange(false)}
+                type="button"
+              >
+                <X size={14} aria-hidden="true" />
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              className="history-select-button"
+              disabled={!canDeleteAll || isLoading}
+              onClick={() => onSelectionModeChange(true)}
+              type="button"
+            >
+              <CheckSquare size={14} aria-hidden="true" />
+              Select
+            </button>
+          )}
         </div>
       </header>
       <div className="history-toolbar">
@@ -94,10 +137,11 @@ export function WarpTimeline({
         {pulls.length > 0 ? (
           pulls.map((pull) => (
             <WarpHistoryRow
-              deletingPullId={deletingPullId}
+              isSelecting={isSelecting}
               key={pull.id}
-              onDeletePull={onDeletePull}
+              onToggleSelection={onTogglePullSelection}
               pull={pull}
+              selected={selectedPullIds.has(pull.id)}
               showBannerLabel={showBannerLabel}
             />
           ))
@@ -144,14 +188,16 @@ export function WarpTimeline({
 }
 
 function WarpHistoryRow({
-  deletingPullId,
-  onDeletePull,
+  isSelecting,
+  onToggleSelection,
   pull,
+  selected,
   showBannerLabel,
 }: {
-  deletingPullId?: string
-  onDeletePull: (pull: WarpPull) => void
+  isSelecting: boolean
+  onToggleSelection: (pullId: string) => void
   pull: WarpPull
+  selected: boolean
   showBannerLabel: boolean
 }) {
   const catalogItem = useMemo(
@@ -166,7 +212,16 @@ function WarpHistoryRow({
   )
 
   return (
-    <article className="warp-row">
+    <article className={isSelecting ? 'warp-row warp-row-selecting' : 'warp-row'}>
+      {isSelecting ? (
+        <input
+          aria-label={`Select ${pull.itemName}`}
+          checked={selected}
+          className="history-select-checkbox"
+          onChange={() => onToggleSelection(pull.id)}
+          type="checkbox"
+        />
+      ) : null}
       <WarpHistoryItemIcon
         iconPath={pull.iconPath ?? catalogItem?.iconPath}
         rarity={pull.rarity}
@@ -187,15 +242,6 @@ function WarpHistoryRow({
       <div className="warp-pity">
         <strong>{formatPityAtPull(pull)}</strong>
       </div>
-      <button
-        aria-label={`Delete ${pull.itemName}`}
-        className="warp-delete-button icon-button"
-        disabled={deletingPullId !== undefined}
-        onClick={() => onDeletePull(pull)}
-        type="button"
-      >
-        <Trash2 size={15} aria-hidden="true" />
-      </button>
     </article>
   )
 }

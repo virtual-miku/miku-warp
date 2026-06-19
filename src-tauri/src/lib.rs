@@ -274,6 +274,14 @@ fn delete_warp_pull(
 }
 
 #[tauri::command]
+fn delete_warp_pulls(
+    app: tauri::AppHandle,
+    input: database::DeleteWarpPullsInput,
+) -> Result<database::DeleteWarpPullsResult, String> {
+    database::delete_warp_pulls(&app, input)
+}
+
+#[tauri::command]
 fn delete_account_warp_history(
     app: tauri::AppHandle,
     input: database::DeleteAccountWarpHistoryInput,
@@ -369,6 +377,7 @@ pub fn run() {
             delete_account_warp_history,
             delete_backup_snapshot,
             delete_warp_pull,
+            delete_warp_pulls,
             disconnect_google_drive_backup,
             export_backup_snapshot,
             get_cloud_backup_status,

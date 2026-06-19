@@ -409,6 +409,27 @@
   cursor: pointer;
 }
 
+.history-select-button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-strong);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.history-select-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .history-delete-all-button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
@@ -561,11 +582,23 @@
 .warp-row {
   min-height: 68px;
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 96px 104px 34px;
+  grid-template-columns: 44px minmax(0, 1fr) 96px 104px;
   gap: 12px;
   align-items: center;
   padding: 10px 16px;
   border-bottom: 1px solid var(--border);
+}
+
+.warp-row-selecting {
+  grid-template-columns: 24px 44px minmax(0, 1fr) 96px 104px;
+}
+
+.history-select-checkbox {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
 }
 
 .warp-row:last-child {
@@ -1567,6 +1600,10 @@
     grid-template-columns: 40px minmax(0, 1fr);
   }
 
+  .warp-row-selecting {
+    grid-template-columns: 24px 40px minmax(0, 1fr);
+  }
+
   .trash-row {
     grid-template-columns: 40px minmax(0, 1fr);
   }
@@ -1584,6 +1621,11 @@
   .warp-pity {
     grid-column: 2;
     text-align: left;
+  }
+
+  .warp-row-selecting .warp-time,
+  .warp-row-selecting .warp-pity {
+    grid-column: 3;
   }
 
   .warp-delete-button {

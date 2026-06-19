@@ -38,6 +38,13 @@ export type DeleteWarpPullResult = {
   recomputedBanner: boolean
 }
 
+export type DeleteWarpPullsResult = {
+  accountId: string
+  requestedPulls: number
+  deletedPulls: number
+  recomputedBanners: number
+}
+
 export type DeleteAccountWarpHistoryResult = {
   accountId: string
   deletedPulls: number
@@ -73,6 +80,12 @@ export function listAccounts() {
 export function deleteWarpPull(accountId: string, pullId: string) {
   return invokeTauri<DeleteWarpPullResult>('delete_warp_pull', {
     input: { accountId, pullId },
+  })
+}
+
+export function deleteWarpPulls(accountId: string, pullIds: string[]) {
+  return invokeTauri<DeleteWarpPullsResult>('delete_warp_pulls', {
+    input: { accountId, pullIds },
   })
 }
 

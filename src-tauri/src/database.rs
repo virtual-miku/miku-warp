@@ -182,6 +182,13 @@ pub struct DeleteWarpPullInput {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DeleteWarpPullsInput {
+    pub account_id: String,
+    pub pull_ids: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DeleteAccountWarpHistoryInput {
     pub account_id: String,
 }
@@ -296,6 +303,15 @@ pub struct DeleteWarpPullResult {
     pub pull_id: String,
     pub deleted_pulls: usize,
     pub recomputed_banner: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteWarpPullsResult {
+    pub account_id: String,
+    pub requested_pulls: usize,
+    pub deleted_pulls: usize,
+    pub recomputed_banners: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -653,6 +669,16 @@ pub fn delete_warp_pull(
     let mut connection = open_database(&database_path)?;
 
     delete_warp_pull_from_database(&mut connection, &input)
+}
+
+pub fn delete_warp_pulls(
+    app: &AppHandle,
+    input: DeleteWarpPullsInput,
+) -> Result<DeleteWarpPullsResult, String> {
+    let database_path = resolve_database_path(app)?;
+    let mut connection = open_database(&database_path)?;
+
+    delete_warp_pulls_from_database(&mut connection, &input)
 }
 
 pub fn delete_account_warp_history(
@@ -1413,6 +1439,66 @@ fn delete_warp_pull_from_database(
         pull_id: input.pull_id.clone(),
         deleted_pulls,
         recomputed_banner,
+    })
+}
+
+fn delete_warp_pulls_from_database(
+    connection: &mut Connection,
+    input: &DeleteWarpPullsInput,
+) -> Result<DeleteWarpPullsResult, String> {
+    validate_delete_warp_pulls(input)?;
+    let transaction = connection
+        .transaction()
+        .map_err(|error| format!("Failed to start selected history delete transaction: {error}"))?;
+    let mut banner_ids = HashSet::new();
+    let mut deleted_pulls = 0;
+
+    {
+        let mut banner_statement = transaction
+            .prepare(
+                "SELECT banner_id FROM warp_pulls
+                 WHERE id = ?1 AND account_id = ?2 AND deleted_at IS NULL",
+            )
+            .map_err(|error| format!("Failed to prepare selected pull lookup: {error}"))?;
+        let mut delete_statement = transaction
+            .prepare(
+                "UPDATE warp_pulls SET deleted_at = CURRENT_TIMESTAMP
+                 WHERE id = ?1 AND account_id = ?2 AND deleted_at IS NULL",
+            )
+            .map_err(|error| format!("Failed to prepare selected pull delete: {error}"))?;
+
+        for pull_id in input.pull_ids.iter().collect::<HashSet<_>>() {
+            let banner_id = banner_statement
+                .query_row(params![pull_id, &input.account_id], |row| {
+                    row.get::<_, String>(0)
+                })
+                .optional()
+                .map_err(|error| format!("Failed to read selected pull {pull_id}: {error}"))?;
+
+            if let Some(banner_id) = banner_id {
+                deleted_pulls += delete_statement
+                    .execute(params![pull_id, &input.account_id])
+                    .map_err(|error| {
+                        format!("Failed to move selected pull {pull_id} to Trash: {error}")
+                    })?;
+                banner_ids.insert(banner_id);
+            }
+        }
+    }
+
+    for banner_id in &banner_ids {
+        recompute_pity_for_account_banner(&transaction, &input.account_id, banner_id)?;
+    }
+
+    transaction
+        .commit()
+        .map_err(|error| format!("Failed to commit selected history delete: {error}"))?;
+
+    Ok(DeleteWarpPullsResult {
+        account_id: input.account_id.clone(),
+        requested_pulls: input.pull_ids.len(),
+        deleted_pulls,
+        recomputed_banners: banner_ids.len(),
     })
 }
 
@@ -2665,6 +2751,28 @@ fn validate_trash_warp_pull(input: &TrashWarpPullInput) -> Result<(), String> {
 
     if input.pull_id.trim().is_empty() {
         return Err("Trash pull id cannot be empty.".to_string());
+    }
+
+    Ok(())
+}
+
+fn validate_delete_warp_pulls(input: &DeleteWarpPullsInput) -> Result<(), String> {
+    validate_account_id(&input.account_id, "History account id")?;
+
+    if input.pull_ids.is_empty() {
+        return Err("Select at least one history item to delete.".to_string());
+    }
+
+    if input.pull_ids.len() > 500 {
+        return Err("At most 500 history items can be deleted at once.".to_string());
+    }
+
+    if input
+        .pull_ids
+        .iter()
+        .any(|pull_id| pull_id.trim().is_empty())
+    {
+        return Err("Selected history pull ids cannot be empty.".to_string());
     }
 
     Ok(())
@@ -4061,6 +4169,61 @@ mod tests {
         assert_eq!(restore_result.affected_pulls, 1);
         assert_eq!(restored_pulls.len(), 3);
         assert_eq!(restored_sparkle.pity_five_at_pull, Some(3));
+    }
+
+    #[test]
+    fn moves_selected_history_to_trash_in_one_transaction() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+        upsert_warp_item_catalog(
+            &mut connection,
+            &[
+                catalog_item("character-1001", "1001", "Pela", "character", 4),
+                catalog_item("light-cone-2001", "2001", "Data Bank", "light_cone", 3),
+            ],
+        )
+        .expect("catalog sync");
+        save_manual_import_draft_to_database(&mut connection, &manual_import_draft())
+            .expect("manual import");
+        let pulls = list_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: "account-1".to_string(),
+                banner_type: None,
+                limit: Some(5),
+                offset: None,
+                search: None,
+                rarity: None,
+            },
+        )
+        .expect("history list")
+        .pulls;
+
+        let result = delete_warp_pulls_from_database(
+            &mut connection,
+            &DeleteWarpPullsInput {
+                account_id: "account-1".to_string(),
+                pull_ids: pulls.iter().map(|pull| pull.id.clone()).collect(),
+            },
+        )
+        .expect("selected history moves to Trash");
+        let trash = list_trashed_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: "account-1".to_string(),
+                banner_type: None,
+                limit: Some(5),
+                offset: None,
+                search: None,
+                rarity: None,
+            },
+        )
+        .expect("Trash list");
+
+        assert_eq!(result.requested_pulls, 2);
+        assert_eq!(result.deleted_pulls, 2);
+        assert_eq!(result.recomputed_banners, 1);
+        assert_eq!(trash.total, 2);
     }
 
     #[test]

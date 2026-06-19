@@ -65,7 +65,7 @@ import {
 import { syncWarpItemCatalog } from '../features/persistence/data/warp-item-catalog-sync'
 import {
   deleteAccountWarpHistory,
-  deleteWarpPull,
+  deleteWarpPulls,
   listAccounts,
   listWarpBannerSummaries,
   listWarpPulls,
@@ -119,8 +119,9 @@ const defaultAccount: ManualImportAccountInput = {
 type HistoryDeleteConfirmation =
   | {
       accountId: string
-      kind: 'pull'
-      pull: WarpPull
+      kind: 'selected'
+      pullIds: string[]
+      totalPulls: number
       uid: string
     }
   | {
@@ -188,11 +189,15 @@ export function App() {
   const [persistedPulls, setPersistedPulls] = useState<WarpPull[]>([])
   const [historyTotalPulls, setHistoryTotalPulls] = useState(0)
   const [historyLoading, setHistoryLoading] = useState(false)
-  const [deletingHistoryPullId, setDeletingHistoryPullId] = useState<string>()
+  const [deletingSelectedHistory, setDeletingSelectedHistory] = useState(false)
   const [deletingAllHistory, setDeletingAllHistory] = useState(false)
   const [historyDeleteConfirmation, setHistoryDeleteConfirmation] =
     useState<HistoryDeleteConfirmation>()
   const [historyPage, setHistoryPage] = useState(1)
+  const [historySelecting, setHistorySelecting] = useState(false)
+  const [selectedHistoryPullIds, setSelectedHistoryPullIds] = useState<Set<string>>(
+    () => new Set(),
+  )
   const [historySearchQuery, setHistorySearchQuery] = useState('')
   const [historyRarityFilter, setHistoryRarityFilter] =
     useState<TimelineRarityFilter>('all')
@@ -691,6 +696,8 @@ export function App() {
     setActiveBannerType(bannerType)
     setHistoryLoading(true)
     setHistoryPage(1)
+    setHistorySelecting(false)
+    setSelectedHistoryPullIds(new Set())
     setPersistedPulls([])
     setManualImportSaveNotice(undefined)
   }
@@ -721,6 +728,8 @@ export function App() {
     saveActiveAccount(nextAccount)
     setHistoryLoading(true)
     setHistoryPage(1)
+    setHistorySelecting(false)
+    setSelectedHistoryPullIds(new Set())
     setTrashPage(1)
     if (activeView === 'trash') {
       setTrashLoading(true)
@@ -730,29 +739,51 @@ export function App() {
     setManualImportSaveNotice(undefined)
   }
 
-  const handleDeleteHistoryPull = useCallback(
-    (pull: WarpPull) => {
-      if (deletingHistoryPullId || deletingAllHistory) {
-        return
+  const handleHistorySelectionModeChange = (isSelecting: boolean) => {
+    setHistorySelecting(isSelecting)
+    setSelectedHistoryPullIds(new Set())
+  }
+
+  const handleToggleHistoryPullSelection = (pullId: string) => {
+    setSelectedHistoryPullIds((current) => {
+      const next = new Set(current)
+
+      if (next.has(pullId)) {
+        next.delete(pullId)
+      } else {
+        next.add(pullId)
       }
 
-      setHistoryDeleteConfirmation({
-        accountId: activeAccount.id,
-        kind: 'pull',
-        pull,
-        uid: activeAccount.uid,
-      })
-    },
-    [
-      activeAccount.id,
-      activeAccount.uid,
-      deletingAllHistory,
-      deletingHistoryPullId,
-    ],
-  )
+      return next
+    })
+  }
+
+  const handleDeleteSelectedHistory = useCallback(() => {
+    if (
+      deletingSelectedHistory ||
+      deletingAllHistory ||
+      selectedHistoryPullIds.size === 0
+    ) {
+      return
+    }
+
+    setHistoryDeleteConfirmation({
+      accountId: activeAccount.id,
+      kind: 'selected',
+      pullIds: [...selectedHistoryPullIds],
+      totalPulls: selectedHistoryPullIds.size,
+      uid: activeAccount.uid,
+    })
+  }, [
+    activeAccount.id,
+    activeAccount.uid,
+    deletingAllHistory,
+    deletingSelectedHistory,
+    selectedHistoryPullIds,
+  ])
 
   const handleDeleteAllHistory = useCallback(() => {
-    if (deletingAllHistory || deletingHistoryPullId || activeAccountPullCount === 0) {
+    if (deletingAllHistory || deletingSelectedHistory || activeAccountPullCount === 0) {
       return
     }
 
@@ -767,7 +798,7 @@ export function App() {
     activeAccount.uid,
     activeAccountPullCount,
     deletingAllHistory,
-    deletingHistoryPullId,
+    deletingSelectedHistory,
   ])
 
   const handleConfirmHistoryDelete = useCallback(async () => {
@@ -775,19 +806,21 @@ export function App() {
       return
     }
 
-    if (historyDeleteConfirmation.kind === 'pull') {
-      setDeletingHistoryPullId(historyDeleteConfirmation.pull.id)
+    if (historyDeleteConfirmation.kind === 'selected') {
+      setDeletingSelectedHistory(true)
 
       try {
-        await deleteWarpPull(
+        await deleteWarpPulls(
           historyDeleteConfirmation.accountId,
-          historyDeleteConfirmation.pull.id,
+          historyDeleteConfirmation.pullIds,
         )
         await refreshWarpHistory()
         await refreshAccounts()
         setHistoryDeleteConfirmation(undefined)
+        setHistorySelecting(false)
+        setSelectedHistoryPullIds(new Set())
       } finally {
-        setDeletingHistoryPullId(undefined)
+        setDeletingSelectedHistory(false)
       }
 
       return
@@ -802,6 +835,8 @@ export function App() {
       await refreshWarpHistory()
       await refreshAccounts()
       setHistoryDeleteConfirmation(undefined)
+      setHistorySelecting(false)
+      setSelectedHistoryPullIds(new Set())
     } finally {
       setDeletingAllHistory(false)
       setHistoryLoading(false)
@@ -1631,25 +1666,32 @@ export function App() {
                 totalPulls={historyTotalPulls}
                 isLoading={historyLoading}
                 canDeleteAll={activeAccountPullCount > 0}
-                deletingPullId={deletingHistoryPullId}
                 isDeletingAll={deletingAllHistory}
+                isDeletingSelected={deletingSelectedHistory}
+                isSelecting={historySelecting}
+                selectedPullIds={selectedHistoryPullIds}
                 showBannerLabel={activeBannerType === 'all'}
                 onDeleteAll={handleDeleteAllHistory}
-                onDeletePull={handleDeleteHistoryPull}
+                onDeleteSelected={handleDeleteSelectedHistory}
                 onPageChange={(page) => {
                   setHistoryLoading(true)
                   setHistoryPage(page)
+                  setSelectedHistoryPullIds(new Set())
                 }}
                 onRarityFilterChange={(rarityFilter) => {
                   setHistoryLoading(true)
                   setHistoryRarityFilter(rarityFilter)
                   setHistoryPage(1)
+                  setSelectedHistoryPullIds(new Set())
                 }}
+                onSelectionModeChange={handleHistorySelectionModeChange}
                 onSearchQueryChange={(searchQuery) => {
                   setHistoryLoading(true)
                   setHistorySearchQuery(searchQuery)
                   setHistoryPage(1)
+                  setSelectedHistoryPullIds(new Set())
                 }}
+                onTogglePullSelection={handleToggleHistoryPullSelection}
               />
             </div>
 
@@ -1762,13 +1804,13 @@ export function App() {
         }
         description={formatHistoryDeleteDescription(historyDeleteConfirmation)}
         isOpen={historyDeleteConfirmation !== undefined}
-        isPending={deletingHistoryPullId !== undefined || deletingAllHistory}
+        isPending={deletingSelectedHistory || deletingAllHistory}
         onCancel={() => setHistoryDeleteConfirmation(undefined)}
         onConfirm={handleConfirmHistoryDelete}
         title={
           historyDeleteConfirmation?.kind === 'all'
             ? 'Move all history to Trash?'
-            : 'Move this item to Trash?'
+            : 'Move selected history to Trash?'
         }
       />
       <ConfirmDialog
@@ -1831,8 +1873,8 @@ function formatHistoryDeleteDescription(
     return ''
   }
 
-  if (confirmation.kind === 'pull') {
-    return `${confirmation.pull.itemName} will be moved to Trash for UID ${confirmation.uid}. Pity for this banner will be recalculated, and the item can be restored for six months.`
+  if (confirmation.kind === 'selected') {
+    return `${confirmation.totalPulls} selected history items will be moved to Trash for UID ${confirmation.uid}. Their banner pity will be recalculated, and they can be restored for six months.`
   }
 
   return `All ${confirmation.totalPulls} history records for UID ${confirmation.uid} will be moved to Trash. Other UIDs will not be affected, and these items can be restored for six months.`
