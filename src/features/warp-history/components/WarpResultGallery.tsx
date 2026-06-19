@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { listWarpPulls } from '../../persistence/data/warp-pull-history'
 import { getCatalogAssetUrl } from '../data/catalog-assets'
@@ -10,7 +10,9 @@ import {
 import { getPityLevelClass } from '../domain/pity-level'
 import type { WarpPull } from '../domain/warp-pull'
 
-const resultBatchSize = 12
+const resultColumnMinWidth = 62
+const resultColumnGap = 10
+const initialResultRows = 2
 const catalogIconByIdentity = new Map(
   itemCatalog.map((item) => [
     createCatalogItemKey(item.name, item.itemType, item.rarity),
@@ -81,12 +83,53 @@ function WarpResultList({
   bannerType,
   rarity,
 }: WarpResultListProps) {
+  const galleryBodyRef = useRef<HTMLDivElement>(null)
+  const [resultBatchSize, setResultBatchSize] = useState(0)
   const [pulls, setPulls] = useState<WarpPull[]>([])
   const [totalPulls, setTotalPulls] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
   const [hasError, setHasError] = useState(false)
 
   useEffect(() => {
+    const galleryBody = galleryBodyRef.current
+
+    if (!galleryBody) {
+      return
+    }
+
+    const updateBatchSize = () => {
+      const contentWidth = galleryBody.getBoundingClientRect().width - 32
+
+      if (contentWidth < resultColumnMinWidth) {
+        return
+      }
+
+      const columnCount = Math.max(
+        1,
+        Math.floor(
+          (contentWidth + resultColumnGap) /
+            (resultColumnMinWidth + resultColumnGap),
+        ),
+      )
+
+      setResultBatchSize((currentSize) =>
+        currentSize > 0 ? currentSize : columnCount * initialResultRows,
+      )
+    }
+
+    updateBatchSize()
+
+    const resizeObserver = new ResizeObserver(updateBatchSize)
+    resizeObserver.observe(galleryBody)
+
+    return () => resizeObserver.disconnect()
+  }, [])
+
+  useEffect(() => {
+    if (resultBatchSize === 0) {
+      return
+    }
+
     let isActive = true
 
     listWarpPulls({
@@ -116,7 +159,7 @@ function WarpResultList({
     return () => {
       isActive = false
     }
-  }, [accountId, bannerType, rarity])
+  }, [accountId, bannerType, rarity, resultBatchSize])
 
   const handleLoadMore = async () => {
     if (isLoading || (!hasError && pulls.length >= totalPulls)) {
@@ -147,7 +190,7 @@ function WarpResultList({
   const hasMore = pulls.length < totalPulls
 
   return (
-    <div className="warp-result-gallery-body">
+    <div className="warp-result-gallery-body" ref={galleryBodyRef}>
       {pulls.length > 0 ? (
         <div className="warp-result-grid" role="list">
           {pulls.map((pull) => (
@@ -167,7 +210,7 @@ function WarpResultList({
       {hasMore || hasError ? (
         <button
           aria-label={isLoading ? 'Loading more results' : 'Show more results'}
-          className="icon-button warp-result-expand"
+          className={`icon-button warp-result-expand warp-result-expand-${rarity}`}
           disabled={isLoading}
           onClick={() => void handleLoadMore()}
           title="Show more results"

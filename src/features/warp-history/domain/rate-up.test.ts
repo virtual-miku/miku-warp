@@ -31,7 +31,7 @@ describe('getNextRateUpChance', () => {
 
   it('does not guess after an ambiguous Celestial Invitation result', () => {
     expect(getNextRateUpChance('character_event', 'Blade', null)).toEqual({
-      detail: 'Uncertain after',
+      detail: 'Celestial Invitation result after',
       itemName: 'Blade',
     })
   })

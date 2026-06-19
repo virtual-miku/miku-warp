@@ -34,8 +34,8 @@ export function getNextRateUpChance(
   if (nextFiveStarGuaranteed === null) {
     return {
       detail: lastFiveStarName
-        ? 'Uncertain after'
-        : 'Not enough history to determine the next rate-up chance',
+        ? 'Celestial Invitation result after'
+        : 'Celestial Invitation prevents an exact rate-up prediction',
       itemName: lastFiveStarName,
     }
   }
