@@ -18,7 +18,8 @@ Client ID with application type **Desktop app**. Google may also show a Client
 Secret for that desktop client. If Google requires it during token exchange, set
 the Client Secret alongside the Client ID for local development.
 
-For local development:
+For local development, provide the OAuth credentials only to the process that
+runs the desktop app:
 
 ```powershell
 $env:MIKU_WARP_GOOGLE_CLIENT_ID="your-desktop-client-id.apps.googleusercontent.com"
@@ -26,18 +27,19 @@ $env:MIKU_WARP_GOOGLE_CLIENT_SECRET="your-desktop-client-secret"
 npm run desktop
 ```
 
-For release builds, set the same environment variable before building so the
-Client ID is bundled into the desktop app. Do not bundle the Client Secret into
-public desktop builds; a desktop binary cannot keep that value private.
+These variables are runtime-only. Neither `npm run build` nor
+`npm run desktop:build` embeds their values, even when the variables are still
+set in the current PowerShell session. You can build from the same terminal
+without clearing them:
 
 ```powershell
-$env:MIKU_WARP_GOOGLE_CLIENT_ID="your-desktop-client-id.apps.googleusercontent.com"
 npm run desktop:build
 ```
 
-If a distributed Google OAuth client requires a Client Secret, use a small
-backend OAuth broker for the token exchange instead of embedding the secret in
-the app.
+The resulting public package has Google Drive disabled until a release-safe
+OAuth configuration is implemented. If a distributed Google OAuth client
+requires a Client Secret, use a backend OAuth broker instead of relying on
+environment variables or embedding the value in the desktop binary.
 
 ## Structure
 

@@ -15,7 +15,6 @@ use url::Url;
 const GOOGLE_DRIVE_APP_DATA_SCOPE: &str = "https://www.googleapis.com/auth/drive.appdata";
 const GOOGLE_OAUTH_CLIENT_ID_ENV: &str = "MIKU_WARP_GOOGLE_CLIENT_ID";
 const LEGACY_GOOGLE_OAUTH_CLIENT_ID_ENV: &str = "WARP_TRACKER_GOOGLE_CLIENT_ID";
-const BUNDLED_GOOGLE_OAUTH_CLIENT_ID: Option<&str> = option_env!("MIKU_WARP_GOOGLE_CLIENT_ID");
 const GOOGLE_OAUTH_CLIENT_SECRET_ENV: &str = "MIKU_WARP_GOOGLE_CLIENT_SECRET";
 const LEGACY_GOOGLE_OAUTH_CLIENT_SECRET_ENV: &str = "WARP_TRACKER_GOOGLE_CLIENT_SECRET";
 const KEYRING_SERVICE_NAME: &str = "app.warptracker.desktop.google-drive";
@@ -1032,7 +1031,7 @@ fn humanize_google_token_error(detail: &str) -> String {
         .to_ascii_lowercase()
         .contains("client_secret is missing")
     {
-        return "Google requires a Client Secret for this OAuth client. Add the Client Secret from Google Cloud Console to Miku Warp's build or development environment, then reconnect.".to_string();
+        return "Google requires a Client Secret for this OAuth client. Add the Client Secret from Google Cloud Console to Miku Warp's runtime environment, then reconnect.".to_string();
     }
 
     detail.to_string()
@@ -1090,7 +1089,7 @@ fn read_google_oauth_client_config_from_environment() -> GoogleOAuthClientConfig
 }
 
 fn read_google_oauth_client_id_from_environment() -> Option<String> {
-    let runtime_client_id = [
+    [
         GOOGLE_OAUTH_CLIENT_ID_ENV,
         LEGACY_GOOGLE_OAUTH_CLIENT_ID_ENV,
     ]
@@ -1098,12 +1097,6 @@ fn read_google_oauth_client_id_from_environment() -> Option<String> {
     .find_map(|env_key| {
         env::var(env_key)
             .ok()
-            .map(|client_id| client_id.trim().to_string())
-            .filter(|client_id| !client_id.is_empty())
-    });
-
-    runtime_client_id.or_else(|| {
-        BUNDLED_GOOGLE_OAUTH_CLIENT_ID
             .map(|client_id| client_id.trim().to_string())
             .filter(|client_id| !client_id.is_empty())
     })
@@ -1376,7 +1369,7 @@ mod tests {
 
         assert_eq!(
             detail,
-            "Google requires a Client Secret for this OAuth client. Add the Client Secret from Google Cloud Console to Miku Warp's build or development environment, then reconnect."
+            "Google requires a Client Secret for this OAuth client. Add the Client Secret from Google Cloud Console to Miku Warp's runtime environment, then reconnect."
         );
     }
 
