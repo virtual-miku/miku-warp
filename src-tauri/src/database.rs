@@ -416,7 +416,8 @@ pub struct WarpBannerSummaryRow {
     pub five_star_pity_total: i64,
     pub rate_up_wins: i64,
     pub rate_up_losses: i64,
-    pub next_five_star_guaranteed: bool,
+    pub rate_up_uncertain: i64,
+    pub next_five_star_guaranteed: Option<bool>,
     pub last_four_star_pity: Option<i64>,
     pub last_five_star_pity: Option<i64>,
     pub last_four_star_name: Option<String>,
@@ -496,7 +497,8 @@ struct WarpBannerSummaryAccumulator {
     five_star_pity_total: i64,
     rate_up_wins: i64,
     rate_up_losses: i64,
-    next_five_star_guaranteed: bool,
+    rate_up_uncertain: i64,
+    next_five_star_guaranteed: Option<bool>,
     last_four_star_pity: Option<i64>,
     last_five_star_pity: Option<i64>,
     last_four_star_name: Option<String>,
@@ -1786,18 +1788,19 @@ fn build_warp_banner_summaries(
             .entry(pull.banner_type.clone())
             .or_insert_with(|| WarpBannerSummaryAccumulator {
                 banner_type: pull.banner_type.clone(),
+                next_five_star_guaranteed: is_rate_up_banner(&pull.banner_type).then_some(false),
                 ..WarpBannerSummaryAccumulator::default()
             });
 
         summary.total_pulls += 1;
         summary.current_four_star_pity += 1;
         summary.current_five_star_pity += 1;
-        summary.last_pull_at = Some(pull.pulled_at);
+        summary.last_pull_at = Some(pull.pulled_at.clone());
         summary.last_item_name = Some(pull.item_name.clone());
         summary.last_item_rarity = Some(pull.rarity);
 
         if pull.rarity == 5 {
-            update_rate_up_outcome(summary, &pull.item_name);
+            update_rate_up_outcome(summary, &pull.item_name, &pull.pulled_at);
             let five_star_pity = summary.current_five_star_pity;
             summary.five_star_count += 1;
             summary.five_star_pity_total += five_star_pity;
@@ -1821,19 +1824,67 @@ fn build_warp_banner_summaries(
         .collect()
 }
 
-fn update_rate_up_outcome(summary: &mut WarpBannerSummaryAccumulator, item_name: &str) {
-    if !is_rate_up_banner(&summary.banner_type) {
+fn update_rate_up_outcome(
+    summary: &mut WarpBannerSummaryAccumulator,
+    item_name: &str,
+    pulled_at: &str,
+) {
+    let Some(outcome) = classify_rate_up_outcome(&summary.banner_type, item_name, pulled_at) else {
         return;
+    };
+
+    match outcome {
+        RateUpOutcome::Loss => {
+            summary.rate_up_losses += 1;
+            summary.next_five_star_guaranteed = Some(true);
+        }
+        RateUpOutcome::Featured => {
+            if summary.next_five_star_guaranteed == Some(false) {
+                summary.rate_up_wins += 1;
+            } else if summary.next_five_star_guaranteed.is_none() {
+                summary.rate_up_uncertain += 1;
+            }
+
+            summary.next_five_star_guaranteed = Some(false);
+        }
+        RateUpOutcome::CelestialInvitation => {
+            if summary.next_five_star_guaranteed == Some(true) {
+                summary.next_five_star_guaranteed = Some(false);
+            } else {
+                summary.rate_up_uncertain += 1;
+                summary.next_five_star_guaranteed = None;
+            }
+        }
+    }
+}
+
+enum RateUpOutcome {
+    Featured,
+    Loss,
+    CelestialInvitation,
+}
+
+const CELESTIAL_INVITATION_V3_2_START_DATE: &str = "2025-04-09";
+const CELESTIAL_INVITATION_V4_2_START_DATE: &str = "2026-04-22";
+
+fn classify_rate_up_outcome(
+    banner_type: &str,
+    item_name: &str,
+    pulled_at: &str,
+) -> Option<RateUpOutcome> {
+    if !is_rate_up_banner(banner_type) {
+        return None;
     }
 
-    if is_known_off_rate_item(&summary.banner_type, item_name) {
-        summary.rate_up_losses += 1;
-        summary.next_five_star_guaranteed = true;
-    } else if summary.next_five_star_guaranteed {
-        summary.next_five_star_guaranteed = false;
-    } else {
-        summary.rate_up_wins += 1;
+    if is_known_off_rate_item(banner_type, item_name) {
+        return Some(RateUpOutcome::Loss);
     }
+
+    if is_celestial_invitation_candidate(banner_type, item_name, pulled_at) {
+        return Some(RateUpOutcome::CelestialInvitation);
+    }
+
+    Some(RateUpOutcome::Featured)
 }
 
 fn is_rate_up_banner(banner_type: &str) -> bool {
@@ -1864,6 +1915,21 @@ fn is_known_off_rate_item(banner_type: &str, item_name: &str) -> bool {
             | "Something Irreplaceable"
             | "Time Waits for No One"
     )
+}
+
+fn is_celestial_invitation_candidate(banner_type: &str, item_name: &str, pulled_at: &str) -> bool {
+    if !matches!(banner_type, "character_event" | "collaboration_character") {
+        return false;
+    }
+
+    let pull_date = pulled_at.get(..10).unwrap_or(pulled_at);
+    let added_in_version_3_2 = matches!(item_name, "Fu Xuan" | "Blade" | "Seele");
+    let added_in_version_4_2 = matches!(item_name, "Yunli" | "Argenti" | "Silver Wolf");
+
+    // Warp history omits both the featured banner and the user's seven selected
+    // Celestial Invitation characters, so these outcomes cannot be labeled safely.
+    (pull_date >= CELESTIAL_INVITATION_V3_2_START_DATE && added_in_version_3_2)
+        || (pull_date >= CELESTIAL_INVITATION_V4_2_START_DATE && added_in_version_4_2)
 }
 
 fn export_backup_snapshot_to_directory(
@@ -3827,6 +3893,7 @@ impl WarpBannerSummaryAccumulator {
             five_star_pity_total: self.five_star_pity_total,
             rate_up_wins: self.rate_up_wins,
             rate_up_losses: self.rate_up_losses,
+            rate_up_uncertain: self.rate_up_uncertain,
             next_five_star_guaranteed: self.next_five_star_guaranteed,
             last_four_star_pity: self.last_four_star_pity,
             last_five_star_pity: self.last_five_star_pity,
@@ -4991,8 +5058,97 @@ mod tests {
 
         assert_eq!(character_event.rate_up_wins, 2);
         assert_eq!(character_event.rate_up_losses, 1);
+        assert_eq!(character_event.rate_up_uncertain, 0);
+        assert_eq!(character_event.next_five_star_guaranteed, Some(false));
         assert_eq!(standard.rate_up_wins, 0);
         assert_eq!(standard.rate_up_losses, 0);
+        assert_eq!(standard.rate_up_uncertain, 0);
+        assert_eq!(standard.next_five_star_guaranteed, None);
+    }
+
+    #[test]
+    fn keeps_celestial_invitation_results_out_of_known_win_rate() {
+        let summaries = build_warp_banner_summaries(vec![
+            WarpBannerSummaryCandidate {
+                banner_type: "character_event".to_string(),
+                item_name: "Fu Xuan".to_string(),
+                rarity: 5,
+                pulled_at: "2025-04-08T23:59:59Z".to_string(),
+            },
+            WarpBannerSummaryCandidate {
+                banner_type: "character_event".to_string(),
+                item_name: "Blade".to_string(),
+                rarity: 5,
+                pulled_at: "2025-04-09T00:00:00Z".to_string(),
+            },
+            WarpBannerSummaryCandidate {
+                banner_type: "character_event".to_string(),
+                item_name: "Sparkle".to_string(),
+                rarity: 5,
+                pulled_at: "2025-05-01T00:00:00Z".to_string(),
+            },
+            WarpBannerSummaryCandidate {
+                banner_type: "character_event".to_string(),
+                item_name: "Yanqing".to_string(),
+                rarity: 5,
+                pulled_at: "2025-06-01T00:00:00Z".to_string(),
+            },
+            WarpBannerSummaryCandidate {
+                banner_type: "character_event".to_string(),
+                item_name: "Seele".to_string(),
+                rarity: 5,
+                pulled_at: "2025-07-01T00:00:00Z".to_string(),
+            },
+            WarpBannerSummaryCandidate {
+                banner_type: "character_event".to_string(),
+                item_name: "Yunli".to_string(),
+                rarity: 5,
+                pulled_at: "2026-04-21T23:59:59Z".to_string(),
+            },
+            WarpBannerSummaryCandidate {
+                banner_type: "character_event".to_string(),
+                item_name: "Argenti".to_string(),
+                rarity: 5,
+                pulled_at: "2026-04-22T00:00:00Z".to_string(),
+            },
+        ]);
+        let summary = summaries
+            .iter()
+            .find(|summary| summary.banner_type == "character_event")
+            .expect("character event summary");
+
+        assert_eq!(summary.rate_up_wins, 2);
+        assert_eq!(summary.rate_up_losses, 1);
+        assert_eq!(summary.rate_up_uncertain, 3);
+        assert_eq!(summary.next_five_star_guaranteed, None);
+    }
+
+    #[test]
+    fn expands_celestial_invitation_candidates_by_version() {
+        assert!(matches!(
+            classify_rate_up_outcome("character_event", "Blade", "2025-04-09 00:00:00"),
+            Some(RateUpOutcome::CelestialInvitation)
+        ));
+        assert!(matches!(
+            classify_rate_up_outcome("character_event", "Yunli", "2026-04-21 23:59:59"),
+            Some(RateUpOutcome::Featured)
+        ));
+        assert!(matches!(
+            classify_rate_up_outcome(
+                "collaboration_character",
+                "Silver Wolf",
+                "2026-04-22 00:00:00"
+            ),
+            Some(RateUpOutcome::CelestialInvitation)
+        ));
+        assert!(matches!(
+            classify_rate_up_outcome(
+                "character_event",
+                "Silver Wolf LV.999",
+                "2026-04-22 00:00:00"
+            ),
+            Some(RateUpOutcome::Featured)
+        ));
     }
 
     #[test]

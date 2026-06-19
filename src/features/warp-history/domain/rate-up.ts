@@ -23,12 +23,21 @@ export function getRateUpWinRateTone(winRate: number): RateUpWinRateTone {
 export function getNextRateUpChance(
   bannerType: BannerType,
   lastFiveStarName?: string,
-  nextFiveStarGuaranteed = false,
+  nextFiveStarGuaranteed: boolean | null = false,
 ): NextRateUpChance {
   const baseChance = getBaseRateUpChance(bannerType)
 
   if (baseChance === undefined) {
     return { detail: '' }
+  }
+
+  if (nextFiveStarGuaranteed === null) {
+    return {
+      detail: lastFiveStarName
+        ? 'Uncertain after'
+        : 'Not enough history to determine the next rate-up chance',
+      itemName: lastFiveStarName,
+    }
   }
 
   if (nextFiveStarGuaranteed) {

@@ -29,6 +29,13 @@ describe('getNextRateUpChance', () => {
     expect(getNextRateUpChance('standard', 'Himeko')).toEqual({ detail: '' })
   })
 
+  it('does not guess after an ambiguous Celestial Invitation result', () => {
+    expect(getNextRateUpChance('character_event', 'Blade', null)).toEqual({
+      detail: 'Uncertain after',
+      itemName: 'Blade',
+    })
+  })
+
   it('maps win-rate thirds to clear performance tones', () => {
     expect(getRateUpWinRateTone(33)).toBe('poor')
     expect(getRateUpWinRateTone(34)).toBe('average')

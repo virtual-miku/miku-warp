@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import {
   getBannerLabel,
   getFiveStarHardPity,
+  isRateUpBanner,
   type BannerType,
 } from '../domain/banner'
 import type { WarpBannerSummary } from '../../persistence/data/warp-pull-history'
@@ -30,6 +31,7 @@ export function BannerStatsPanel({
     summary?.fiveStarPityTotal,
     summary?.fiveStarCount,
   )
+  const showRateUpStats = isRateUpBanner(bannerType)
 
   return (
     <section className="banner-detail-panel" aria-label="Banner statistics">
@@ -57,14 +59,18 @@ export function BannerStatsPanel({
             </>
           }
         />
-        {nextRateUp.chance !== undefined ? (
+        {showRateUpStats ? (
           <StatItem
             label="Next 5★ rate-up"
-            value={`${nextRateUp.chance}%`}
+            value={
+              nextRateUp.chance === undefined
+                ? 'Unknown'
+                : `${nextRateUp.chance}%`
+            }
             detail={<RateUpDetail nextRateUp={nextRateUp} />}
           />
         ) : null}
-        {nextRateUp.chance !== undefined ? (
+        {showRateUpStats ? (
           <RateUpWinRateItem summary={summary} />
         ) : null}
       </div>
@@ -92,6 +98,7 @@ function StatItem({ label, value, detail, valueClassName }: StatItemProps) {
 function RateUpWinRateItem({ summary }: { summary?: WarpBannerSummary }) {
   const wins = summary?.rateUpWins ?? 0
   const losses = summary?.rateUpLosses ?? 0
+  const uncertain = summary?.rateUpUncertain ?? 0
   const attempts = wins + losses
   const winRate = attempts > 0 ? Math.round((wins / attempts) * 100) : undefined
 
@@ -105,21 +112,45 @@ function RateUpWinRateItem({ summary }: { summary?: WarpBannerSummary }) {
           : `rate-up-score-${getRateUpWinRateTone(winRate)}`
       }
       detail={
-        attempts > 0
-          ? (
-              <>
-                <span className="rate-up-wins">
-                  {wins} {wins === 1 ? 'win' : 'wins'}
-                </span>
-                {' · '}
-                <span className="rate-up-losses">
-                  {losses} {losses === 1 ? 'loss' : 'losses'}
-                </span>
-              </>
-            )
-          : 'No recorded rate-up result yet'
+        attempts > 0 || uncertain > 0 ? (
+          <RateUpOutcomeDetail
+            losses={losses}
+            uncertain={uncertain}
+            wins={wins}
+          />
+        ) : (
+          'No recorded rate-up result yet'
+        )
       }
     />
+  )
+}
+
+function RateUpOutcomeDetail({
+  losses,
+  uncertain,
+  wins,
+}: {
+  losses: number
+  uncertain: number
+  wins: number
+}) {
+  return (
+    <>
+      <span className="rate-up-wins">
+        {wins} {wins === 1 ? 'win' : 'wins'}
+      </span>
+      {' · '}
+      <span className="rate-up-losses">
+        {losses} {losses === 1 ? 'loss' : 'losses'}
+      </span>
+      {uncertain > 0 ? (
+        <>
+          {' · '}
+          <span className="rate-up-uncertain">{uncertain} uncertain</span>
+        </>
+      ) : null}
+    </>
   )
 }
 

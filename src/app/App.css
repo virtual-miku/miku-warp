@@ -343,6 +343,20 @@
   font-weight: 700;
 }
 
+.banner-pull-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.banner-pull-value img {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  object-fit: contain;
+  transform: translateY(2px);
+}
+
 .banner-detail-panel {
   display: grid;
   gap: 10px;
@@ -430,6 +444,11 @@
 
 .rate-up-wins,
 .rate-up-losses {
+  font-weight: 800;
+}
+
+.rate-up-uncertain {
+  color: var(--text-muted);
   font-weight: 800;
 }
 

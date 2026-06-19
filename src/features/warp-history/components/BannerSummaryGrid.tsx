@@ -1,9 +1,13 @@
 import {
   bannerDefinitions,
   type BannerFilterType,
+  type BannerType,
   getBannerLabel,
 } from '../domain/banner'
 import type { WarpBannerSummary } from '../../persistence/data/warp-pull-history'
+
+const STAR_RAIL_PASS_ICON_PATH = '/icon/item/101.png'
+const STAR_RAIL_SPECIAL_PASS_ICON_PATH = '/icon/item/102.png'
 
 type BannerSummaryGridProps = {
   activeBannerType: BannerFilterType
@@ -37,6 +41,7 @@ export function BannerSummaryGrid({
       </header>
       <div className="banner-summary-grid">
         <button
+          aria-label={`All banners: ${allSummary.totalPulls} pulls`}
           aria-pressed={activeBannerType === 'all'}
           className={
             activeBannerType === 'all'
@@ -47,7 +52,9 @@ export function BannerSummaryGrid({
           type="button"
         >
           <span>All</span>
-          <strong>{allSummary.totalPulls} <small>pulls</small></strong>
+          <strong>
+            {allSummary.totalPulls} <small>pulls</small>
+          </strong>
         </button>
         {visibleBanners.map((banner) => {
           const summary = summaryByBanner.get(banner.type)
@@ -55,6 +62,7 @@ export function BannerSummaryGrid({
 
           return (
             <button
+              aria-label={`${getBannerLabel(banner.type)}: ${summary?.totalPulls ?? 0} pulls`}
               aria-pressed={isActive}
               className={
                 isActive
@@ -66,13 +74,26 @@ export function BannerSummaryGrid({
               type="button"
             >
               <span>{getBannerLabel(banner.type)}</span>
-              <strong>{summary?.totalPulls ?? 0} <small>pulls</small></strong>
+              <strong className="banner-pull-value">
+                {summary?.totalPulls ?? 0}
+                <img
+                  alt=""
+                  aria-hidden="true"
+                  src={getBannerPassIconPath(banner.type)}
+                />
+              </strong>
             </button>
           )
         })}
       </div>
     </section>
   )
+}
+
+function getBannerPassIconPath(bannerType: BannerType) {
+  return bannerType === 'standard' || bannerType === 'departure'
+    ? STAR_RAIL_PASS_ICON_PATH
+    : STAR_RAIL_SPECIAL_PASS_ICON_PATH
 }
 
 function summarizeAllBanners(summaries: WarpBannerSummary[]) {

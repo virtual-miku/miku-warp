@@ -23,3 +23,12 @@ export function getFiveStarHardPity(type: BannerType) {
     ? 80
     : 90
 }
+
+export function isRateUpBanner(type: BannerType) {
+  return (
+    type === 'character_event' ||
+    type === 'light_cone_event' ||
+    type === 'collaboration_character' ||
+    type === 'collaboration_light_cone'
+  )
+}
