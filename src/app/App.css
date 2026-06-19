@@ -242,6 +242,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  line-height: 1;
 }
 
 .stellar-jade-value img {
@@ -249,6 +250,7 @@
   height: 28px;
   flex: 0 0 auto;
   object-fit: contain;
+  transform: translateY(1px);
 }
 
 .pity-card span {
@@ -829,6 +831,17 @@
   justify-content: flex-end;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.backup-status-detail {
+  margin: -2px 0 2px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .backup-policy-row {

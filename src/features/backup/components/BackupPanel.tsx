@@ -165,6 +165,9 @@ export function BackupPanel({
             </AppButton>
           </div>
         </div>
+        {!isGoogleDriveConnected ? (
+          <p className="backup-status-detail">{cloudBackupStatus.detail}</p>
+        ) : null}
         <div className="backup-policy-row">
           <div>
             <strong>Auto backup</strong>
