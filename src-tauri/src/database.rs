@@ -2485,7 +2485,7 @@ fn recompute_pity_for_snapshot(
 
 fn validate_backup_snapshot(snapshot: &BackupSnapshot) -> Result<(), String> {
     if snapshot.application != "warp-tracker" {
-        return Err("Backup snapshot was not created by Warp Tracker.".to_string());
+        return Err("Backup snapshot was not created by Miku Warp.".to_string());
     }
 
     if snapshot.schema_version != BACKUP_SCHEMA_VERSION {

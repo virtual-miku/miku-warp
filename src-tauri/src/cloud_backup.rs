@@ -642,7 +642,7 @@ fn oauth_callback_response(is_success: bool) -> String {
     let body = if is_success {
         "Google Drive is connected. You can close this browser tab."
     } else {
-        "Google Drive connection failed. Return to Warp Tracker and try again."
+        "Google Drive connection failed. Return to Miku Warp and try again."
     };
 
     let html = format!("<!doctype html><html><body><p>{body}</p></body></html>");

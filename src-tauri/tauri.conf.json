@@ -1,6 +1,6 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Warp Tracker",
+  "productName": "Miku Warp",
   "version": "0.1.0",
   "identifier": "app.warptracker.desktop",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Warp Tracker",
+        "title": "Miku Warp",
         "width": 1180,
         "height": 760,
         "minWidth": 960,

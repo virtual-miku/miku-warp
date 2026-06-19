@@ -1660,10 +1660,10 @@ export function App() {
         <aside className="sidebar" aria-label="Workspace">
           <div className="brand">
             <div className="brand-mark" aria-hidden="true">
-              WT
+              <img src="/miku-warp.png" alt="" />
             </div>
             <div>
-              <strong>Warp Tracker</strong>
+              <strong>Miku Warp</strong>
               <span>Honkai: Star Rail</span>
             </div>
           </div>

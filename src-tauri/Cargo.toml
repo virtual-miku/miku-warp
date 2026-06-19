@@ -1,5 +1,5 @@
 [package]
-name = "warp-tracker"
+name = "miku-warp"
 version = "0.1.0"
 description = "Local-first Honkai: Star Rail warp tracker"
 authors = ["saki"]

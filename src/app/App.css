@@ -33,11 +33,17 @@
   height: 42px;
   display: grid;
   place-items: center;
+  overflow: hidden;
   border-radius: 8px;
   background: var(--brand-bg);
-  color: var(--brand-text);
-  font-weight: 800;
-  font-size: 14px;
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.brand-mark img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
 }
 
 .brand strong,

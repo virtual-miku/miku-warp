@@ -1,4 +1,4 @@
-# Warp Tracker Frontend
+# Miku Warp
 
 Desktop UI for the Honkai: Star Rail warp tracker.
 

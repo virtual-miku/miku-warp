@@ -56,9 +56,9 @@ export function restoreBackupSnapshot(fileName: string) {
 
 export async function selectBackupJsonFile() {
   const selectedPath = await open({
-    filters: [{ name: 'Warp Tracker backup JSON', extensions: ['json'] }],
+    filters: [{ name: 'Miku Warp backup JSON', extensions: ['json'] }],
     multiple: false,
-    title: 'Select Warp Tracker backup JSON',
+    title: 'Select Miku Warp backup JSON',
   })
 
   return typeof selectedPath === 'string' ? selectedPath : undefined
