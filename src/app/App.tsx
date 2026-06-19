@@ -1210,10 +1210,12 @@ export function App() {
     setBackupNotice(undefined)
 
     try {
-      const commandStatus = await connectGoogleDriveBackup()
-      const status = await waitForConnectedCloudBackupStatus(
-        commandStatus,
+      const startStatus = await connectGoogleDriveBackup()
+      setCloudBackupStatus(startStatus)
+
+      const status = await waitForGoogleDriveAuthCompletion(
         refreshCloudBackupStatus,
+        setCloudBackupStatus,
       )
       setCloudBackupStatus(status)
 
@@ -1227,11 +1229,13 @@ export function App() {
       } else {
         setBackupNotice({
           tone: 'error',
-          title: 'Google Drive connection incomplete',
-          detail: [
-            'Google login finished, but Miku Warp still cannot read a saved Drive connection.',
-            status.detail || `Current status: ${status.label}.`,
-          ].join('\n'),
+          title:
+            status.connectionStatus === 'connection_failed'
+              ? 'Google Drive connection failed'
+              : 'Google Drive connection incomplete',
+          detail:
+            status.detail ||
+            'Google login did not finish yet. Try Connect again when the browser login is complete.',
         })
       }
     } catch (error) {
@@ -2010,19 +2014,25 @@ function formatCloudBackupUploadDetail(
   ].join('\n')
 }
 
-async function waitForConnectedCloudBackupStatus(
-  initialStatus: CloudBackupStatus,
+async function waitForGoogleDriveAuthCompletion(
   refreshStatus: () => Promise<CloudBackupStatus>,
+  onStatus: (status: CloudBackupStatus) => void,
 ) {
-  let status = initialStatus
+  let status = await refreshStatus()
+  onStatus(status)
 
-  for (let attempt = 0; attempt < 5; attempt += 1) {
+  for (let attempt = 0; attempt < 190; attempt += 1) {
     if (status.connectionStatus === 'connected') {
       return status
     }
 
-    await delay(250)
+    if (status.connectionStatus === 'connection_failed') {
+      return status
+    }
+
+    await delay(1000)
     status = await refreshStatus()
+    onStatus(status)
   }
 
   return status

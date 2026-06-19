@@ -7,6 +7,8 @@ export type CloudBackupConnectionStatus =
   | 'not_configured'
   | 'storage_unavailable'
   | 'disconnected'
+  | 'connecting'
+  | 'connection_failed'
   | 'connected'
   | 'needs_reauth'
 
@@ -90,6 +92,10 @@ export function getCloudBackupStatusLabel(
       return 'Secure storage unavailable'
     case 'disconnected':
       return 'Not connected'
+    case 'connecting':
+      return 'Waiting for Google login'
+    case 'connection_failed':
+      return 'Connection failed'
     case 'connected':
       return 'Connected'
     case 'needs_reauth':

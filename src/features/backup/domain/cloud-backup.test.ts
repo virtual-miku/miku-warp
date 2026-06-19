@@ -32,6 +32,12 @@ describe('cloud backup status', () => {
       'Secure storage unavailable',
     )
     expect(getCloudBackupStatusLabel('disconnected')).toBe('Not connected')
+    expect(getCloudBackupStatusLabel('connecting')).toBe(
+      'Waiting for Google login',
+    )
+    expect(getCloudBackupStatusLabel('connection_failed')).toBe(
+      'Connection failed',
+    )
     expect(getCloudBackupStatusLabel('connected')).toBe('Connected')
     expect(getCloudBackupStatusLabel('needs_reauth')).toBe('Needs re-login')
   })

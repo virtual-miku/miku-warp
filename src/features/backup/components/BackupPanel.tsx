@@ -347,6 +347,14 @@ function getGoogleDriveActionLabel(
     return 'Disconnect'
   }
 
+  if (status.connectionStatus === 'connecting') {
+    return 'Connecting'
+  }
+
+  if (status.connectionStatus === 'connection_failed') {
+    return 'Retry'
+  }
+
   if (status.connectionStatus === 'needs_reauth') {
     return 'Re-login'
   }

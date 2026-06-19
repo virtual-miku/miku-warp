@@ -6,6 +6,8 @@ use sha2::{Digest, Sha256};
 use std::env;
 use std::io::{Read, Write};
 use std::net::TcpListener;
+use std::sync::{Mutex, OnceLock};
+use std::thread;
 use std::time::{Duration, Instant};
 use url::Url;
 
@@ -39,6 +41,8 @@ pub enum CloudBackupConnectionStatus {
     NotConfigured,
     StorageUnavailable,
     Disconnected,
+    Connecting,
+    ConnectionFailed,
     Connected,
     NeedsReauth,
 }
@@ -125,10 +129,17 @@ pub trait SecretStore {
 #[derive(Debug, Default)]
 pub struct KeyringSecretStore;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct GoogleOAuthClientConfig {
     client_id: Option<String>,
     client_secret: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+enum GoogleDriveAuthFlowState {
+    Idle,
+    InProgress { started_at: Instant },
+    Failed { detail: String },
 }
 
 impl KeyringSecretStore {
@@ -161,9 +172,10 @@ impl SecretStore for KeyringSecretStore {
 }
 
 pub fn get_cloud_backup_status() -> CloudBackupStatus {
-    cloud_backup_status(
+    cloud_backup_status_with_auth_flow(
         &KeyringSecretStore,
         read_google_oauth_client_config_from_environment(),
+        read_google_drive_auth_flow_state(),
     )
 }
 
@@ -174,18 +186,34 @@ pub fn connect_google_drive_backup() -> Result<CloudBackupStatus, String> {
         .client_id
         .clone()
         .ok_or_else(google_drive_unavailable_message)?;
+    let current_status = cloud_backup_status(&secret_store, oauth_config.clone());
 
-    complete_google_oauth_flow(
+    if matches!(
+        current_status.connection_status,
+        CloudBackupConnectionStatus::StorageUnavailable
+    ) {
+        return Err(current_status.detail);
+    }
+
+    if matches!(
+        current_status.connection_status,
+        CloudBackupConnectionStatus::Connected
+    ) {
+        return Ok(current_status);
+    }
+
+    start_google_oauth_flow_in_background(client_id, oauth_config.client_secret.clone())?;
+
+    Ok(cloud_backup_status_with_auth_flow(
         &secret_store,
-        &client_id,
-        oauth_config.client_secret.as_deref(),
-    )?;
-
-    Ok(cloud_backup_status(&secret_store, oauth_config))
+        oauth_config,
+        read_google_drive_auth_flow_state(),
+    ))
 }
 
 pub fn disconnect_google_drive_backup() -> Result<CloudBackupStatus, String> {
     let secret_store = KeyringSecretStore;
+    set_google_drive_auth_flow_state(GoogleDriveAuthFlowState::Idle);
     secret_store
         .delete_secret(GOOGLE_DRIVE_REFRESH_TOKEN_KEY)
         .map_err(secret_store_error_message)?;
@@ -314,6 +342,52 @@ fn cloud_backup_status(
             false,
             "Not connected",
             String::new(),
+        ),
+    }
+}
+
+fn cloud_backup_status_with_auth_flow(
+    secret_store: &impl SecretStore,
+    oauth_config: GoogleOAuthClientConfig,
+    auth_flow_state: GoogleDriveAuthFlowState,
+) -> CloudBackupStatus {
+    let status = cloud_backup_status(secret_store, oauth_config);
+
+    apply_google_auth_flow_state(status, auth_flow_state)
+}
+
+fn apply_google_auth_flow_state(
+    status: CloudBackupStatus,
+    auth_flow_state: GoogleDriveAuthFlowState,
+) -> CloudBackupStatus {
+    if !matches!(
+        status.connection_status,
+        CloudBackupConnectionStatus::Disconnected | CloudBackupConnectionStatus::NeedsReauth
+    ) {
+        return status;
+    }
+
+    match auth_flow_state {
+        GoogleDriveAuthFlowState::Idle => status,
+        GoogleDriveAuthFlowState::InProgress { .. } => create_status(
+            CloudBackupConnectionStatus::Connecting,
+            status.secure_storage_status,
+            status.oauth_client_configured,
+            false,
+            false,
+            false,
+            "Waiting for Google login",
+            "Finish Google login in the browser. Miku Warp will update automatically.".to_string(),
+        ),
+        GoogleDriveAuthFlowState::Failed { detail } => create_status(
+            CloudBackupConnectionStatus::ConnectionFailed,
+            status.secure_storage_status,
+            status.oauth_client_configured,
+            true,
+            false,
+            false,
+            "Connection failed",
+            detail,
         ),
     }
 }
@@ -549,10 +623,97 @@ fn complete_google_oauth_flow(
             "Google did not return a refresh token. Try disconnecting the app from your Google account, then connect again.".to_string()
         })?;
 
-        secret_store
-            .write_secret(GOOGLE_DRIVE_REFRESH_TOKEN_KEY, &refresh_token)
-            .map_err(secret_store_error_message)
+        write_and_verify_refresh_token(secret_store, &refresh_token)
     })
+}
+
+fn start_google_oauth_flow_in_background(
+    client_id: String,
+    client_secret: Option<String>,
+) -> Result<(), String> {
+    let started = mark_google_drive_auth_flow_in_progress()?;
+
+    if !started {
+        return Ok(());
+    }
+
+    thread::spawn(move || {
+        let secret_store = KeyringSecretStore;
+        let result =
+            complete_google_oauth_flow(&secret_store, &client_id, client_secret.as_deref());
+
+        match result {
+            Ok(()) => set_google_drive_auth_flow_state(GoogleDriveAuthFlowState::Idle),
+            Err(error) => {
+                set_google_drive_auth_flow_state(GoogleDriveAuthFlowState::Failed { detail: error })
+            }
+        }
+    });
+
+    Ok(())
+}
+
+fn mark_google_drive_auth_flow_in_progress() -> Result<bool, String> {
+    let mut state = google_drive_auth_flow_state()
+        .lock()
+        .map_err(|error| format!("Failed to prepare Google Drive login state: {error}"))?;
+
+    if let GoogleDriveAuthFlowState::InProgress { started_at } = &*state {
+        if started_at.elapsed() < OAUTH_CALLBACK_TIMEOUT {
+            return Ok(false);
+        }
+    }
+
+    *state = GoogleDriveAuthFlowState::InProgress {
+        started_at: Instant::now(),
+    };
+
+    Ok(true)
+}
+
+fn read_google_drive_auth_flow_state() -> GoogleDriveAuthFlowState {
+    google_drive_auth_flow_state()
+        .lock()
+        .map(|state| state.clone())
+        .unwrap_or(GoogleDriveAuthFlowState::Failed {
+            detail: "Failed to read Google Drive login state.".to_string(),
+        })
+}
+
+fn set_google_drive_auth_flow_state(state: GoogleDriveAuthFlowState) {
+    if let Ok(mut auth_flow_state) = google_drive_auth_flow_state().lock() {
+        *auth_flow_state = state;
+    }
+}
+
+fn google_drive_auth_flow_state() -> &'static Mutex<GoogleDriveAuthFlowState> {
+    static AUTH_FLOW_STATE: OnceLock<Mutex<GoogleDriveAuthFlowState>> = OnceLock::new();
+
+    AUTH_FLOW_STATE.get_or_init(|| Mutex::new(GoogleDriveAuthFlowState::Idle))
+}
+
+fn write_and_verify_refresh_token(
+    secret_store: &impl SecretStore,
+    refresh_token: &str,
+) -> Result<(), String> {
+    secret_store
+        .write_secret(GOOGLE_DRIVE_REFRESH_TOKEN_KEY, refresh_token)
+        .map_err(secret_store_error_message)?;
+
+    match secret_store
+        .read_secret(GOOGLE_DRIVE_REFRESH_TOKEN_KEY)
+        .map_err(secret_store_error_message)?
+    {
+        Some(saved_token) if saved_token == refresh_token => Ok(()),
+        Some(_) => Err(
+            "Google Drive token was saved, but Miku Warp could not verify it correctly."
+                .to_string(),
+        ),
+        None => Err(
+            "Google Drive token was saved, but Miku Warp could not read it back from secure storage."
+                .to_string(),
+        ),
+    }
 }
 
 fn wait_for_authorization_code<F>(
@@ -942,6 +1103,74 @@ mod tests {
     }
 
     #[test]
+    fn reports_auth_flow_in_progress_without_starting_duplicate_connects() {
+        let store = MemorySecretStore::default();
+
+        let status = cloud_backup_status_with_auth_flow(
+            &store,
+            oauth_config(Some("client-id")),
+            GoogleDriveAuthFlowState::InProgress {
+                started_at: Instant::now(),
+            },
+        );
+
+        assert_eq!(
+            status.connection_status,
+            CloudBackupConnectionStatus::Connecting
+        );
+        assert_eq!(status.label, "Waiting for Google login");
+        assert!(!status.can_connect);
+        assert!(!status.can_upload);
+    }
+
+    #[test]
+    fn reports_auth_flow_failure_until_user_retries() {
+        let store = MemorySecretStore::default();
+
+        let status = cloud_backup_status_with_auth_flow(
+            &store,
+            oauth_config(Some("client-id")),
+            GoogleDriveAuthFlowState::Failed {
+                detail: "callback failed".to_string(),
+            },
+        );
+
+        assert_eq!(
+            status.connection_status,
+            CloudBackupConnectionStatus::ConnectionFailed
+        );
+        assert_eq!(status.label, "Connection failed");
+        assert_eq!(status.detail, "callback failed");
+        assert!(status.can_connect);
+        assert!(!status.can_upload);
+    }
+
+    #[test]
+    fn verifies_refresh_token_after_saving() {
+        let store = MemorySecretStore::default();
+
+        write_and_verify_refresh_token(&store, "refresh-token")
+            .expect("refresh token can be saved and read back");
+
+        assert_eq!(
+            store
+                .read_secret(GOOGLE_DRIVE_REFRESH_TOKEN_KEY)
+                .expect("secret can be read"),
+            Some("refresh-token".to_string())
+        );
+    }
+
+    #[test]
+    fn rejects_refresh_token_when_secure_storage_cannot_read_it_back() {
+        let store = WriteOnlySecretStore;
+
+        let error = write_and_verify_refresh_token(&store, "refresh-token")
+            .expect_err("missing readback should fail");
+
+        assert!(error.contains("could not read it back"));
+    }
+
+    #[test]
     fn creates_pkce_s256_challenge() {
         let challenge = create_pkce_code_challenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk");
 
@@ -1225,6 +1454,22 @@ mod tests {
                 Some(error) => Err(SecretStoreError::Unavailable(error.clone())),
                 None => Ok(()),
             }
+        }
+    }
+
+    struct WriteOnlySecretStore;
+
+    impl SecretStore for WriteOnlySecretStore {
+        fn read_secret(&self, _key: &str) -> Result<Option<String>, SecretStoreError> {
+            Ok(None)
+        }
+
+        fn write_secret(&self, _key: &str, _value: &str) -> Result<(), SecretStoreError> {
+            Ok(())
+        }
+
+        fn delete_secret(&self, _key: &str) -> Result<(), SecretStoreError> {
+            Ok(())
         }
     }
 
