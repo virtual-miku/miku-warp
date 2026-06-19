@@ -1,20 +1,24 @@
 import type { PitySummary } from '../domain/pity'
+import { getFiveStarHardPity, type BannerType } from '../domain/banner'
 
 type PityOverviewProps = {
+  bannerType: BannerType
   summary: PitySummary
 }
 
-export function PityOverview({ summary }: PityOverviewProps) {
+export function PityOverview({ bannerType, summary }: PityOverviewProps) {
+  const fiveStarHardPity = getFiveStarHardPity(bannerType)
+
   return (
     <section className="pity-grid" aria-label="Pity overview">
       <article className="pity-card pity-accent-gold">
         <span>5-star pity</span>
-        <strong>{summary.currentFiveStarPity}</strong>
+        <strong>{summary.currentFiveStarPity}/{fiveStarHardPity}</strong>
         <span>Last: {summary.lastFiveStarName ?? 'None'}</span>
       </article>
       <article className="pity-card pity-accent-purple">
         <span>4-star pity</span>
-        <strong>{summary.currentFourStarPity}</strong>
+        <strong>{summary.currentFourStarPity}/10</strong>
         <span>Last: {summary.lastFourStarName ?? 'None'}</span>
       </article>
       <article className="pity-card pity-accent-teal">
@@ -25,4 +29,3 @@ export function PityOverview({ summary }: PityOverviewProps) {
     </section>
   )
 }
-

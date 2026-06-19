@@ -1,14 +1,10 @@
-import { FileInput, FolderSearch, History, RotateCcw } from 'lucide-react'
+import { FileInput, FolderSearch, History } from 'lucide-react'
 import { AppButton } from '../../../shared/ui/AppButton'
 import type {
   GameHistorySourceScanResult,
   ImportGameHistoryResult,
 } from '../../persistence/data/game-history-source'
 import type { ManualImportPreview } from '../domain/manual-note-parser'
-import {
-  getManualImportStatus,
-  getManualImportStatusLabel,
-} from '../domain/manual-import-preview'
 
 type ImportPanelProps = {
   gameHistoryImportError?: string
@@ -41,7 +37,6 @@ export function ImportPanel({
   onScanGameHistory,
   onOpenManualImport,
 }: ImportPanelProps) {
-  const status = getManualImportStatus(manualImportPreview)
   const gameHistoryTitle =
     gameHistoryScan?.matchedCachePath ?? gameHistoryScan?.urlPreview
   const hasGameHistoryMessage = Boolean(
@@ -52,13 +47,12 @@ export function ImportPanel({
     <section className="tool-panel" id="import" aria-label="Import sources">
       <header className="panel-header">
         <h2>Import</h2>
-        <span className="status-pill">{manualImportPreview.totalPulls} detected</span>
       </header>
       <div className="tool-panel-body">
         <div className="tool-row">
           <div>
-            <strong>Manual note</strong>
-            <span>{manualImportPreview.groups.length} sessions parsed</span>
+            <strong>Manual Import</strong>
+            <span>{manualImportPreview.totalPulls} detected</span>
           </div>
           <AppButton icon={FileInput} onClick={onOpenManualImport}>
             Open
@@ -84,13 +78,6 @@ export function ImportPanel({
             {gameInstallPath}
           </span>
           <small>Choose the folder containing StarRail_Data.</small>
-        </div>
-        <div className="tool-row">
-          <div>
-            <strong>Catalog match</strong>
-            <span>{manualImportPreview.recognizedPulls} items recognized</span>
-          </div>
-          <span className="status-pill">{getManualImportStatusLabel(status)}</span>
         </div>
         <div className="tool-row">
           <div>
@@ -163,15 +150,6 @@ export function ImportPanel({
             </p>
           </div>
         ) : null}
-        <div className="tool-row">
-          <div>
-            <strong>Restore</strong>
-            <span>Backup file</span>
-          </div>
-          <AppButton icon={RotateCcw} variant="ghost">
-            Load
-          </AppButton>
-        </div>
       </div>
     </section>
   )

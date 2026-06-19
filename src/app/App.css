@@ -152,6 +152,9 @@
 }
 
 .banner-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   gap: 4px;
   min-height: 42px;

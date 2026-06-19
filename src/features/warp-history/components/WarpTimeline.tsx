@@ -45,15 +45,11 @@ export function WarpTimeline({
   onSearchQueryChange,
 }: WarpTimelineProps) {
   const pageCount = Math.max(1, Math.ceil(totalPulls / pageSize))
-  const firstVisiblePull = totalPulls === 0 ? 0 : (page - 1) * pageSize + 1
-  const lastVisiblePull = Math.min(page * pageSize, totalPulls)
-
   return (
     <section className="history-panel" aria-label="Warp history">
       <header className="panel-header">
         <h2>Warp history</h2>
         <div className="history-header-actions">
-          <span>{formatRecordCount(firstVisiblePull, lastVisiblePull, totalPulls, isLoading)}</span>
           <button
             className="history-delete-all-button"
             disabled={!canDeleteAll || isLoading || isDeletingAll}
@@ -229,32 +225,18 @@ function WarpHistoryItemIcon({
   )
 }
 
-function formatRecordCount(
-  firstVisiblePull: number,
-  lastVisiblePull: number,
-  totalPulls: number,
-  isLoading: boolean,
-) {
-  if (isLoading) {
-    return 'Loading'
-  }
-
-  if (totalPulls === 0) {
-    return '0 records'
-  }
-
-  return `${firstVisiblePull}-${lastVisiblePull} of ${totalPulls}`
-}
-
 function formatPullTime(value: string) {
-  return new Intl.DateTimeFormat('id-ID', {
+  const date = new Date(value)
+  const dateLabel = new Intl.DateTimeFormat('id-ID', {
     day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
     month: 'short',
-    second: '2-digit',
     year: 'numeric',
-  }).format(new Date(value))
+  }).format(date)
+  const timeLabel = [date.getHours(), date.getMinutes(), date.getSeconds()]
+    .map((part) => part.toString().padStart(2, '0'))
+    .join(':')
+
+  return `${dateLabel}, ${timeLabel}`
 }
 
 function formatItemType(value: WarpPull['itemType']) {

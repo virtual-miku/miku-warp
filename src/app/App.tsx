@@ -1,10 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Bell,
-  Download,
   LayoutDashboard,
-  RefreshCw,
-  Settings,
 } from 'lucide-react'
 import {
   BackupPanel,
@@ -97,7 +94,6 @@ import {
   calculatePitySummary,
 } from '../features/warp-history/domain/pity'
 import type { WarpPull } from '../features/warp-history/domain/warp-pull'
-import { AppButton } from '../shared/ui/AppButton'
 import { ConfirmDialog } from '../shared/ui/ConfirmDialog'
 import './App.css'
 
@@ -1399,25 +1395,6 @@ export function App() {
               <span className="eyebrow">Selected banner</span>
               <h1>{getBannerFilterLabel(activeBannerType)}</h1>
             </div>
-            <div className="header-actions" aria-label="Quick actions">
-              <AppButton icon={RefreshCw}>Sync</AppButton>
-              <AppButton
-                disabled={
-                  backupDeleting ||
-                  backupExporting ||
-                  backupImporting ||
-                  backupRestoring ||
-                  cloudBackupBusy
-                }
-                icon={Download}
-                onClick={handleExportBackup}
-              >
-                {backupExporting ? 'Exporting' : 'Export'}
-              </AppButton>
-              <AppButton icon={Settings} variant="ghost">
-                Settings
-              </AppButton>
-            </div>
           </header>
 
           <BannerTabs
@@ -1435,7 +1412,10 @@ export function App() {
               />
               {activeBannerType === 'all' ? null : (
                 <>
-                  <PityOverview summary={pitySummary} />
+                  <PityOverview
+                    bannerType={activeBannerType}
+                    summary={pitySummary}
+                  />
                   <BannerStatsPanel
                     bannerType={activeBannerType}
                     summary={activeBannerSummary}

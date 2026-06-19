@@ -1,6 +1,7 @@
 import {
   bannerDefinitions,
   type BannerFilterType,
+  getFiveStarHardPity,
   getBannerLabel,
 } from '../domain/banner'
 import type { WarpBannerSummary } from '../../persistence/data/warp-pull-history'
@@ -34,7 +35,6 @@ export function BannerSummaryGrid({
     <section className="banner-summary-panel" aria-label="Banner summary">
       <header className="panel-header">
         <h2>Banner progress</h2>
-        <span>{summaries.length} active banners</span>
       </header>
       <div className="banner-summary-grid">
         <button
@@ -70,7 +70,7 @@ export function BannerSummaryGrid({
             >
               <span>{getBannerLabel(banner.type)}</span>
               <strong>{summary?.totalPulls ?? 0}</strong>
-              <span>{formatFiveStarLine(summary)}</span>
+              <span>{formatFiveStarLine(banner.type, summary)}</span>
               <span>{formatLastPullLine(summary)}</span>
             </button>
           )
@@ -108,12 +108,15 @@ function summarizeAllBanners(summaries: WarpBannerSummary[]) {
   )
 }
 
-function formatFiveStarLine(summary: WarpBannerSummary | undefined) {
+function formatFiveStarLine(
+  bannerType: Exclude<BannerFilterType, 'all'>,
+  summary: WarpBannerSummary | undefined,
+) {
   if (!summary || summary.totalPulls === 0) {
     return 'No pulls yet'
   }
 
-  return `5-star pity ${summary.currentFiveStarPity} - ${summary.fiveStarCount} gold`
+  return `5-star pity ${summary.currentFiveStarPity}/${getFiveStarHardPity(bannerType)} - ${summary.fiveStarCount} gold`
 }
 
 function formatLastPullLine(summary: { lastItemName?: string } | undefined) {

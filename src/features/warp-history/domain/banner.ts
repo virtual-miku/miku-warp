@@ -17,3 +17,9 @@ export function getBannerLabel(type: BannerType) {
 export function getBannerFilterLabel(type: BannerFilterType) {
   return type === 'all' ? 'All' : getBannerLabel(type)
 }
+
+export function getFiveStarHardPity(type: BannerType) {
+  return type === 'light_cone_event' || type === 'collaboration_light_cone'
+    ? 80
+    : 90
+}
