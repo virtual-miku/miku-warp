@@ -1,3 +1,4 @@
+import { open } from '@tauri-apps/plugin-dialog'
 import { invokeTauri } from './tauri-invoke'
 
 export type ExportBackupSnapshotResult = {
@@ -50,4 +51,21 @@ export function restoreBackupSnapshot(fileName: string) {
   return invokeTauri<RestoreBackupSnapshotResult>('restore_backup_snapshot', {
     input: { fileName },
   })
+}
+
+export async function selectBackupJsonFile() {
+  const selectedPath = await open({
+    filters: [{ name: 'Warp Tracker backup JSON', extensions: ['json'] }],
+    multiple: false,
+    title: 'Select Warp Tracker backup JSON',
+  })
+
+  return typeof selectedPath === 'string' ? selectedPath : undefined
+}
+
+export function replaceDatabaseFromBackupFile(filePath: string) {
+  return invokeTauri<RestoreBackupSnapshotResult>(
+    'replace_database_from_backup_file',
+    { input: { filePath } },
+  )
 }

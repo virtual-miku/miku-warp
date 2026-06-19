@@ -154,6 +154,17 @@ pub struct ListWarpPullsResult {
     pub total: usize,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountRow {
+    pub id: String,
+    pub uid: String,
+    pub region: Option<String>,
+    pub nickname: Option<String>,
+    pub total_pulls: i64,
+    pub last_pull_at: Option<String>,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ListWarpBannerSummariesInput {
@@ -162,8 +173,27 @@ pub struct ListWarpBannerSummariesInput {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DeleteWarpPullInput {
+    pub account_id: String,
+    pub pull_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteAccountWarpHistoryInput {
+    pub account_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct RestoreBackupSnapshotInput {
     pub file_name: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RestoreBackupSnapshotFromFileInput {
+    pub file_path: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -247,6 +277,23 @@ pub struct DeleteBackupSnapshotResult {
     pub backup_path: String,
     pub file_name: String,
     pub remaining_snapshots: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteWarpPullResult {
+    pub account_id: String,
+    pub pull_id: String,
+    pub deleted_pulls: usize,
+    pub recomputed_banner: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteAccountWarpHistoryResult {
+    pub account_id: String,
+    pub deleted_pulls: usize,
+    pub deleted_import_batches: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -536,6 +583,13 @@ pub fn list_warp_pulls(
     list_warp_pulls_from_database(&connection, &query)
 }
 
+pub fn list_accounts(app: &AppHandle) -> Result<Vec<AccountRow>, String> {
+    let database_path = resolve_database_path(app)?;
+    let connection = open_database(&database_path)?;
+
+    list_accounts_from_database(&connection)
+}
+
 pub fn list_warp_banner_summaries(
     app: &AppHandle,
     query: ListWarpBannerSummariesInput,
@@ -544,6 +598,26 @@ pub fn list_warp_banner_summaries(
     let connection = open_database(&database_path)?;
 
     list_warp_banner_summaries_from_database(&connection, &query)
+}
+
+pub fn delete_warp_pull(
+    app: &AppHandle,
+    input: DeleteWarpPullInput,
+) -> Result<DeleteWarpPullResult, String> {
+    let database_path = resolve_database_path(app)?;
+    let mut connection = open_database(&database_path)?;
+
+    delete_warp_pull_from_database(&mut connection, &input)
+}
+
+pub fn delete_account_warp_history(
+    app: &AppHandle,
+    input: DeleteAccountWarpHistoryInput,
+) -> Result<DeleteAccountWarpHistoryResult, String> {
+    let database_path = resolve_database_path(app)?;
+    let mut connection = open_database(&database_path)?;
+
+    delete_account_warp_history_from_database(&mut connection, &input)
 }
 
 pub fn export_backup_snapshot(app: &AppHandle) -> Result<ExportBackupSnapshotResult, String> {
@@ -598,6 +672,17 @@ pub fn restore_backup_snapshot(
     let backup_path = resolve_backup_snapshot_path(&backup_directory, &input.file_name)?;
 
     restore_backup_snapshot_from_file(&mut connection, &backup_path)
+}
+
+pub fn replace_database_from_backup_file(
+    app: &AppHandle,
+    input: RestoreBackupSnapshotFromFileInput,
+) -> Result<RestoreBackupSnapshotResult, String> {
+    let database_path = resolve_database_path(app)?;
+    let mut connection = open_database(&database_path)?;
+    let backup_path = PathBuf::from(input.file_path);
+
+    replace_database_from_backup_snapshot_file(&mut connection, &backup_path)
 }
 
 pub fn restore_backup_snapshot_from_bytes(
@@ -1142,6 +1227,36 @@ fn list_warp_pulls_from_database(
     })
 }
 
+fn list_accounts_from_database(connection: &Connection) -> Result<Vec<AccountRow>, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT a.id, a.uid, a.region, a.nickname,
+                    COUNT(wp.id) AS total_pulls,
+                    MAX(wp.pulled_at) AS last_pull_at
+             FROM accounts a
+             LEFT JOIN warp_pulls wp ON wp.account_id = a.id
+             GROUP BY a.id, a.uid, a.region, a.nickname
+             ORDER BY MAX(wp.pulled_at) DESC, a.uid ASC, COALESCE(a.region, '') ASC, a.id ASC",
+        )
+        .map_err(|error| format!("Failed to prepare account list query: {error}"))?;
+
+    let rows = statement
+        .query_map([], |row| {
+            Ok(AccountRow {
+                id: row.get(0)?,
+                uid: row.get(1)?,
+                region: row.get(2)?,
+                nickname: row.get(3)?,
+                total_pulls: row.get(4)?,
+                last_pull_at: row.get(5)?,
+            })
+        })
+        .map_err(|error| format!("Failed to query accounts: {error}"))?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Failed to decode accounts: {error}"))
+}
+
 fn list_warp_banner_summaries_from_database(
     connection: &Connection,
     query: &ListWarpBannerSummariesInput,
@@ -1174,6 +1289,82 @@ fn list_warp_banner_summaries_from_database(
         .map_err(|error| format!("Failed to decode banner summary rows: {error}"))?;
 
     Ok(build_warp_banner_summaries(pulls))
+}
+
+fn delete_warp_pull_from_database(
+    connection: &mut Connection,
+    input: &DeleteWarpPullInput,
+) -> Result<DeleteWarpPullResult, String> {
+    validate_delete_warp_pull(input)?;
+
+    let transaction = connection
+        .transaction()
+        .map_err(|error| format!("Failed to start warp pull delete transaction: {error}"))?;
+    let banner_id = transaction
+        .query_row(
+            "SELECT banner_id FROM warp_pulls WHERE id = ?1 AND account_id = ?2",
+            params![&input.pull_id, &input.account_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| format!("Failed to read warp pull {}: {error}", input.pull_id))?;
+    let mut deleted_pulls = 0;
+    let mut recomputed_banner = false;
+
+    if let Some(banner_id) = banner_id {
+        deleted_pulls = transaction
+            .execute(
+                "DELETE FROM warp_pulls WHERE id = ?1 AND account_id = ?2",
+                params![&input.pull_id, &input.account_id],
+            )
+            .map_err(|error| format!("Failed to delete warp pull {}: {error}", input.pull_id))?;
+        recompute_pity_for_account_banner(&transaction, &input.account_id, &banner_id)?;
+        recomputed_banner = true;
+    }
+
+    transaction
+        .commit()
+        .map_err(|error| format!("Failed to commit warp pull delete transaction: {error}"))?;
+
+    Ok(DeleteWarpPullResult {
+        account_id: input.account_id.clone(),
+        pull_id: input.pull_id.clone(),
+        deleted_pulls,
+        recomputed_banner,
+    })
+}
+
+fn delete_account_warp_history_from_database(
+    connection: &mut Connection,
+    input: &DeleteAccountWarpHistoryInput,
+) -> Result<DeleteAccountWarpHistoryResult, String> {
+    validate_account_id(&input.account_id, "History account id")?;
+
+    let transaction = connection
+        .transaction()
+        .map_err(|error| format!("Failed to start account history delete transaction: {error}"))?;
+    let deleted_pulls = transaction
+        .execute(
+            "DELETE FROM warp_pulls WHERE account_id = ?1",
+            params![&input.account_id],
+        )
+        .map_err(|error| format!("Failed to delete account warp pulls: {error}"))?;
+    let deleted_import_batches = transaction
+        .execute(
+            "DELETE FROM import_batches WHERE account_id = ?1",
+            params![&input.account_id],
+        )
+        .map_err(|error| format!("Failed to delete account import batches: {error}"))?;
+
+    transaction
+        .commit()
+        .map_err(|error| format!("Failed to commit account history delete transaction: {error}"))?;
+
+    Ok(DeleteAccountWarpHistoryResult {
+        account_id: input.account_id.clone(),
+        deleted_pulls,
+        deleted_import_batches,
+    })
 }
 
 fn build_warp_banner_summaries(
@@ -1256,6 +1447,28 @@ fn restore_backup_snapshot_from_file(
     restore_backup_snapshot_text(connection, &backup_source, &payload)
 }
 
+fn replace_database_from_backup_snapshot_file(
+    connection: &mut Connection,
+    backup_path: &Path,
+) -> Result<RestoreBackupSnapshotResult, String> {
+    if backup_path
+        .extension()
+        .and_then(|extension| extension.to_str())
+        .map(|extension| !extension.eq_ignore_ascii_case("json"))
+        .unwrap_or(true)
+    {
+        return Err("Backup import file must be a .json file.".to_string());
+    }
+
+    let payload = fs::read_to_string(backup_path)
+        .map_err(|error| format!("Failed to read backup snapshot: {error}"))?;
+    let snapshot: BackupSnapshot = serde_json::from_str(&payload)
+        .map_err(|error| format!("Failed to parse backup snapshot: {error}"))?;
+
+    validate_backup_snapshot(&snapshot)?;
+    replace_database_with_backup_snapshot(connection, &backup_path.to_string_lossy(), &snapshot)
+}
+
 fn restore_backup_snapshot_payload(
     connection: &mut Connection,
     backup_source: &str,
@@ -1312,6 +1525,58 @@ fn restore_backup_snapshot_to_database(
         duplicate_warp_pulls,
         recomputed_banners,
     })
+}
+
+fn replace_database_with_backup_snapshot(
+    connection: &mut Connection,
+    backup_source: &str,
+    snapshot: &BackupSnapshot,
+) -> Result<RestoreBackupSnapshotResult, String> {
+    let transaction = connection
+        .transaction()
+        .map_err(|error| format!("Failed to start backup replace transaction: {error}"))?;
+
+    clear_restorable_history_tables(&transaction)?;
+    restore_backup_accounts(&transaction, &snapshot.accounts)?;
+    restore_backup_banners(&transaction, &snapshot.banners)?;
+    restore_backup_warp_items(&transaction, &snapshot.warp_items)?;
+    restore_backup_import_batches(&transaction, &snapshot.import_batches)?;
+    let (warp_pulls_inserted, duplicate_warp_pulls) =
+        restore_backup_warp_pulls(&transaction, &snapshot.warp_pulls)?;
+    let recomputed_banners = recompute_pity_for_snapshot(&transaction, snapshot)?;
+
+    transaction
+        .commit()
+        .map_err(|error| format!("Failed to commit backup replace transaction: {error}"))?;
+
+    Ok(RestoreBackupSnapshotResult {
+        backup_path: backup_source.to_string(),
+        exported_at: snapshot.exported_at.clone(),
+        accounts: snapshot.accounts.len(),
+        banners: snapshot.banners.len(),
+        warp_items: snapshot.warp_items.len(),
+        import_batches: snapshot.import_batches.len(),
+        warp_pulls: snapshot.warp_pulls.len(),
+        warp_pulls_inserted,
+        duplicate_warp_pulls,
+        recomputed_banners,
+    })
+}
+
+fn clear_restorable_history_tables(transaction: &Transaction<'_>) -> Result<(), String> {
+    for table_name in [
+        "warp_pulls",
+        "import_batches",
+        "accounts",
+        "banners",
+        "warp_items",
+    ] {
+        transaction
+            .execute(&format!("DELETE FROM {table_name}"), [])
+            .map_err(|error| format!("Failed to clear {table_name}: {error}"))?;
+    }
+
+    Ok(())
 }
 
 fn record_cloud_backup_snapshot_to_database(
@@ -2108,9 +2373,7 @@ fn create_backup_file_name() -> Result<String, String> {
 }
 
 fn validate_list_warp_pulls_query(query: &ListWarpPullsInput) -> Result<(), String> {
-    if query.account_id.trim().is_empty() {
-        return Err("Warp pull query account id cannot be empty.".to_string());
-    }
+    validate_account_id(&query.account_id, "Warp pull query account id")?;
 
     if let Some(banner_type) = &query.banner_type {
         banner_label(banner_type)?;
@@ -2127,11 +2390,27 @@ fn validate_list_warp_pulls_query(query: &ListWarpPullsInput) -> Result<(), Stri
     Ok(())
 }
 
+fn validate_delete_warp_pull(input: &DeleteWarpPullInput) -> Result<(), String> {
+    validate_account_id(&input.account_id, "Delete warp pull account id")?;
+
+    if input.pull_id.trim().is_empty() {
+        return Err("Delete warp pull id cannot be empty.".to_string());
+    }
+
+    Ok(())
+}
+
 fn validate_list_warp_banner_summaries_query(
     query: &ListWarpBannerSummariesInput,
 ) -> Result<(), String> {
-    if query.account_id.trim().is_empty() {
-        return Err("Warp banner summary query account id cannot be empty.".to_string());
+    validate_account_id(&query.account_id, "Warp banner summary query account id")?;
+
+    Ok(())
+}
+
+fn validate_account_id(account_id: &str, label: &str) -> Result<(), String> {
+    if account_id.trim().is_empty() {
+        return Err(format!("{label} cannot be empty."));
     }
 
     Ok(())
@@ -3406,6 +3685,179 @@ mod tests {
             "google-drive://remote-1/warp-tracker-backup.json"
         );
         assert_eq!(restore_result.warp_pulls_inserted, 2);
+        assert_eq!(count_table(&target_connection, "warp_pulls"), 2);
+
+        std::fs::remove_dir_all(backup_directory).ok();
+    }
+
+    #[test]
+    fn deletes_single_pull_and_recomputes_only_account_banner_pity() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+        upsert_warp_item_catalog(
+            &mut connection,
+            &[
+                catalog_item("light-cone-2001", "2001", "Data Bank", "light_cone", 3),
+                catalog_item("character-1001", "1001", "Pela", "character", 4),
+                catalog_item("character-1002", "1002", "Sparkle", "character", 5),
+            ],
+        )
+        .expect("catalog sync");
+        save_manual_import_draft_to_database(
+            &mut connection,
+            &manual_import_draft_with_pulls(vec![
+                manual_import_pull("character_event", "light-cone-2001", "Data Bank", 1),
+                manual_import_pull("character_event", "character-1001", "Pela", 2),
+                manual_import_pull("character_event", "character-1002", "Sparkle", 3),
+            ]),
+        )
+        .expect("manual import");
+        let pela_pull_id = list_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: "account-1".to_string(),
+                banner_type: Some("character_event".to_string()),
+                limit: Some(10),
+                offset: None,
+                search: Some("Pela".to_string()),
+                rarity: Some(4),
+            },
+        )
+        .expect("Pela can be listed")
+        .pulls[0]
+            .id
+            .clone();
+
+        let delete_result = delete_warp_pull_from_database(
+            &mut connection,
+            &DeleteWarpPullInput {
+                account_id: "account-1".to_string(),
+                pull_id: pela_pull_id,
+            },
+        )
+        .expect("single pull delete");
+        let pulls = list_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: "account-1".to_string(),
+                banner_type: Some("character_event".to_string()),
+                limit: Some(10),
+                offset: None,
+                search: None,
+                rarity: None,
+            },
+        )
+        .expect("remaining pulls can be listed")
+        .pulls;
+        let sparkle = pulls
+            .iter()
+            .find(|pull| pull.item_name == "Sparkle")
+            .expect("Sparkle remains");
+
+        assert_eq!(delete_result.deleted_pulls, 1);
+        assert!(delete_result.recomputed_banner);
+        assert_eq!(pulls.len(), 2);
+        assert!(!pulls.iter().any(|pull| pull.item_name == "Pela"));
+        assert_eq!(sparkle.pity_four_at_pull, Some(2));
+        assert_eq!(sparkle.pity_five_at_pull, Some(2));
+    }
+
+    #[test]
+    fn deletes_all_history_for_selected_account_without_removing_account() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+        upsert_warp_item_catalog(
+            &mut connection,
+            &[
+                catalog_item("character-1001", "1001", "Pela", "character", 4),
+                catalog_item("light-cone-2001", "2001", "Data Bank", "light_cone", 3),
+            ],
+        )
+        .expect("catalog sync");
+        save_manual_import_draft_to_database(&mut connection, &manual_import_draft())
+            .expect("manual import");
+        save_game_history_import_to_database(&mut connection, &game_history_import())
+            .expect("second account game import");
+
+        let delete_result = delete_account_warp_history_from_database(
+            &mut connection,
+            &DeleteAccountWarpHistoryInput {
+                account_id: "account-1".to_string(),
+            },
+        )
+        .expect("account history delete");
+        let accounts = list_accounts_from_database(&connection).expect("accounts list");
+        let source_account = accounts
+            .iter()
+            .find(|account| account.id == "account-1")
+            .expect("deleted history account remains");
+        let other_account = accounts
+            .iter()
+            .find(|account| account.id == "account-800000001")
+            .expect("other account remains");
+
+        assert_eq!(delete_result.deleted_pulls, 2);
+        assert_eq!(delete_result.deleted_import_batches, 1);
+        assert_eq!(source_account.total_pulls, 0);
+        assert_eq!(other_account.total_pulls, 2);
+    }
+
+    #[test]
+    fn replaces_local_history_from_json_backup_file() {
+        let mut source_connection = Connection::open_in_memory().expect("source database");
+        apply_migrations(&source_connection).expect("source migration applies");
+        upsert_warp_item_catalog(
+            &mut source_connection,
+            &[
+                catalog_item("character-1001", "1001", "Pela", "character", 4),
+                catalog_item("light-cone-2001", "2001", "Data Bank", "light_cone", 3),
+            ],
+        )
+        .expect("source catalog sync");
+        save_manual_import_draft_to_database(&mut source_connection, &manual_import_draft())
+            .expect("source manual import");
+        let backup_directory = unique_test_dir("backup-replace");
+        let export_result =
+            export_backup_snapshot_to_directory(&source_connection, &backup_directory)
+                .expect("backup export");
+
+        let mut target_connection = Connection::open_in_memory().expect("target database");
+        apply_migrations(&target_connection).expect("target migration applies");
+        upsert_warp_item_catalog(
+            &mut target_connection,
+            &[
+                catalog_item("character-1001", "1001", "Pela", "character", 4),
+                catalog_item("light-cone-2001", "2001", "Data Bank", "light_cone", 3),
+            ],
+        )
+        .expect("target catalog sync");
+        save_game_history_import_to_database(&mut target_connection, &game_history_import())
+            .expect("target game import");
+
+        let replace_result = replace_database_from_backup_snapshot_file(
+            &mut target_connection,
+            &PathBuf::from(&export_result.backup_path),
+        )
+        .expect("replace from json backup");
+        let accounts = list_accounts_from_database(&target_connection).expect("accounts list");
+        let pulls = list_warp_pulls_from_database(
+            &target_connection,
+            &ListWarpPullsInput {
+                account_id: "account-1".to_string(),
+                banner_type: None,
+                limit: Some(10),
+                offset: None,
+                search: None,
+                rarity: None,
+            },
+        )
+        .expect("restored account pulls")
+        .pulls;
+
+        assert_eq!(replace_result.warp_pulls_inserted, 2);
+        assert_eq!(accounts.len(), 1);
+        assert_eq!(accounts[0].id, "account-1");
+        assert_eq!(pulls.len(), 2);
         assert_eq!(count_table(&target_connection, "warp_pulls"), 2);
 
         std::fs::remove_dir_all(backup_directory).ok();

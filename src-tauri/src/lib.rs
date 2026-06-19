@@ -253,11 +253,32 @@ fn list_warp_pulls(
 }
 
 #[tauri::command]
+fn list_accounts(app: tauri::AppHandle) -> Result<Vec<database::AccountRow>, String> {
+    database::list_accounts(&app)
+}
+
+#[tauri::command]
 fn list_warp_banner_summaries(
     app: tauri::AppHandle,
     query: database::ListWarpBannerSummariesInput,
 ) -> Result<Vec<database::WarpBannerSummaryRow>, String> {
     database::list_warp_banner_summaries(&app, query)
+}
+
+#[tauri::command]
+fn delete_warp_pull(
+    app: tauri::AppHandle,
+    input: database::DeleteWarpPullInput,
+) -> Result<database::DeleteWarpPullResult, String> {
+    database::delete_warp_pull(&app, input)
+}
+
+#[tauri::command]
+fn delete_account_warp_history(
+    app: tauri::AppHandle,
+    input: database::DeleteAccountWarpHistoryInput,
+) -> Result<database::DeleteAccountWarpHistoryResult, String> {
+    database::delete_account_warp_history(&app, input)
 }
 
 #[tauri::command]
@@ -297,6 +318,14 @@ fn restore_backup_snapshot(
     database::restore_backup_snapshot(&app, input)
 }
 
+#[tauri::command]
+fn replace_database_from_backup_file(
+    app: tauri::AppHandle,
+    input: database::RestoreBackupSnapshotFromFileInput,
+) -> Result<database::RestoreBackupSnapshotResult, String> {
+    database::replace_database_from_backup_file(&app, input)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -313,17 +342,21 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             connect_google_drive_backup,
+            delete_account_warp_history,
             delete_backup_snapshot,
+            delete_warp_pull,
             disconnect_google_drive_backup,
             export_backup_snapshot,
             get_cloud_backup_status,
             get_cloud_backup_policy,
             get_database_status,
             import_game_history,
+            list_accounts,
             list_warp_banner_summaries,
             list_google_drive_backup_snapshots,
             list_backup_snapshots,
             list_warp_pulls,
+            replace_database_from_backup_file,
             restore_google_drive_backup_snapshot,
             restore_backup_snapshot,
             restore_latest_backup_snapshot,

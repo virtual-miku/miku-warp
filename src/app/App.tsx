@@ -38,8 +38,10 @@ import {
   type BackupSnapshotSummary,
   exportBackupSnapshot,
   type ExportBackupSnapshotResult,
+  replaceDatabaseFromBackupFile,
   restoreBackupSnapshot,
   restoreLatestBackupSnapshot,
+  selectBackupJsonFile,
   type RestoreBackupSnapshotResult,
 } from '../features/persistence/data/backup-export'
 import {
@@ -66,8 +68,12 @@ import {
 } from '../features/persistence/data/game-install-path'
 import { syncWarpItemCatalog } from '../features/persistence/data/warp-item-catalog-sync'
 import {
+  deleteAccountWarpHistory,
+  deleteWarpPull,
+  listAccounts,
   listWarpBannerSummaries,
   listWarpPulls,
+  type WarpAccount,
   type WarpBannerSummary,
 } from '../features/persistence/data/warp-pull-history'
 import {
@@ -84,7 +90,8 @@ import {
 } from '../features/warp-history/components/WarpTimeline'
 import { itemCatalog } from '../features/warp-history/data/item-catalog'
 import {
-  getBannerLabel,
+  getBannerFilterLabel,
+  type BannerFilterType,
   type BannerType,
 } from '../features/warp-history/domain/banner'
 import {
@@ -95,7 +102,8 @@ import type { WarpPull } from '../features/warp-history/domain/warp-pull'
 import { AppButton } from '../shared/ui/AppButton'
 import './App.css'
 
-const defaultBannerType = 'character_event' satisfies BannerType
+const defaultBannerType = 'character_event' satisfies BannerFilterType
+const defaultManualFallbackBannerType = 'character_event' satisfies BannerType
 const historyPageSize = 5
 const defaultAccount: ManualImportAccountInput = {
   id: 'account-800000000',
@@ -106,12 +114,13 @@ const defaultAccount: ManualImportAccountInput = {
 
 export function App() {
   const [activeBannerType, setActiveBannerType] =
-    useState<BannerType>(defaultBannerType)
+    useState<BannerFilterType>(defaultBannerType)
   const [manualImportOpen, setManualImportOpen] = useState(false)
   const [manualImportSaving, setManualImportSaving] = useState(false)
   const [manualImportSaveNotice, setManualImportSaveNotice] =
     useState<ManualImportSaveNotice>()
   const [backupExporting, setBackupExporting] = useState(false)
+  const [backupImporting, setBackupImporting] = useState(false)
   const [deletingBackupFileName, setDeletingBackupFileName] = useState<string>()
   const [restoringBackupFileName, setRestoringBackupFileName] =
     useState<string>()
@@ -143,6 +152,7 @@ export function App() {
   const [gameInstallPath, setGameInstallPath] = useState(loadGameInstallPath)
   const [activeAccount, setActiveAccount] =
     useState<ManualImportAccountInput>(() => loadActiveAccount(defaultAccount))
+  const [accounts, setAccounts] = useState<WarpAccount[]>([])
   const [cloudBackupStatus, setCloudBackupStatus] =
     useState<CloudBackupStatus>(() => createInitialGoogleDriveBackupStatus())
   const [cloudBackupPolicy, setCloudBackupPolicy] =
@@ -151,6 +161,8 @@ export function App() {
   const [persistedPulls, setPersistedPulls] = useState<WarpPull[]>([])
   const [historyTotalPulls, setHistoryTotalPulls] = useState(0)
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [deletingHistoryPullId, setDeletingHistoryPullId] = useState<string>()
+  const [deletingAllHistory, setDeletingAllHistory] = useState(false)
   const [historyPage, setHistoryPage] = useState(1)
   const [historySearchQuery, setHistorySearchQuery] = useState('')
   const [historyRarityFilter, setHistoryRarityFilter] =
@@ -168,11 +180,18 @@ export function App() {
   )
   const activeBannerSummary = useMemo(
     () =>
-      bannerSummaries.find(
-        (summary) => summary.bannerType === activeBannerType,
-      ),
+      activeBannerType === 'all'
+        ? undefined
+        : bannerSummaries.find(
+            (summary) => summary.bannerType === activeBannerType,
+          ),
     [activeBannerType, bannerSummaries],
   )
+  const activeAccountSummary = useMemo(
+    () => accounts.find((account) => account.id === activeAccount.id),
+    [accounts, activeAccount.id],
+  )
+  const activeAccountPullCount = activeAccountSummary?.totalPulls ?? historyTotalPulls
   const pitySummary = useMemo(
     () =>
       activeBannerSummary
@@ -198,17 +217,37 @@ export function App() {
     cloudBackupPolicyUpdating ||
     cloudBackupRestoring ||
     cloudBackupUploading
+  const manualFallbackBannerType =
+    activeBannerType === 'all' ? defaultManualFallbackBannerType : activeBannerType
 
   const fetchPersistedPulls = useCallback(() => {
     return listWarpPulls({
       accountId: activeAccount.id,
-      bannerType: activeBannerType,
+      bannerType: activeBannerType === 'all' ? undefined : activeBannerType,
       limit: historyPageSize,
       offset: (historyPage - 1) * historyPageSize,
       rarity: historyRarityFilter === 'all' ? undefined : historyRarityFilter,
       search: historySearchQuery,
     })
   }, [activeAccount.id, activeBannerType, historyPage, historyRarityFilter, historySearchQuery])
+
+  const fetchHistoryForAccount = useCallback(
+    (accountId: string, page = historyPage) => {
+      return Promise.all([
+        listWarpPulls({
+          accountId,
+          bannerType: activeBannerType === 'all' ? undefined : activeBannerType,
+          limit: historyPageSize,
+          offset: (page - 1) * historyPageSize,
+          rarity:
+            historyRarityFilter === 'all' ? undefined : historyRarityFilter,
+          search: historySearchQuery,
+        }),
+        listWarpBannerSummaries({ accountId }),
+      ])
+    },
+    [activeBannerType, historyPage, historyRarityFilter, historySearchQuery],
+  )
 
   const refreshPersistedPulls = useCallback(async () => {
     try {
@@ -237,6 +276,17 @@ export function App() {
   const refreshWarpHistory = useCallback(async () => {
     await Promise.all([refreshPersistedPulls(), refreshBannerSummaries()])
   }, [refreshBannerSummaries, refreshPersistedPulls])
+
+  const refreshAccounts = useCallback(async () => {
+    try {
+      const nextAccounts = await listAccounts()
+      setAccounts(nextAccounts)
+      return nextAccounts
+    } catch {
+      setAccounts([])
+      return []
+    }
+  }, [])
 
   const refreshBackupSnapshots = useCallback(async () => {
     try {
@@ -338,6 +388,26 @@ export function App() {
       .catch(() => {
         if (isActive) {
           setBackupSnapshots([])
+        }
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let isActive = true
+
+    listAccounts()
+      .then((nextAccounts) => {
+        if (isActive) {
+          setAccounts(nextAccounts)
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setAccounts([])
         }
       })
 
@@ -487,7 +557,7 @@ export function App() {
       const [pulls, summaries] = await Promise.all([
         listWarpPulls({
           accountId: result.accountId,
-          bannerType: activeBannerType,
+          bannerType: activeBannerType === 'all' ? undefined : activeBannerType,
           limit: historyPageSize,
           offset: (historyPage - 1) * historyPageSize,
           rarity: historyRarityFilter === 'all' ? undefined : historyRarityFilter,
@@ -498,6 +568,7 @@ export function App() {
       setPersistedPulls(pulls.pulls)
       setHistoryTotalPulls(pulls.total)
       setBannerSummaries(summaries)
+      await refreshAccounts()
     } catch (error) {
       setGameHistoryImportError(getErrorMessage(error))
     } finally {
@@ -512,9 +583,10 @@ export function App() {
     historyPage,
     historyRarityFilter,
     historySearchQuery,
+    refreshAccounts,
   ])
 
-  const handleBannerTypeChange = (bannerType: BannerType) => {
+  const handleBannerTypeChange = (bannerType: BannerFilterType) => {
     if (bannerType === activeBannerType) {
       return
     }
@@ -525,6 +597,98 @@ export function App() {
     setPersistedPulls([])
     setManualImportSaveNotice(undefined)
   }
+
+  const handleAccountChange = (accountId: string) => {
+    const account = accounts.find((candidate) => candidate.id === accountId)
+
+    if (!account || account.id === activeAccount.id) {
+      return
+    }
+
+    const nextAccount = {
+      id: account.id,
+      uid: account.uid,
+      region: account.region ?? 'asia',
+      nickname: account.nickname ?? 'Trailblazer',
+    }
+
+    setActiveAccount(nextAccount)
+    saveActiveAccount(nextAccount)
+    setHistoryLoading(true)
+    setHistoryPage(1)
+    setPersistedPulls([])
+    setHistoryTotalPulls(0)
+    setManualImportSaveNotice(undefined)
+  }
+
+  const handleDeleteHistoryPull = useCallback(
+    async (pull: WarpPull) => {
+      if (deletingHistoryPullId || deletingAllHistory) {
+        return
+      }
+
+      const confirmed = window.confirm(
+        `Delete ${pull.itemName} from UID ${activeAccount.uid} history? This cannot be undone.`,
+      )
+
+      if (!confirmed) {
+        return
+      }
+
+      setDeletingHistoryPullId(pull.id)
+
+      try {
+        await deleteWarpPull(activeAccount.id, pull.id)
+        await refreshWarpHistory()
+        await refreshAccounts()
+      } finally {
+        setDeletingHistoryPullId(undefined)
+      }
+    },
+    [
+      activeAccount.id,
+      activeAccount.uid,
+      deletingAllHistory,
+      deletingHistoryPullId,
+      refreshAccounts,
+      refreshWarpHistory,
+    ],
+  )
+
+  const handleDeleteAllHistory = useCallback(async () => {
+    if (deletingAllHistory || deletingHistoryPullId || activeAccountPullCount === 0) {
+      return
+    }
+
+    const confirmed = window.confirm(
+      `Delete all ${activeAccountPullCount} local history records for UID ${activeAccount.uid}? This cannot be undone.`,
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    setDeletingAllHistory(true)
+    setHistoryLoading(true)
+
+    try {
+      await deleteAccountWarpHistory(activeAccount.id)
+      setHistoryPage(1)
+      await refreshWarpHistory()
+      await refreshAccounts()
+    } finally {
+      setDeletingAllHistory(false)
+      setHistoryLoading(false)
+    }
+  }, [
+    activeAccount.id,
+    activeAccount.uid,
+    activeAccountPullCount,
+    deletingAllHistory,
+    deletingHistoryPullId,
+    refreshAccounts,
+    refreshWarpHistory,
+  ])
 
   async function runAutoBackupAfterManualImport(insertedPulls: number) {
     if (!cloudBackupPolicy.autoBackupEnabled) {
@@ -593,7 +757,7 @@ export function App() {
 
     const draft = buildManualImportDraft(manualImportPreview, {
       accountId: activeAccount.id,
-      fallbackBannerType: activeBannerType,
+      fallbackBannerType: manualFallbackBannerType,
       timezone: 'Asia/Jakarta',
     })
 
@@ -615,6 +779,7 @@ export function App() {
         toSaveManualImportDraftPayload(activeAccount, draft),
       )
       await refreshWarpHistory()
+      await refreshAccounts()
       const autoBackupDetail = await runAutoBackupAfterManualImport(
         result.recordsInserted,
       )
@@ -641,7 +806,7 @@ export function App() {
   }
 
   const handleExportBackup = useCallback(async () => {
-    if (backupDeleting || backupExporting || backupRestoring || cloudBackupBusy) {
+    if (backupDeleting || backupExporting || backupImporting || backupRestoring || cloudBackupBusy) {
       return
     }
 
@@ -669,8 +834,87 @@ export function App() {
   }, [
     backupDeleting,
     backupExporting,
+    backupImporting,
     backupRestoring,
     cloudBackupBusy,
+    refreshBackupSnapshots,
+  ])
+
+  const handleImportBackupJson = useCallback(async () => {
+    if (backupDeleting || backupExporting || backupImporting || backupRestoring || cloudBackupBusy) {
+      return
+    }
+
+    const filePath = await selectBackupJsonFile()
+
+    if (!filePath) {
+      return
+    }
+
+    const confirmed = window.confirm(
+      'Import this JSON backup and replace all current local warp history with the file contents?',
+    )
+
+    if (!confirmed) {
+      return
+    }
+
+    setBackupImporting(true)
+    setBackupNotice(undefined)
+    setHistoryLoading(true)
+
+    try {
+      const result = await replaceDatabaseFromBackupFile(filePath)
+      const nextAccounts = await refreshAccounts()
+      const nextAccount = nextAccounts[0]
+
+      if (nextAccount) {
+        const account = {
+          id: nextAccount.id,
+          uid: nextAccount.uid,
+          region: nextAccount.region ?? 'asia',
+          nickname: nextAccount.nickname ?? 'Trailblazer',
+        }
+        setActiveAccount(account)
+        saveActiveAccount(account)
+      }
+
+      setHistoryPage(1)
+      if (nextAccount) {
+        const [pulls, summaries] = await fetchHistoryForAccount(nextAccount.id, 1)
+        setPersistedPulls(pulls.pulls)
+        setHistoryTotalPulls(pulls.total)
+        setBannerSummaries(summaries)
+      } else {
+        setPersistedPulls([])
+        setHistoryTotalPulls(0)
+        setBannerSummaries([])
+      }
+      await refreshBackupSnapshots()
+
+      setBackupNotice({
+        tone: 'success',
+        title: 'JSON imported',
+        detail: formatBackupReplaceDetail(result),
+      })
+    } catch (error) {
+      setBackupNotice({
+        tone: 'error',
+        title: 'JSON import failed',
+        detail: getErrorMessage(error),
+      })
+    } finally {
+      setBackupImporting(false)
+      setHistoryLoading(false)
+    }
+  }, [
+    backupDeleting,
+    backupExporting,
+    backupImporting,
+    backupRestoring,
+    cloudBackupBusy,
+    fetchHistoryForAccount,
+    refreshAccounts,
     refreshBackupSnapshots,
   ])
 
@@ -678,6 +922,7 @@ export function App() {
     if (
       backupDeleting ||
       backupExporting ||
+      backupImporting ||
       backupRestoring ||
       cloudBackupBusy ||
       !cloudBackupStatus.canConnect
@@ -710,6 +955,7 @@ export function App() {
   }, [
     backupDeleting,
     backupExporting,
+    backupImporting,
     backupRestoring,
     cloudBackupBusy,
     cloudBackupStatus.canConnect,
@@ -769,6 +1015,7 @@ export function App() {
     if (
       backupDeleting ||
       backupExporting ||
+      backupImporting ||
       backupRestoring ||
       cloudBackupBusy ||
       !cloudBackupStatus.canDisconnect
@@ -801,6 +1048,7 @@ export function App() {
   }, [
     backupDeleting,
     backupExporting,
+    backupImporting,
     backupRestoring,
     cloudBackupBusy,
     cloudBackupStatus.canDisconnect,
@@ -811,6 +1059,7 @@ export function App() {
     if (
       backupDeleting ||
       backupExporting ||
+      backupImporting ||
       backupRestoring ||
       cloudBackupBusy ||
       !cloudBackupStatus.canUpload
@@ -843,6 +1092,7 @@ export function App() {
   }, [
     backupDeleting,
     backupExporting,
+    backupImporting,
     backupRestoring,
     cloudBackupBusy,
     cloudBackupStatus.canUpload,
@@ -855,6 +1105,7 @@ export function App() {
       if (
         backupDeleting ||
         backupExporting ||
+        backupImporting ||
         backupRestoring ||
         cloudBackupBusy ||
         cloudBackupStatus.connectionStatus !== 'connected'
@@ -877,6 +1128,7 @@ export function App() {
       try {
         const result = await restoreGoogleDriveBackupSnapshot(snapshot)
         await refreshWarpHistory()
+        await refreshAccounts()
 
         setBackupNotice({
           tone: 'success',
@@ -897,10 +1149,12 @@ export function App() {
     [
       backupDeleting,
       backupExporting,
+      backupImporting,
       backupRestoring,
       cloudBackupBusy,
       cloudBackupStatus.connectionStatus,
       refreshCloudBackupStatus,
+      refreshAccounts,
       refreshWarpHistory,
     ],
   )
@@ -909,6 +1163,7 @@ export function App() {
     if (
       backupDeleting ||
       backupExporting ||
+      backupImporting ||
       backupRestoring ||
       cloudBackupBusy ||
       cloudBackupStatus.connectionStatus !== 'connected'
@@ -936,6 +1191,7 @@ export function App() {
   }, [
     backupDeleting,
     backupExporting,
+    backupImporting,
     backupRestoring,
     cloudBackupBusy,
     cloudBackupStatus.connectionStatus,
@@ -944,7 +1200,7 @@ export function App() {
   ])
 
   const handleRestoreBackup = useCallback(async () => {
-    if (backupDeleting || backupExporting || backupRestoring || cloudBackupBusy) {
+    if (backupDeleting || backupExporting || backupImporting || backupRestoring || cloudBackupBusy) {
       return
     }
 
@@ -954,6 +1210,7 @@ export function App() {
     try {
       const result = await restoreLatestBackupSnapshot()
       await refreshWarpHistory()
+      await refreshAccounts()
       await refreshBackupSnapshots()
 
       setBackupNotice({
@@ -972,17 +1229,19 @@ export function App() {
     }
   }, [
     backupExporting,
+    backupImporting,
     backupDeleting,
     backupRestoring,
     backupSnapshots,
     cloudBackupBusy,
+    refreshAccounts,
     refreshBackupSnapshots,
     refreshWarpHistory,
   ])
 
   const handleRestoreBackupSnapshot = useCallback(
     async (fileName: string) => {
-      if (backupDeleting || backupExporting || backupRestoring || cloudBackupBusy) {
+      if (backupDeleting || backupExporting || backupImporting || backupRestoring || cloudBackupBusy) {
         return
       }
 
@@ -992,6 +1251,7 @@ export function App() {
       try {
         const result = await restoreBackupSnapshot(fileName)
         await refreshWarpHistory()
+        await refreshAccounts()
         await refreshBackupSnapshots()
 
         setBackupNotice({
@@ -1011,9 +1271,11 @@ export function App() {
     },
     [
       backupExporting,
+      backupImporting,
       backupDeleting,
       backupRestoring,
       cloudBackupBusy,
+      refreshAccounts,
       refreshBackupSnapshots,
       refreshWarpHistory,
     ],
@@ -1021,7 +1283,7 @@ export function App() {
 
   const handleDeleteBackupSnapshot = useCallback(
     async (fileName: string) => {
-      if (backupDeleting || backupExporting || backupRestoring || cloudBackupBusy) {
+      if (backupDeleting || backupExporting || backupImporting || backupRestoring || cloudBackupBusy) {
         return
       }
 
@@ -1058,6 +1320,7 @@ export function App() {
     [
       backupDeleting,
       backupExporting,
+      backupImporting,
       backupRestoring,
       cloudBackupBusy,
       refreshBackupSnapshots,
@@ -1096,7 +1359,21 @@ export function App() {
           <section className="account-panel" aria-label="Selected account">
             <span className="eyebrow">Active UID</span>
             <strong>{activeAccount.uid}</strong>
-            <span>Asia server</span>
+            <span>{formatAccountMeta(activeAccountSummary)}</span>
+            {accounts.length > 0 ? (
+              <select
+                aria-label="Switch active UID"
+                className="account-select"
+                onChange={(event) => handleAccountChange(event.target.value)}
+                value={activeAccount.id}
+              >
+                {accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    {account.uid} - {account.totalPulls} pulls
+                  </option>
+                ))}
+              </select>
+            ) : null}
           </section>
         </aside>
 
@@ -1104,7 +1381,7 @@ export function App() {
           <header className="workspace-header">
             <div>
               <span className="eyebrow">Selected banner</span>
-              <h1>{getBannerLabel(activeBannerType)}</h1>
+              <h1>{getBannerFilterLabel(activeBannerType)}</h1>
             </div>
             <div className="header-actions" aria-label="Quick actions">
               <AppButton icon={RefreshCw}>Sync</AppButton>
@@ -1112,6 +1389,7 @@ export function App() {
                 disabled={
                   backupDeleting ||
                   backupExporting ||
+                  backupImporting ||
                   backupRestoring ||
                   cloudBackupBusy
                 }
@@ -1139,11 +1417,15 @@ export function App() {
                 summaries={bannerSummaries}
                 onBannerTypeChange={handleBannerTypeChange}
               />
-              <PityOverview summary={pitySummary} />
-              <BannerStatsPanel
-                bannerType={activeBannerType}
-                summary={activeBannerSummary}
-              />
+              {activeBannerType === 'all' ? null : (
+                <>
+                  <PityOverview summary={pitySummary} />
+                  <BannerStatsPanel
+                    bannerType={activeBannerType}
+                    summary={activeBannerSummary}
+                  />
+                </>
+              )}
               <WarpTimeline
                 pulls={timelinePulls}
                 page={historyPage}
@@ -1152,6 +1434,12 @@ export function App() {
                 searchQuery={historySearchQuery}
                 totalPulls={historyTotalPulls}
                 isLoading={historyLoading}
+                canDeleteAll={activeAccountPullCount > 0}
+                deletingPullId={deletingHistoryPullId}
+                isDeletingAll={deletingAllHistory}
+                showBannerLabel={activeBannerType === 'all'}
+                onDeleteAll={handleDeleteAllHistory}
+                onDeletePull={handleDeleteHistoryPull}
                 onPageChange={(page) => {
                   setHistoryLoading(true)
                   setHistoryPage(page)
@@ -1198,6 +1486,7 @@ export function App() {
                 isCloudRestoring={cloudBackupRestoring}
                 isCloudUploading={cloudBackupUploading}
                 isExporting={backupExporting}
+                isImporting={backupImporting}
                 isDeleting={backupDeleting}
                 isRestoring={backupRestoring}
                 latestBackup={backupSnapshots[0]}
@@ -1210,6 +1499,7 @@ export function App() {
                 onDeleteSnapshot={handleDeleteBackupSnapshot}
                 onDisconnectGoogleDrive={handleDisconnectGoogleDrive}
                 onExportBackup={handleExportBackup}
+                onImportBackupJson={handleImportBackupJson}
                 onRefreshGoogleDriveBackups={handleRefreshGoogleDriveBackups}
                 onRestoreGoogleDriveBackup={handleRestoreGoogleDriveBackup}
                 onRestoreBackup={handleRestoreBackup}
@@ -1238,7 +1528,7 @@ export function App() {
         onClose={() => setManualImportOpen(false)}
         onNoteChange={handleManualNoteChange}
         onSaveNoticeClose={() => setManualImportSaveNotice(undefined)}
-        fallbackBannerType={activeBannerType}
+        fallbackBannerType={manualFallbackBannerType}
         preview={manualImportPreview}
         saveNotice={manualImportSaveNotice}
       />
@@ -1261,6 +1551,25 @@ function formatBackupRestoreDetail(result: RestoreBackupSnapshotResult) {
     `${result.recomputedBanners} banner pity groups recomputed.`,
     `Restored from ${result.backupPath}`,
   ].join('\n')
+}
+
+function formatBackupReplaceDetail(result: RestoreBackupSnapshotResult) {
+  return [
+    `${result.warpPullsInserted} pulls imported from JSON.`,
+    `${result.accounts} accounts and ${result.importBatches} import batches restored.`,
+    `Current local history was replaced from ${result.backupPath}.`,
+  ].join('\n')
+}
+
+function formatAccountMeta(account: WarpAccount | undefined) {
+  if (!account) {
+    return 'Asia server'
+  }
+
+  const region = account.region ?? 'asia'
+  const pulls = account.totalPulls === 1 ? '1 pull' : `${account.totalPulls} pulls`
+
+  return `${region.toUpperCase()} - ${pulls}`
 }
 
 function formatCloudBackupUploadDetail(

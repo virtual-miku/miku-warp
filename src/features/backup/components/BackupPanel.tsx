@@ -3,6 +3,7 @@ import {
   KeyRound,
   LogOut,
   RefreshCcw,
+  FileJson,
   Trash2,
   Upload,
 } from 'lucide-react'
@@ -45,6 +46,7 @@ type BackupPanelProps = {
   isCloudRestoring: boolean
   isCloudUploading: boolean
   isExporting: boolean
+  isImporting: boolean
   isRestoring: boolean
   isDeleting: boolean
   latestBackup?: BackupSnapshotInfo
@@ -61,6 +63,7 @@ type BackupPanelProps = {
   onRestoreGoogleDriveBackup: (snapshot: CloudBackupSnapshotInfo) => void
   onUploadGoogleDriveBackup: () => void
   onExportBackup: () => void
+  onImportBackupJson: () => void
   onRestoreBackup: () => void
   onRestoreSnapshot: (fileName: string) => void
 }
@@ -77,6 +80,7 @@ export function BackupPanel({
   isCloudRestoring,
   isCloudUploading,
   isExporting,
+  isImporting,
   isDeleting,
   isRestoring,
   latestBackup,
@@ -93,6 +97,7 @@ export function BackupPanel({
   onRestoreGoogleDriveBackup,
   onUploadGoogleDriveBackup,
   onExportBackup,
+  onImportBackupJson,
   onRestoreBackup,
   onRestoreSnapshot,
 }: BackupPanelProps) {
@@ -103,7 +108,7 @@ export function BackupPanel({
     isCloudPolicyUpdating ||
     isCloudRestoring ||
     isCloudUploading
-  const isBusy = isExporting || isRestoring || isDeleting || isCloudBusy
+  const isBusy = isExporting || isImporting || isRestoring || isDeleting || isCloudBusy
   const visibleSnapshots = snapshots.slice(0, 3)
   const visibleCloudSnapshots = cloudSnapshots.slice(0, 3)
   const isGoogleDriveConnected =
@@ -265,6 +270,14 @@ export function BackupPanel({
               variant="ghost"
             >
               {isExporting ? 'Exporting' : 'Export'}
+            </AppButton>
+            <AppButton
+              disabled={isBusy}
+              icon={FileJson}
+              onClick={onImportBackupJson}
+              variant="ghost"
+            >
+              {isImporting ? 'Importing' : 'Import JSON'}
             </AppButton>
             <AppButton
               disabled={isBusy || !latestBackup}

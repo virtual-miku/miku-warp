@@ -7,10 +7,16 @@
 }
 
 .sidebar {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  min-height: 100vh;
+  max-height: 100vh;
   display: flex;
   flex-direction: column;
   gap: 28px;
   padding: 24px 18px;
+  overflow-y: auto;
   border-right: 1px solid var(--border);
   background: var(--panel-bg);
 }
@@ -92,6 +98,20 @@
   margin-top: auto;
   padding: 14px;
   border-radius: 8px;
+}
+
+.account-select {
+  width: 100%;
+  min-height: 36px;
+  margin-top: 12px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-strong);
+  background: var(--panel-bg);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .eyebrow {
@@ -343,6 +363,34 @@
   font-size: 13px;
 }
 
+.history-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.history-delete-all-button {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--danger);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.history-delete-all-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .warp-list {
   display: grid;
 }
@@ -406,7 +454,7 @@
 .warp-row {
   min-height: 68px;
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) 80px 104px;
+  grid-template-columns: 44px minmax(0, 1fr) 96px 104px 34px;
   gap: 12px;
   align-items: center;
   padding: 10px 16px;
@@ -518,6 +566,10 @@
   display: block;
   color: var(--text-strong);
   font-size: 13px;
+}
+
+.warp-delete-button {
+  color: var(--danger);
 }
 
 .tool-panel-body {
@@ -1264,6 +1316,9 @@
 
   .sidebar {
     position: static;
+    min-height: auto;
+    max-height: none;
+    overflow: visible;
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
@@ -1339,6 +1394,11 @@
   .warp-pity {
     grid-column: 2;
     text-align: left;
+  }
+
+  .warp-delete-button {
+    grid-column: 2;
+    justify-self: start;
   }
 
   .modal-backdrop {

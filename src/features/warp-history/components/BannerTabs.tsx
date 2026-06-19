@@ -1,13 +1,13 @@
 import {
   bannerDefinitions,
-  type BannerType,
+  type BannerFilterType,
 } from '../domain/banner'
 import type { WarpBannerSummary } from '../../persistence/data/warp-pull-history'
 
 type BannerTabsProps = {
-  activeBannerType: BannerType
+  activeBannerType: BannerFilterType
   summaries: WarpBannerSummary[]
-  onBannerTypeChange: (bannerType: BannerType) => void
+  onBannerTypeChange: (bannerType: BannerFilterType) => void
 }
 
 export function BannerTabs({
@@ -19,6 +19,19 @@ export function BannerTabs({
 
   return (
     <div className="banner-tabs" role="tablist" aria-label="Warp banners">
+      <button
+        className={
+          activeBannerType === 'all'
+            ? 'banner-tab banner-tab-active'
+            : 'banner-tab'
+        }
+        type="button"
+        role="tab"
+        aria-selected={activeBannerType === 'all'}
+        onClick={() => onBannerTypeChange('all')}
+      >
+        All
+      </button>
       {visibleBanners.map((banner) => (
         <button
           className={
@@ -41,7 +54,7 @@ export function BannerTabs({
 
 function visibleBannerDefinitions(
   summaries: WarpBannerSummary[],
-  activeBannerType: BannerType,
+  activeBannerType: BannerFilterType,
 ) {
   const bannersWithData = new Set(
     summaries

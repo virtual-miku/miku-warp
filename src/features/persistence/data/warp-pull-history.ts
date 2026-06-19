@@ -22,6 +22,28 @@ export type ListWarpPullsResult = {
   total: number
 }
 
+export type WarpAccount = {
+  id: string
+  uid: string
+  region?: string
+  nickname?: string
+  totalPulls: number
+  lastPullAt?: string
+}
+
+export type DeleteWarpPullResult = {
+  accountId: string
+  pullId: string
+  deletedPulls: number
+  recomputedBanner: boolean
+}
+
+export type DeleteAccountWarpHistoryResult = {
+  accountId: string
+  deletedPulls: number
+  deletedImportBatches: number
+}
+
 export type WarpBannerSummary = {
   bannerType: BannerType
   totalPulls: number
@@ -42,6 +64,23 @@ export type WarpBannerSummary = {
 
 export function listWarpPulls(query: ListWarpPullsInput) {
   return invokeTauri<ListWarpPullsResult>('list_warp_pulls', { query })
+}
+
+export function listAccounts() {
+  return invokeTauri<WarpAccount[]>('list_accounts')
+}
+
+export function deleteWarpPull(accountId: string, pullId: string) {
+  return invokeTauri<DeleteWarpPullResult>('delete_warp_pull', {
+    input: { accountId, pullId },
+  })
+}
+
+export function deleteAccountWarpHistory(accountId: string) {
+  return invokeTauri<DeleteAccountWarpHistoryResult>(
+    'delete_account_warp_history',
+    { input: { accountId } },
+  )
 }
 
 export function listWarpBannerSummaries(

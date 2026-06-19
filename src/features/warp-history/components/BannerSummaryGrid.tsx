@@ -1,14 +1,14 @@
 import {
   bannerDefinitions,
+  type BannerFilterType,
   getBannerLabel,
-  type BannerType,
 } from '../domain/banner'
 import type { WarpBannerSummary } from '../../persistence/data/warp-pull-history'
 
 type BannerSummaryGridProps = {
-  activeBannerType: BannerType
+  activeBannerType: BannerFilterType
   summaries: WarpBannerSummary[]
-  onBannerTypeChange: (bannerType: BannerType) => void
+  onBannerTypeChange: (bannerType: BannerFilterType) => void
 }
 
 export function BannerSummaryGrid({
@@ -19,6 +19,7 @@ export function BannerSummaryGrid({
   const summaryByBanner = new Map(
     summaries.map((summary) => [summary.bannerType, summary]),
   )
+  const allSummary = summarizeAllBanners(summaries)
   const visibleBanners = bannerDefinitions.filter((banner) => {
     const summary = summaryByBanner.get(banner.type)
 
@@ -36,6 +37,21 @@ export function BannerSummaryGrid({
         <span>{summaries.length} active banners</span>
       </header>
       <div className="banner-summary-grid">
+        <button
+          aria-pressed={activeBannerType === 'all'}
+          className={
+            activeBannerType === 'all'
+              ? 'banner-summary-card banner-summary-card-active'
+              : 'banner-summary-card'
+          }
+          onClick={() => onBannerTypeChange('all')}
+          type="button"
+        >
+          <span>All</span>
+          <strong>{allSummary.totalPulls}</strong>
+          <span>{allSummary.fiveStarCount} gold records</span>
+          <span>{formatLastPullLine(allSummary)}</span>
+        </button>
         {visibleBanners.map((banner) => {
           const summary = summaryByBanner.get(banner.type)
           const isActive = activeBannerType === banner.type
@@ -64,6 +80,34 @@ export function BannerSummaryGrid({
   )
 }
 
+function summarizeAllBanners(summaries: WarpBannerSummary[]) {
+  return summaries.reduce<{
+    totalPulls: number
+    fiveStarCount: number
+    lastItemName?: string
+    lastPullAt?: string
+  }>(
+    (result, summary) => {
+      const isLatest =
+        summary.lastPullAt &&
+        (!result.lastPullAt || summary.lastPullAt > result.lastPullAt)
+
+      return {
+        totalPulls: result.totalPulls + summary.totalPulls,
+        fiveStarCount: result.fiveStarCount + summary.fiveStarCount,
+        lastItemName: isLatest ? summary.lastItemName : result.lastItemName,
+        lastPullAt: isLatest ? summary.lastPullAt : result.lastPullAt,
+      }
+    },
+    {
+      totalPulls: 0,
+      fiveStarCount: 0,
+      lastItemName: undefined,
+      lastPullAt: undefined,
+    },
+  )
+}
+
 function formatFiveStarLine(summary: WarpBannerSummary | undefined) {
   if (!summary || summary.totalPulls === 0) {
     return 'No pulls yet'
@@ -72,7 +116,7 @@ function formatFiveStarLine(summary: WarpBannerSummary | undefined) {
   return `5-star pity ${summary.currentFiveStarPity} - ${summary.fiveStarCount} gold`
 }
 
-function formatLastPullLine(summary: WarpBannerSummary | undefined) {
+function formatLastPullLine(summary: { lastItemName?: string } | undefined) {
   if (!summary?.lastItemName) {
     return 'Last: none'
   }

@@ -8,7 +8,12 @@ export const bannerDefinitions = [
 ] as const
 
 export type BannerType = (typeof bannerDefinitions)[number]['type']
+export type BannerFilterType = 'all' | BannerType
 
 export function getBannerLabel(type: BannerType) {
   return bannerDefinitions.find((banner) => banner.type === type)?.label ?? type
+}
+
+export function getBannerFilterLabel(type: BannerFilterType) {
+  return type === 'all' ? 'All' : getBannerLabel(type)
 }
