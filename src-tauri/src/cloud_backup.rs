@@ -15,8 +15,6 @@ const LEGACY_GOOGLE_OAUTH_CLIENT_ID_ENV: &str = "WARP_TRACKER_GOOGLE_CLIENT_ID";
 const BUNDLED_GOOGLE_OAUTH_CLIENT_ID: Option<&str> = option_env!("MIKU_WARP_GOOGLE_CLIENT_ID");
 const GOOGLE_OAUTH_CLIENT_SECRET_ENV: &str = "MIKU_WARP_GOOGLE_CLIENT_SECRET";
 const LEGACY_GOOGLE_OAUTH_CLIENT_SECRET_ENV: &str = "WARP_TRACKER_GOOGLE_CLIENT_SECRET";
-const BUNDLED_GOOGLE_OAUTH_CLIENT_SECRET: Option<&str> =
-    option_env!("MIKU_WARP_GOOGLE_CLIENT_SECRET");
 const KEYRING_SERVICE_NAME: &str = "app.warptracker.desktop.google-drive";
 const GOOGLE_DRIVE_REFRESH_TOKEN_KEY: &str = "google-drive-refresh-token";
 const GOOGLE_AUTHORIZATION_ENDPOINT: &str = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -832,11 +830,7 @@ fn read_google_oauth_client_secret_from_environment() -> Option<String> {
             .filter(|client_secret| !client_secret.is_empty())
     });
 
-    runtime_client_secret.or_else(|| {
-        BUNDLED_GOOGLE_OAUTH_CLIENT_SECRET
-            .map(|client_secret| client_secret.trim().to_string())
-            .filter(|client_secret| !client_secret.is_empty())
-    })
+    runtime_client_secret
 }
 
 fn google_drive_unavailable_message() -> String {

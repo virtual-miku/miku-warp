@@ -1210,14 +1210,30 @@ export function App() {
     setBackupNotice(undefined)
 
     try {
-      const status = await connectGoogleDriveBackup()
+      const commandStatus = await connectGoogleDriveBackup()
+      const status = await waitForConnectedCloudBackupStatus(
+        commandStatus,
+        refreshCloudBackupStatus,
+      )
       setCloudBackupStatus(status)
-      await refreshCloudBackupSnapshots().catch(() => undefined)
-      setBackupNotice({
-        tone: 'success',
-        title: 'Google Drive connected',
-        detail: status.detail,
-      })
+
+      if (status.connectionStatus === 'connected') {
+        await refreshCloudBackupSnapshots().catch(() => undefined)
+        setBackupNotice({
+          tone: 'success',
+          title: 'Google Drive connected',
+          detail: status.detail,
+        })
+      } else {
+        setBackupNotice({
+          tone: 'error',
+          title: 'Google Drive connection incomplete',
+          detail: [
+            'Google login finished, but Miku Warp still cannot read a saved Drive connection.',
+            status.detail || `Current status: ${status.label}.`,
+          ].join('\n'),
+        })
+      }
     } catch (error) {
       const fallbackStatus = await refreshCloudBackupStatus()
       setBackupNotice({
@@ -1992,6 +2008,30 @@ function formatCloudBackupUploadDetail(
       ? `Modified at ${result.remoteModifiedTime}.`
       : `Local file: ${result.localBackupPath}`,
   ].join('\n')
+}
+
+async function waitForConnectedCloudBackupStatus(
+  initialStatus: CloudBackupStatus,
+  refreshStatus: () => Promise<CloudBackupStatus>,
+) {
+  let status = initialStatus
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    if (status.connectionStatus === 'connected') {
+      return status
+    }
+
+    await delay(250)
+    status = await refreshStatus()
+  }
+
+  return status
+}
+
+function delay(milliseconds: number) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, milliseconds)
+  })
 }
 
 function getErrorMessage(error: unknown) {
