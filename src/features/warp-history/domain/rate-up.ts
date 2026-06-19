@@ -23,6 +23,7 @@ const standardLightConeNames = new Set([
 export type NextRateUpChance = {
   chance?: number
   detail: string
+  itemName?: string
 }
 
 export function getNextRateUpChance(
@@ -32,21 +33,23 @@ export function getNextRateUpChance(
   const baseChance = getBaseRateUpChance(bannerType)
 
   if (baseChance === undefined) {
-    return { detail: 'This banner has no featured rate-up.' }
+    return { detail: '' }
   }
 
   if (lastFiveStarName && isKnownOffRateItem(bannerType, lastFiveStarName)) {
     return {
       chance: 100,
-      detail: `Guaranteed after ${lastFiveStarName}`,
+      detail: 'Guaranteed after',
+      itemName: lastFiveStarName,
     }
   }
 
   return {
     chance: baseChance,
     detail: lastFiveStarName
-      ? `Base chance after ${lastFiveStarName}`
+      ? 'Base chance after'
       : 'Base chance before the first recorded 5★',
+    itemName: lastFiveStarName,
   }
 }
 

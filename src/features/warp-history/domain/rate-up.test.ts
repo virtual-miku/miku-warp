@@ -13,14 +13,19 @@ describe('getNextRateUpChance', () => {
   })
 
   it('returns guaranteed after a known standard-pool loss', () => {
-    expect(getNextRateUpChance('character_event', 'Yanqing').chance).toBe(100)
+    expect(getNextRateUpChance('character_event', 'Yanqing')).toMatchObject({
+      chance: 100,
+      itemName: 'Yanqing',
+    })
     expect(
-      getNextRateUpChance('light_cone_event', "But the Battle Isn't Over")
-        .chance,
-    ).toBe(100)
+      getNextRateUpChance('light_cone_event', "But the Battle Isn't Over"),
+    ).toMatchObject({
+      chance: 100,
+      itemName: "But the Battle Isn't Over",
+    })
   })
 
   it('does not claim a rate-up chance for Standard', () => {
-    expect(getNextRateUpChance('standard', 'Himeko').chance).toBeUndefined()
+    expect(getNextRateUpChance('standard', 'Himeko')).toEqual({ detail: '' })
   })
 })

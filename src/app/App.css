@@ -332,7 +332,7 @@
 
 .banner-detail-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 8px;
   padding: 0 14px;
 }
@@ -348,7 +348,7 @@
   background: var(--panel-bg);
 }
 
-.banner-detail-item span {
+.banner-detail-label {
   min-width: 0;
   overflow: hidden;
   color: var(--text-muted);
@@ -357,15 +357,24 @@
   white-space: nowrap;
 }
 
-.banner-detail-item .banner-detail-gold {
-  color: var(--rarity-5);
-  font-weight: 800;
-}
-
 .banner-detail-item strong {
   color: var(--text-strong);
   font-size: 24px;
   line-height: 1.1;
+}
+
+.banner-detail-detail {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.banner-detail-gold {
+  color: var(--rarity-5);
+  font-weight: 800;
 }
 
 .history-panel,

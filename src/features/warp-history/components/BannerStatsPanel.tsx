@@ -1,6 +1,10 @@
+import type { ReactNode } from 'react'
 import { getBannerLabel, type BannerType } from '../domain/banner'
 import type { WarpBannerSummary } from '../../persistence/data/warp-pull-history'
-import { getNextRateUpChance } from '../domain/rate-up'
+import {
+  getNextRateUpChance,
+  type NextRateUpChance,
+} from '../domain/rate-up'
 
 type BannerStatsPanelProps = {
   bannerType: BannerType
@@ -28,22 +32,22 @@ export function BannerStatsPanel({
             summary?.fiveStarPityTotal,
             summary?.fiveStarCount,
           )}
-          detail={`Total 5★ obtained: ${summary?.fiveStarCount ?? 0}`}
-          detailClassName="banner-detail-gold"
+          detail={
+            <>
+              Total 5★ obtained:{' '}
+              <span className="banner-detail-gold">
+                {summary?.fiveStarCount ?? 0}
+              </span>
+            </>
+          }
         />
-        <StatItem
-          label="Next 5★ rate-up"
-          value={nextRateUp.chance === undefined ? 'N/A' : `${nextRateUp.chance}%`}
-          detail={nextRateUp.detail}
-        />
-        <StatItem
-          label="Current 4★ pity"
-          value={`${summary?.currentFourStarPity ?? 0}/10`}
-          detail={formatLastPity(
-            summary?.lastFourStarName,
-            summary?.lastFourStarPity,
-          )}
-        />
+        {nextRateUp.chance !== undefined ? (
+          <StatItem
+            label="Next 5★ rate-up"
+            value={`${nextRateUp.chance}%`}
+            detail={<RateUpDetail nextRateUp={nextRateUp} />}
+          />
+        ) : null}
       </div>
     </section>
   )
@@ -52,17 +56,29 @@ export function BannerStatsPanel({
 type StatItemProps = {
   label: string
   value: number | string
-  detail: string
-  detailClassName?: string
+  detail: ReactNode
 }
 
-function StatItem({ label, value, detail, detailClassName }: StatItemProps) {
+function StatItem({ label, value, detail }: StatItemProps) {
   return (
     <article className="banner-detail-item">
-      <span>{label}</span>
+      <span className="banner-detail-label">{label}</span>
       <strong>{value}</strong>
-      <span className={detailClassName}>{detail}</span>
+      <p className="banner-detail-detail">{detail}</p>
     </article>
+  )
+}
+
+function RateUpDetail({ nextRateUp }: { nextRateUp: NextRateUpChance }) {
+  if (!nextRateUp.itemName) {
+    return nextRateUp.detail
+  }
+
+  return (
+    <>
+      {nextRateUp.detail}{' '}
+      <span className="banner-detail-gold">{nextRateUp.itemName}</span>
+    </>
   )
 }
 
@@ -75,12 +91,4 @@ function formatAveragePity(
   }
 
   return `Pity ${(total / count).toFixed(1)}`
-}
-
-function formatLastPity(name: string | undefined, pity: number | undefined) {
-  if (!name) {
-    return 'Last: none'
-  }
-
-  return pity ? `Last: ${name} at ${pity}` : `Last: ${name}`
 }

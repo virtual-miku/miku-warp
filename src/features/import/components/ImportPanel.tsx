@@ -116,15 +116,6 @@ export function ImportPanel({
             {isGameHistoryImporting ? 'Importing' : 'Import'}
           </AppButton>
         </div>
-        <div className="tool-row manual-import-row">
-          <div>
-            <strong>Manual import from text</strong>
-            <span>{manualImportPreview.totalPulls} detected</span>
-          </div>
-          <AppButton icon={FileInput} onClick={onOpenManualImport}>
-            Open
-          </AppButton>
-        </div>
         {hasGameHistoryMessage ? (
           <div
             className={[
@@ -150,6 +141,15 @@ export function ImportPanel({
             </p>
           </div>
         ) : null}
+        <div className="tool-row manual-import-row">
+          <div>
+            <strong>Manual import from text</strong>
+            <span>{manualImportPreview.totalPulls} detected</span>
+          </div>
+          <AppButton icon={FileInput} onClick={onOpenManualImport}>
+            Open
+          </AppButton>
+        </div>
       </div>
     </section>
   )
