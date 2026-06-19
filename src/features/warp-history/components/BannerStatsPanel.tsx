@@ -18,19 +18,18 @@ export function BannerStatsPanel({
     <section className="banner-detail-panel" aria-label="Banner statistics">
       <header className="panel-header">
         <h2>{getBannerLabel(bannerType)} stats</h2>
-        <span>{summary?.totalPulls ?? 0} pulls</span>
       </header>
       <div className="banner-detail-grid">
         <StatItem
-          label="Average 5-star"
+          label="Average 5★"
           value={formatAveragePity(
             summary?.fiveStarPityTotal,
             summary?.fiveStarCount,
           )}
-          detail={`${summary?.fiveStarCount ?? 0} gold records`}
+          detail={`Total 5★ obtained: ${summary?.fiveStarCount ?? 0}`}
         />
         <StatItem
-          label="Current 5-star pity"
+          label="Current 5★ pity"
           value={`${summary?.currentFiveStarPity ?? 0}/${getFiveStarHardPity(bannerType)}`}
           detail={formatLastPity(
             summary?.lastFiveStarName,
@@ -38,7 +37,7 @@ export function BannerStatsPanel({
           )}
         />
         <StatItem
-          label="Current 4-star pity"
+          label="Current 4★ pity"
           value={`${summary?.currentFourStarPity ?? 0}/10`}
           detail={formatLastPity(
             summary?.lastFourStarName,
@@ -74,7 +73,7 @@ function formatAveragePity(
     return '-'
   }
 
-  return (total / count).toFixed(1)
+  return `${(total / count).toFixed(1)} pity`
 }
 
 function formatLastPity(name: string | undefined, pity: number | undefined) {

@@ -234,6 +234,7 @@ pub struct BackupSnapshotSummary {
     pub warp_items: usize,
     pub import_batches: usize,
     pub warp_pulls: usize,
+    pub uids: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -2487,6 +2488,11 @@ fn read_backup_snapshot_summary(path: &Path) -> Result<BackupSnapshotSummary, St
         .map_err(|error| format!("Failed to parse backup snapshot: {error}"))?;
 
     validate_backup_snapshot(&snapshot)?;
+    let uids = snapshot
+        .accounts
+        .iter()
+        .map(|account| account.uid.clone())
+        .collect();
 
     Ok(BackupSnapshotSummary {
         backup_path: path.to_string_lossy().to_string(),
@@ -2501,6 +2507,7 @@ fn read_backup_snapshot_summary(path: &Path) -> Result<BackupSnapshotSummary, St
         warp_items: snapshot.warp_items.len(),
         import_batches: snapshot.import_batches.len(),
         warp_pulls: snapshot.warp_pulls.len(),
+        uids,
     })
 }
 

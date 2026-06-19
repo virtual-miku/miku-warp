@@ -23,6 +23,7 @@ export type BackupNotice = {
 export type BackupSnapshotInfo = {
   exportedAt: string
   fileName: string
+  uids: string[]
   warpPulls: number
 }
 
@@ -35,7 +36,6 @@ export type CloudBackupSnapshotInfo = {
 }
 
 type BackupPanelProps = {
-  backupCount: number
   cloudBackupPolicy: CloudBackupPolicy
   cloudSnapshots: CloudBackupSnapshotInfo[]
   cloudBackupStatus: CloudBackupStatus
@@ -69,7 +69,6 @@ type BackupPanelProps = {
 }
 
 export function BackupPanel({
-  backupCount,
   cloudBackupPolicy,
   cloudSnapshots,
   cloudBackupStatus,
@@ -126,7 +125,6 @@ export function BackupPanel({
     >
       <header className="panel-header">
         <h2>Backup</h2>
-        <span className="status-pill">{formatSnapshotCount(backupCount)}</span>
       </header>
       <div className="tool-panel-body">
         <div className="tool-row">
@@ -258,7 +256,7 @@ export function BackupPanel({
             <strong>Local backup</strong>
             <span title={latestBackup?.fileName}>
               {latestBackup
-                ? `${latestBackup.warpPulls} pulls - ${formatSnapshotTime(latestBackup.exportedAt)}`
+                ? `Last backup: ${formatSnapshotTime(latestBackup.exportedAt)}`
                 : 'No local snapshot yet'}
             </span>
           </div>
@@ -296,7 +294,7 @@ export function BackupPanel({
                 <div>
                   <strong>{formatSnapshotTime(snapshot.exportedAt)}</strong>
                   <span title={snapshot.fileName}>
-                    {snapshot.warpPulls} pulls
+                    {formatBackupUids(snapshot.uids)}
                   </span>
                 </div>
                 <div className="backup-snapshot-actions">
@@ -363,20 +361,31 @@ function getGoogleDriveActionLabel(
   return 'Connect'
 }
 
-function formatSnapshotCount(count: number) {
-  if (count === 0) {
-    return 'No snapshots'
-  }
+function formatSnapshotTime(value: string) {
+  const date = new Date(value)
 
-  if (count === 1) {
-    return '1 snapshot'
-  }
-
-  return `${count} snapshots`
+  return new Intl.DateTimeFormat('id-ID', {
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    month: 'short',
+    second: '2-digit',
+    year: 'numeric',
+  })
+    .format(date)
+    .replace(/\./g, ':')
 }
 
-function formatSnapshotTime(value: string) {
-  return value.replace('T', ' ').replace('Z', ' UTC')
+function formatBackupUids(uids: string[]) {
+  if (uids.length === 0) {
+    return 'No UID in snapshot'
+  }
+
+  if (uids.length === 1) {
+    return `UID ${uids[0]}`
+  }
+
+  return `${uids.length} UIDs: ${uids.join(', ')}`
 }
 
 function formatCloudSnapshotCount(count: number) {

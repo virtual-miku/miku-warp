@@ -232,6 +232,14 @@
   font-size: 13px;
 }
 
+.pity-last-five {
+  color: var(--rarity-5);
+}
+
+.pity-last-four {
+  color: var(--rarity-4);
+}
+
 .pity-accent-gold {
   border-top: 3px solid var(--rarity-5);
 }
@@ -301,6 +309,12 @@
   color: var(--text-strong);
   font-size: 26px;
   line-height: 1.1;
+}
+
+.banner-summary-card strong small {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .banner-detail-panel {
@@ -512,6 +526,33 @@
   border-color: var(--accent);
 }
 
+.history-filter-button-5 {
+  color: var(--rarity-5);
+}
+
+.history-filter-button-4 {
+  color: var(--rarity-4);
+}
+
+.history-filter-button-3 {
+  color: var(--rarity-3);
+}
+
+.history-filter-button-5.history-filter-button-active {
+  border-color: var(--rarity-5);
+  box-shadow: inset 0 0 0 1px var(--rarity-5);
+}
+
+.history-filter-button-4.history-filter-button-active {
+  border-color: var(--rarity-4);
+  box-shadow: inset 0 0 0 1px var(--rarity-4);
+}
+
+.history-filter-button-3.history-filter-button-active {
+  border-color: var(--rarity-3);
+  box-shadow: inset 0 0 0 1px var(--rarity-3);
+}
+
 .history-filter-button-active {
   color: var(--text-strong);
   box-shadow: inset 0 0 0 1px var(--accent);
@@ -659,6 +700,12 @@
 .tool-row strong,
 .tool-row span {
   display: block;
+}
+
+.manual-import-row {
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
 }
 
 .game-path-field {

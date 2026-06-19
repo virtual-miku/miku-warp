@@ -74,16 +74,18 @@ export function WarpTimeline({
           {(['all', 5, 4, 3] as const).map((filter) => (
             <button
               aria-pressed={rarityFilter === filter}
-              className={
-                rarityFilter === filter
-                  ? 'history-filter-button history-filter-button-active'
-                  : 'history-filter-button'
-              }
+              className={[
+                'history-filter-button',
+                filter === 'all' ? undefined : `history-filter-button-${filter}`,
+                rarityFilter === filter ? 'history-filter-button-active' : undefined,
+              ]
+                .filter(Boolean)
+                .join(' ')}
               key={filter}
               onClick={() => onRarityFilterChange(filter)}
               type="button"
             >
-              {filter === 'all' ? 'All' : `${filter}-star`}
+              {filter === 'all' ? 'All' : `${filter}★`}
             </button>
           ))}
         </div>
@@ -102,12 +104,12 @@ export function WarpTimeline({
         ) : (
           <div className="warp-empty">
             <strong>
-              {totalPulls > 0 ? 'No matching pulls' : 'No saved pulls yet'}
+              {totalPulls > 0 ? 'No matching pulls' : 'No game history imported yet'}
             </strong>
             <span>
               {totalPulls > 0
                 ? 'Adjust search or rarity filters.'
-                : 'Import manual notes to start tracking this banner.'}
+                : 'Use Game import to fetch your official Warp Records. Manual text import is available for older records.'}
             </span>
           </div>
         )}
@@ -184,7 +186,6 @@ function WarpHistoryRow({
       </time>
       <div className="warp-pity">
         <strong>{formatPityAtPull(pull)}</strong>
-        <span>{formatSource(pull.source)}</span>
       </div>
       <button
         aria-label={`Delete ${pull.itemName}`}
@@ -245,24 +246,12 @@ function formatItemType(value: WarpPull['itemType']) {
 
 function formatPityAtPull(pull: WarpPull) {
   if (pull.rarity === 5 && pull.pityFiveAtPull) {
-    return `5-star pity ${pull.pityFiveAtPull}`
+    return `Pity ${pull.pityFiveAtPull}`
   }
 
   if (pull.rarity >= 4 && pull.pityFourAtPull) {
-    return `4-star pity ${pull.pityFourAtPull}`
+    return `Pity ${pull.pityFourAtPull}`
   }
 
   return '-'
-}
-
-function formatSource(value: WarpPull['source']) {
-  if (value === 'game_history') {
-    return 'Game history'
-  }
-
-  if (value === 'backup_restore') {
-    return 'Backup'
-  }
-
-  return 'Manual'
 }

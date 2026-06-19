@@ -49,15 +49,6 @@ export function ImportPanel({
         <h2>Import</h2>
       </header>
       <div className="tool-panel-body">
-        <div className="tool-row">
-          <div>
-            <strong>Manual Import</strong>
-            <span>{manualImportPreview.totalPulls} detected</span>
-          </div>
-          <AppButton icon={FileInput} onClick={onOpenManualImport}>
-            Open
-          </AppButton>
-        </div>
         <div className="game-path-field">
           <div className="game-path-heading">
             <strong>Game folder</strong>
@@ -123,6 +114,15 @@ export function ImportPanel({
             onClick={onImportGameHistory}
           >
             {isGameHistoryImporting ? 'Importing' : 'Import'}
+          </AppButton>
+        </div>
+        <div className="tool-row manual-import-row">
+          <div>
+            <strong>Manual import from text</strong>
+            <span>{manualImportPreview.totalPulls} detected</span>
+          </div>
+          <AppButton icon={FileInput} onClick={onOpenManualImport}>
+            Open
           </AppButton>
         </div>
         {hasGameHistoryMessage ? (

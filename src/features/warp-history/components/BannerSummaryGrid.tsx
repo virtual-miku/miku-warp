@@ -48,9 +48,8 @@ export function BannerSummaryGrid({
           type="button"
         >
           <span>All</span>
-          <strong>{allSummary.totalPulls}</strong>
-          <span>{allSummary.fiveStarCount} gold records</span>
-          <span>{formatLastPullLine(allSummary)}</span>
+          <strong>{allSummary.totalPulls} <small>pulls</small></strong>
+          <span>{allSummary.fiveStarCount} 5★ obtained</span>
         </button>
         {visibleBanners.map((banner) => {
           const summary = summaryByBanner.get(banner.type)
@@ -69,9 +68,8 @@ export function BannerSummaryGrid({
               type="button"
             >
               <span>{getBannerLabel(banner.type)}</span>
-              <strong>{summary?.totalPulls ?? 0}</strong>
+              <strong>{summary?.totalPulls ?? 0} <small>pulls</small></strong>
               <span>{formatFiveStarLine(banner.type, summary)}</span>
-              <span>{formatLastPullLine(summary)}</span>
             </button>
           )
         })}
@@ -116,13 +114,5 @@ function formatFiveStarLine(
     return 'No pulls yet'
   }
 
-  return `5-star pity ${summary.currentFiveStarPity}/${getFiveStarHardPity(bannerType)} - ${summary.fiveStarCount} gold`
-}
-
-function formatLastPullLine(summary: { lastItemName?: string } | undefined) {
-  if (!summary?.lastItemName) {
-    return 'Last: none'
-  }
-
-  return `Last: ${summary.lastItemName}`
+  return `5★ pity ${summary.currentFiveStarPity}/${getFiveStarHardPity(bannerType)} - ${summary.fiveStarCount} obtained`
 }

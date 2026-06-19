@@ -222,7 +222,7 @@ export function ManualImportDialog({
                 aria-pressed={activeRarityFilter === 5}
                 onClick={() => handleRarityFilterChange(5)}
               >
-                5-star {rarityCounts.rarity5}
+                5★ {rarityCounts.rarity5}
               </button>
               <button
                 className={getRarityChipClass(4, activeRarityFilter)}
@@ -230,7 +230,7 @@ export function ManualImportDialog({
                 aria-pressed={activeRarityFilter === 4}
                 onClick={() => handleRarityFilterChange(4)}
               >
-                4-star {rarityCounts.rarity4}
+                4★ {rarityCounts.rarity4}
               </button>
               <button
                 className={getRarityChipClass(3, activeRarityFilter)}
@@ -238,7 +238,7 @@ export function ManualImportDialog({
                 aria-pressed={activeRarityFilter === 3}
                 onClick={() => handleRarityFilterChange(3)}
               >
-                3-star {rarityCounts.rarity3}
+                3★ {rarityCounts.rarity3}
               </button>
             </div>
 

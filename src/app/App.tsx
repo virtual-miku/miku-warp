@@ -1670,7 +1670,6 @@ export function App() {
                 onOpenManualImport={() => setManualImportOpen(true)}
               />
               <BackupPanel
-                backupCount={backupSnapshots.length}
                 cloudBackupPolicy={cloudBackupPolicy}
                 cloudSnapshots={cloudBackupSnapshots}
                 cloudBackupStatus={cloudBackupStatus}
