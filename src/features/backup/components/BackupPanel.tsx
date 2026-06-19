@@ -64,7 +64,6 @@ type BackupPanelProps = {
   onUploadGoogleDriveBackup: () => void
   onExportBackup: () => void
   onImportBackupJson: () => void
-  onRestoreBackup: () => void
   onRestoreSnapshot: (fileName: string) => void
 }
 
@@ -97,7 +96,6 @@ export function BackupPanel({
   onUploadGoogleDriveBackup,
   onExportBackup,
   onImportBackupJson,
-  onRestoreBackup,
   onRestoreSnapshot,
 }: BackupPanelProps) {
   const isCloudBusy =
@@ -276,14 +274,6 @@ export function BackupPanel({
               variant="ghost"
             >
               {isImporting ? 'Importing' : 'Import JSON'}
-            </AppButton>
-            <AppButton
-              disabled={isBusy || !latestBackup}
-              icon={RefreshCcw}
-              onClick={onRestoreBackup}
-              variant="ghost"
-            >
-              {isRestoring ? 'Restoring' : 'Restore latest'}
             </AppButton>
           </div>
         </div>

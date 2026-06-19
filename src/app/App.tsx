@@ -36,7 +36,6 @@ import {
   type ExportBackupSnapshotResult,
   replaceDatabaseFromBackupFile,
   restoreBackupSnapshot,
-  restoreLatestBackupSnapshot,
   selectBackupJsonFile,
   type RestoreBackupSnapshotResult,
 } from '../features/persistence/data/backup-export'
@@ -144,7 +143,7 @@ type TrashDeleteConfirmation = {
 
 type BackupConfirmation =
   | {
-      kind: 'restore_latest' | 'restore_snapshot'
+      kind: 'restore_snapshot'
       snapshot: BackupSnapshotSummary
     }
   | {
@@ -1476,46 +1475,6 @@ export function App() {
     refreshCloudBackupStatus,
   ])
 
-  const performRestoreBackup = useCallback(async () => {
-    if (backupDeleting || backupExporting || backupImporting || backupRestoring || cloudBackupBusy) {
-      return
-    }
-
-    setRestoringBackupFileName(backupSnapshots[0]?.fileName ?? 'latest')
-    setBackupNotice(undefined)
-
-    try {
-      const result = await restoreLatestBackupSnapshot()
-      await refreshWarpHistory()
-      await refreshAccounts()
-      await refreshBackupSnapshots()
-
-      setBackupNotice({
-        tone: 'success',
-        title: 'Backup restored',
-        detail: formatBackupRestoreDetail(result),
-      })
-    } catch (error) {
-      setBackupNotice({
-        tone: 'error',
-        title: 'Restore failed',
-        detail: getErrorMessage(error),
-      })
-    } finally {
-      setRestoringBackupFileName(undefined)
-    }
-  }, [
-    backupExporting,
-    backupImporting,
-    backupDeleting,
-    backupRestoring,
-    backupSnapshots,
-    cloudBackupBusy,
-    refreshAccounts,
-    refreshBackupSnapshots,
-    refreshWarpHistory,
-  ])
-
   const performRestoreBackupSnapshot = useCallback(
     async (fileName: string) => {
       if (backupDeleting || backupExporting || backupImporting || backupRestoring || cloudBackupBusy) {
@@ -1596,15 +1555,6 @@ export function App() {
     ],
   )
 
-  const handleRestoreBackup = useCallback(() => {
-    const snapshot = backupSnapshots[0]
-    if (!snapshot || backupDeleting || backupRestoring || backupImporting) {
-      return
-    }
-
-    setBackupConfirmation({ kind: 'restore_latest', snapshot })
-  }, [backupDeleting, backupImporting, backupRestoring, backupSnapshots])
-
   const handleRestoreBackupSnapshot = useCallback(
     (fileName: string) => {
       const snapshot = backupSnapshots.find(
@@ -1638,9 +1588,7 @@ export function App() {
       return
     }
 
-    if (backupConfirmation.kind === 'restore_latest') {
-      await performRestoreBackup()
-    } else if (backupConfirmation.kind === 'restore_snapshot') {
+    if (backupConfirmation.kind === 'restore_snapshot') {
       await performRestoreBackupSnapshot(backupConfirmation.snapshot.fileName)
     } else {
       await performDeleteBackupSnapshot(backupConfirmation.snapshot.fileName)
@@ -1650,7 +1598,6 @@ export function App() {
   }, [
     backupConfirmation,
     performDeleteBackupSnapshot,
-    performRestoreBackup,
     performRestoreBackupSnapshot,
   ])
 
@@ -1837,7 +1784,6 @@ export function App() {
                 onImportBackupJson={handleImportBackupJson}
                 onRefreshGoogleDriveBackups={handleRefreshGoogleDriveBackups}
                 onRestoreGoogleDriveBackup={handleRestoreGoogleDriveBackup}
-                onRestoreBackup={handleRestoreBackup}
                 onRestoreSnapshot={handleRestoreBackupSnapshot}
                 onUploadGoogleDriveBackup={handleUploadGoogleDriveBackup}
               />
