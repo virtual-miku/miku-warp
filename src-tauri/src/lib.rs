@@ -282,6 +282,30 @@ fn delete_account_warp_history(
 }
 
 #[tauri::command]
+fn list_trashed_warp_pulls(
+    app: tauri::AppHandle,
+    query: database::ListWarpPullsInput,
+) -> Result<database::ListTrashedWarpPullsResult, String> {
+    database::list_trashed_warp_pulls(&app, query)
+}
+
+#[tauri::command]
+fn restore_trashed_warp_pull(
+    app: tauri::AppHandle,
+    input: database::TrashWarpPullInput,
+) -> Result<database::TrashWarpPullMutationResult, String> {
+    database::restore_trashed_warp_pull(&app, input)
+}
+
+#[tauri::command]
+fn permanently_delete_trashed_warp_pull(
+    app: tauri::AppHandle,
+    input: database::TrashWarpPullInput,
+) -> Result<database::TrashWarpPullMutationResult, String> {
+    database::permanently_delete_trashed_warp_pull(&app, input)
+}
+
+#[tauri::command]
 fn list_backup_snapshots(
     app: tauri::AppHandle,
 ) -> Result<Vec<database::BackupSnapshotSummary>, String> {
@@ -352,14 +376,17 @@ pub fn run() {
             get_database_status,
             import_game_history,
             list_accounts,
+            list_trashed_warp_pulls,
             list_warp_banner_summaries,
             list_google_drive_backup_snapshots,
             list_backup_snapshots,
             list_warp_pulls,
+            permanently_delete_trashed_warp_pull,
             replace_database_from_backup_file,
             restore_google_drive_backup_snapshot,
             restore_backup_snapshot,
             restore_latest_backup_snapshot,
+            restore_trashed_warp_pull,
             save_manual_import_draft,
             scan_game_history_source,
             sync_warp_item_catalog,
