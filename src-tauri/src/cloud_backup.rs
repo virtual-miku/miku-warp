@@ -313,7 +313,7 @@ fn refresh_google_access_token(
             ("grant_type", "refresh_token"),
             ("refresh_token", &refresh_token),
         ])
-        .map_err(|error| format!("Failed to refresh Google Drive access token: {error}"))?
+        .map_err(|error| google_token_request_error("refresh Google Drive access token", error))?
         .into_json::<GoogleTokenResponse>()
         .map_err(|error| format!("Failed to read Google Drive access token response: {error}"))?;
 
@@ -551,7 +551,7 @@ where
                 let request = String::from_utf8_lossy(&buffer[..bytes_read]);
                 let flow_result = parse_oauth_callback_request(&request, expected_state)
                     .and_then(&mut complete_authorization);
-                let response = oauth_callback_response(flow_result.is_ok());
+                let response = oauth_callback_response(flow_result.as_ref().err());
                 stream.write_all(response.as_bytes()).map_err(|error| {
                     format!("Failed to finish OAuth callback response: {error}")
                 })?;
@@ -584,7 +584,7 @@ fn exchange_authorization_code(
             ("grant_type", "authorization_code"),
             ("redirect_uri", redirect_uri),
         ])
-        .map_err(|error| format!("Failed to exchange Google OAuth code: {error}"))?
+        .map_err(|error| google_token_request_error("exchange Google OAuth code", error))?
         .into_json::<GoogleTokenResponse>()
         .map_err(|error| format!("Failed to read Google OAuth token response: {error}"))
 }
@@ -648,11 +648,14 @@ fn parse_oauth_callback_request(request: &str, expected_state: &str) -> Result<S
     code.ok_or_else(|| "Google OAuth callback did not include an authorization code.".to_string())
 }
 
-fn oauth_callback_response(is_success: bool) -> String {
-    let body = if is_success {
-        "Google Drive is connected. You can close this browser tab."
+fn oauth_callback_response(error: Option<&String>) -> String {
+    let body = if let Some(error) = error {
+        format!(
+            "Google Drive connection failed. Return to Miku Warp and try again.<br><small>{}</small>",
+            escape_html(error)
+        )
     } else {
-        "Google Drive connection failed. Return to Miku Warp and try again."
+        "Google Drive is connected. You can close this browser tab.".to_string()
     };
 
     let html = format!("<!doctype html><html><body><p>{body}</p></body></html>");
@@ -662,6 +665,47 @@ fn oauth_callback_response(is_success: bool) -> String {
         html.len(),
         html
     )
+}
+
+fn google_token_request_error(action: &str, error: ureq::Error) -> String {
+    match error {
+        ureq::Error::Status(status, response) => {
+            let body = response.into_string().unwrap_or_default();
+            let detail = parse_google_error_detail(&body)
+                .or_else(|| (!body.trim().is_empty()).then(|| body.trim().to_string()))
+                .unwrap_or_else(|| format!("HTTP {status}"));
+
+            format!("Failed to {action}: {detail}")
+        }
+        error => format!("Failed to {action}: {error}"),
+    }
+}
+
+fn parse_google_error_detail(body: &str) -> Option<String> {
+    let error = serde_json::from_str::<GoogleErrorResponse>(body).ok()?;
+    let mut parts = Vec::new();
+
+    if let Some(code) = error.error.filter(|value| !value.trim().is_empty()) {
+        parts.push(code);
+    }
+
+    if let Some(description) = error
+        .error_description
+        .filter(|value| !value.trim().is_empty())
+    {
+        parts.push(description);
+    }
+
+    (!parts.is_empty()).then(|| parts.join(": "))
+}
+
+fn escape_html(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
 }
 
 fn generate_oauth_random_token() -> String {
@@ -745,6 +789,12 @@ fn secret_store_error_message(error: SecretStoreError) -> String {
 struct GoogleTokenResponse {
     access_token: Option<String>,
     refresh_token: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GoogleErrorResponse {
+    error: Option<String>,
+    error_description: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -869,6 +919,23 @@ mod tests {
             Some(&"S256".to_string())
         );
         assert_eq!(query_pairs.get("access_type"), Some(&"offline".to_string()));
+    }
+
+    #[test]
+    fn parses_google_token_error_details() {
+        let detail = parse_google_error_detail(
+            r#"{"error":"invalid_grant","error_description":"Bad Request"}"#,
+        );
+
+        assert_eq!(detail, Some("invalid_grant: Bad Request".to_string()));
+    }
+
+    #[test]
+    fn escapes_oauth_callback_error_html() {
+        let response = oauth_callback_response(Some(&"<bad & wrong>".to_string()));
+
+        assert!(response.contains("&lt;bad &amp; wrong&gt;"));
+        assert!(!response.contains("<bad & wrong>"));
     }
 
     #[test]
