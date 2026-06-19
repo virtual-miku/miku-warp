@@ -1,5 +1,6 @@
 use rusqlite::{params, Connection, OptionalExtension, Row, Transaction};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, HashSet},
     fs,
@@ -10,6 +11,7 @@ use tauri::{AppHandle, Manager};
 
 const DATABASE_FILE_NAME: &str = "warp-tracker.sqlite";
 const BACKUP_DIRECTORY_NAME: &str = "backups";
+const AUTO_BACKUP_FILE_NAME: &str = "miku-warp-autosave.json";
 const BACKUP_SCHEMA_VERSION: i64 = 1;
 const INIT_MIGRATION_VERSION: &str = "0001_init";
 const INIT_MIGRATION_SQL: &str = include_str!("../migrations/0001_init.sql");
@@ -22,8 +24,10 @@ const AUTO_BACKUP_POLICY_VERSION: &str = "0004_auto_backup_policy";
 const AUTO_BACKUP_POLICY_SQL: &str = include_str!("../migrations/0004_auto_backup_policy.sql");
 const WARP_HISTORY_TRASH_VERSION: &str = "0005_warp_history_trash";
 const WARP_HISTORY_TRASH_SQL: &str = include_str!("../migrations/0005_warp_history_trash.sql");
+const AUTO_BACKUP_SYNC_VERSION: &str = "0006_auto_backup_sync";
+const AUTO_BACKUP_SYNC_SQL: &str = include_str!("../migrations/0006_auto_backup_sync.sql");
 const GOOGLE_DRIVE_PROVIDER: &str = "google_drive";
-const MANUAL_IMPORT_SAVED_TRIGGER: &str = "manual_import_saved";
+const DATA_CHANGED_TRIGGER: &str = "data_changed";
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -236,6 +240,7 @@ pub struct BackupSnapshotSummary {
     pub backup_path: String,
     pub file_name: String,
     pub exported_at: String,
+    pub is_auto_save: bool,
     pub accounts: usize,
     pub banners: usize,
     pub warp_items: usize,
@@ -245,10 +250,26 @@ pub struct BackupSnapshotSummary {
 }
 
 #[derive(Debug)]
-pub struct BackupSnapshotFile {
+pub struct AutoBackupSnapshotFile {
     pub backup_path: String,
     pub file_name: String,
     pub bytes: Vec<u8>,
+    pub content_hash: String,
+    pub exported_at: String,
+    pub changed: bool,
+    pub warp_pulls: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AutoBackupSyncStatus {
+    pub content_hash: String,
+    pub local_up_to_date: bool,
+    pub cloud_required: bool,
+    pub cloud_up_to_date: bool,
+    pub has_pending_backup: bool,
+    pub last_local_backup_at: Option<String>,
+    pub last_cloud_backup_at: Option<String>,
 }
 
 #[derive(Debug)]
@@ -452,6 +473,13 @@ struct WarpBannerSummaryCandidate {
     pulled_at: String,
 }
 
+struct BackupSyncState {
+    local_content_hash: Option<String>,
+    cloud_content_hash: Option<String>,
+    local_backed_up_at: Option<String>,
+    cloud_backed_up_at: Option<String>,
+}
+
 #[derive(Default)]
 struct WarpBannerSummaryAccumulator {
     banner_type: String,
@@ -483,6 +511,18 @@ struct BackupSnapshot {
     warp_items: Vec<BackupWarpItemRow>,
     import_batches: Vec<BackupImportBatchRow>,
     warp_pulls: Vec<BackupWarpPullRow>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupContentHashPayload<'a> {
+    schema_version: i64,
+    applied_migrations: &'a [String],
+    accounts: &'a [BackupAccountRow],
+    banners: &'a [BackupBannerRow],
+    warp_items: &'a [BackupWarpItemRow],
+    import_batches: &'a [BackupImportBatchRow],
+    warp_pulls: &'a [BackupWarpPullRow],
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -581,6 +621,10 @@ const MIGRATIONS: &[Migration] = &[
     Migration {
         version: WARP_HISTORY_TRASH_VERSION,
         sql: WARP_HISTORY_TRASH_SQL,
+    },
+    Migration {
+        version: AUTO_BACKUP_SYNC_VERSION,
+        sql: AUTO_BACKUP_SYNC_SQL,
     },
 ];
 
@@ -729,17 +773,55 @@ pub fn export_backup_snapshot(app: &AppHandle) -> Result<ExportBackupSnapshotRes
     export_backup_snapshot_to_directory(&connection, &backup_directory)
 }
 
+pub fn save_auto_backup_snapshot(app: &AppHandle) -> Result<AutoBackupSnapshotFile, String> {
+    let database_path = resolve_database_path(app)?;
+    let connection = open_database(&database_path)?;
+    let backup_directory = resolve_backup_directory(app)?;
+
+    save_auto_backup_snapshot_to_directory(&connection, &backup_directory)
+}
+
+pub fn get_auto_backup_sync_status(app: &AppHandle) -> Result<AutoBackupSyncStatus, String> {
+    let database_path = resolve_database_path(app)?;
+    let mut connection = open_database(&database_path)?;
+    let backup_directory = resolve_backup_directory(app)?;
+    let snapshot = build_backup_snapshot(&connection)?;
+    let content_hash = calculate_backup_content_hash(&snapshot)?;
+    let state = read_backup_sync_state(&connection)?;
+    let policy = get_cloud_backup_policy_from_database(&mut connection, GOOGLE_DRIVE_PROVIDER)?;
+    let local_backup_exists = backup_directory.join(AUTO_BACKUP_FILE_NAME).exists();
+    let local_up_to_date =
+        local_backup_exists && state.local_content_hash.as_deref() == Some(content_hash.as_str());
+    let cloud_required = policy.auto_backup_enabled;
+    let cloud_up_to_date = state.cloud_content_hash.as_deref() == Some(content_hash.as_str());
+
+    Ok(AutoBackupSyncStatus {
+        content_hash,
+        local_up_to_date,
+        cloud_required,
+        cloud_up_to_date,
+        has_pending_backup: !local_up_to_date || (cloud_required && !cloud_up_to_date),
+        last_local_backup_at: state.local_backed_up_at,
+        last_cloud_backup_at: state.cloud_backed_up_at,
+    })
+}
+
+pub fn mark_cloud_auto_backup_synced(
+    app: &AppHandle,
+    content_hash: &str,
+    backed_up_at: Option<&str>,
+) -> Result<AutoBackupSyncStatus, String> {
+    let database_path = resolve_database_path(app)?;
+    let connection = open_database(&database_path)?;
+
+    mark_cloud_backup_synced(&connection, content_hash, backed_up_at)?;
+    get_auto_backup_sync_status(app)
+}
+
 pub fn list_backup_snapshots(app: &AppHandle) -> Result<Vec<BackupSnapshotSummary>, String> {
     let backup_directory = resolve_backup_directory(app)?;
 
     list_backup_snapshots_in_directory(&backup_directory)
-}
-
-pub fn read_latest_backup_snapshot_file(app: &AppHandle) -> Result<BackupSnapshotFile, String> {
-    let backup_directory = resolve_backup_directory(app)?;
-    let backup_path = find_latest_backup_snapshot_path(&backup_directory)?;
-
-    read_backup_snapshot_file(&backup_path)
 }
 
 pub fn delete_backup_snapshot(
@@ -1736,16 +1818,63 @@ fn export_backup_snapshot_to_directory(
     backup_directory: &Path,
 ) -> Result<ExportBackupSnapshotResult, String> {
     let snapshot = build_backup_snapshot(connection)?;
+    let content_hash = calculate_backup_content_hash(&snapshot)?;
     let backup_path = backup_directory.join(create_backup_file_name()?);
-    let payload = serde_json::to_string_pretty(&snapshot)
+    write_backup_snapshot(&snapshot, backup_directory, &backup_path)?;
+    mark_local_backup_synced(connection, &content_hash, &snapshot.exported_at)?;
+
+    Ok(to_export_backup_snapshot_result(&snapshot, &backup_path))
+}
+
+fn save_auto_backup_snapshot_to_directory(
+    connection: &Connection,
+    backup_directory: &Path,
+) -> Result<AutoBackupSnapshotFile, String> {
+    let snapshot = build_backup_snapshot(connection)?;
+    let content_hash = calculate_backup_content_hash(&snapshot)?;
+    let backup_path = backup_directory.join(AUTO_BACKUP_FILE_NAME);
+    let state = read_backup_sync_state(connection)?;
+    let changed =
+        state.local_content_hash.as_deref() != Some(content_hash.as_str()) || !backup_path.exists();
+
+    if changed {
+        write_backup_snapshot(&snapshot, backup_directory, &backup_path)?;
+        mark_local_backup_synced(connection, &content_hash, &snapshot.exported_at)?;
+    }
+
+    let bytes = fs::read(&backup_path)
+        .map_err(|error| format!("Failed to read local autosave snapshot: {error}"))?;
+
+    Ok(AutoBackupSnapshotFile {
+        backup_path: backup_path.to_string_lossy().to_string(),
+        file_name: AUTO_BACKUP_FILE_NAME.to_string(),
+        bytes,
+        content_hash,
+        exported_at: snapshot.exported_at,
+        changed,
+        warp_pulls: snapshot.warp_pulls.len(),
+    })
+}
+
+fn write_backup_snapshot(
+    snapshot: &BackupSnapshot,
+    backup_directory: &Path,
+    backup_path: &Path,
+) -> Result<(), String> {
+    let payload = serde_json::to_string_pretty(snapshot)
         .map_err(|error| format!("Failed to serialize backup snapshot: {error}"))?;
 
     fs::create_dir_all(backup_directory)
         .map_err(|error| format!("Failed to create backup directory: {error}"))?;
-    fs::write(&backup_path, payload)
-        .map_err(|error| format!("Failed to write backup snapshot: {error}"))?;
+    fs::write(backup_path, payload)
+        .map_err(|error| format!("Failed to write backup snapshot: {error}"))
+}
 
-    Ok(ExportBackupSnapshotResult {
+fn to_export_backup_snapshot_result(
+    snapshot: &BackupSnapshot,
+    backup_path: &Path,
+) -> ExportBackupSnapshotResult {
+    ExportBackupSnapshotResult {
         backup_path: backup_path.to_string_lossy().to_string(),
         exported_at: snapshot.exported_at.clone(),
         accounts: snapshot.accounts.len(),
@@ -1753,7 +1882,7 @@ fn export_backup_snapshot_to_directory(
         warp_items: snapshot.warp_items.len(),
         import_batches: snapshot.import_batches.len(),
         warp_pulls: snapshot.warp_pulls.len(),
-    })
+    }
 }
 
 fn restore_backup_snapshot_from_file(
@@ -2035,7 +2164,7 @@ fn update_cloud_backup_policy_in_database(
             params![
                 &input.provider,
                 input.auto_backup_enabled,
-                MANUAL_IMPORT_SAVED_TRIGGER,
+                DATA_CHANGED_TRIGGER,
             ],
         )
         .map_err(|error| {
@@ -2055,9 +2184,83 @@ fn ensure_cloud_backup_policy(connection: &Connection, provider: &str) -> Result
                provider, auto_backup_enabled, trigger_name, min_interval_minutes
              )
              VALUES (?1, 0, ?2, 0)",
-            params![provider, MANUAL_IMPORT_SAVED_TRIGGER],
+            params![provider, DATA_CHANGED_TRIGGER],
         )
         .map_err(|error| format!("Failed to ensure cloud backup policy for {provider}: {error}"))?;
+
+    Ok(())
+}
+
+fn read_backup_sync_state(connection: &Connection) -> Result<BackupSyncState, String> {
+    ensure_backup_sync_state(connection)?;
+
+    connection
+        .query_row(
+            "SELECT local_content_hash, cloud_content_hash, local_backed_up_at, cloud_backed_up_at
+             FROM backup_sync_state
+             WHERE id = 1",
+            [],
+            |row| {
+                Ok(BackupSyncState {
+                    local_content_hash: row.get(0)?,
+                    cloud_content_hash: row.get(1)?,
+                    local_backed_up_at: row.get(2)?,
+                    cloud_backed_up_at: row.get(3)?,
+                })
+            },
+        )
+        .map_err(|error| format!("Failed to read backup sync state: {error}"))
+}
+
+fn ensure_backup_sync_state(connection: &Connection) -> Result<(), String> {
+    connection
+        .execute(
+            "INSERT OR IGNORE INTO backup_sync_state (id) VALUES (1)",
+            [],
+        )
+        .map_err(|error| format!("Failed to ensure backup sync state: {error}"))?;
+
+    Ok(())
+}
+
+fn mark_local_backup_synced(
+    connection: &Connection,
+    content_hash: &str,
+    backed_up_at: &str,
+) -> Result<(), String> {
+    ensure_backup_sync_state(connection)?;
+
+    connection
+        .execute(
+            "UPDATE backup_sync_state
+             SET local_content_hash = ?1,
+                 local_backed_up_at = ?2,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = 1",
+            params![content_hash, backed_up_at],
+        )
+        .map_err(|error| format!("Failed to update local backup sync state: {error}"))?;
+
+    Ok(())
+}
+
+fn mark_cloud_backup_synced(
+    connection: &Connection,
+    content_hash: &str,
+    backed_up_at: Option<&str>,
+) -> Result<(), String> {
+    ensure_backup_sync_state(connection)?;
+
+    connection
+        .execute(
+            "UPDATE backup_sync_state
+             SET cloud_content_hash = ?1,
+                 cloud_backed_up_at = COALESCE(?2, CURRENT_TIMESTAMP),
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE id = 1",
+            params![content_hash, backed_up_at],
+        )
+        .map_err(|error| format!("Failed to update cloud backup sync state: {error}"))?;
 
     Ok(())
 }
@@ -2097,6 +2300,23 @@ fn build_backup_snapshot(connection: &Connection) -> Result<BackupSnapshot, Stri
         import_batches: read_backup_import_batches(connection)?,
         warp_pulls: read_backup_warp_pulls(connection)?,
     })
+}
+
+fn calculate_backup_content_hash(snapshot: &BackupSnapshot) -> Result<String, String> {
+    let payload = BackupContentHashPayload {
+        schema_version: snapshot.schema_version,
+        applied_migrations: &snapshot.applied_migrations,
+        accounts: &snapshot.accounts,
+        banners: &snapshot.banners,
+        warp_items: &snapshot.warp_items,
+        import_batches: &snapshot.import_batches,
+        warp_pulls: &snapshot.warp_pulls,
+    };
+    let canonical_payload = serde_json::to_vec(&payload)
+        .map_err(|error| format!("Failed to serialize backup content hash payload: {error}"))?;
+    let digest = Sha256::digest(&canonical_payload);
+
+    Ok(format!("{digest:x}"))
 }
 
 fn read_backup_accounts(connection: &Connection) -> Result<Vec<BackupAccountRow>, String> {
@@ -2562,7 +2782,12 @@ fn list_backup_snapshots_in_directory(
         }
     }
 
-    snapshots.sort_by(|left, right| right.file_name.cmp(&left.file_name));
+    snapshots.sort_by(|left, right| {
+        right
+            .exported_at
+            .cmp(&left.exported_at)
+            .then_with(|| right.file_name.cmp(&left.file_name))
+    });
 
     Ok(snapshots)
 }
@@ -2588,6 +2813,8 @@ fn read_backup_snapshot_summary(path: &Path) -> Result<BackupSnapshotSummary, St
             .unwrap_or("backup.json")
             .to_string(),
         exported_at: snapshot.exported_at,
+        is_auto_save: path.file_name().and_then(|file_name| file_name.to_str())
+            == Some(AUTO_BACKUP_FILE_NAME),
         accounts: snapshot.accounts.len(),
         banners: snapshot.banners.len(),
         warp_items: snapshot.warp_items.len(),
@@ -2615,6 +2842,12 @@ fn delete_backup_snapshot_file(
         .and_then(|file_name| file_name.to_str())
         .ok_or_else(|| "Backup snapshot file name is invalid.".to_string())?
         .to_string();
+    if file_name == AUTO_BACKUP_FILE_NAME {
+        return Err(
+            "Autosave backup is kept for safety and cannot be deleted manually.".to_string(),
+        );
+    }
+
     let backup_path_string = backup_path.to_string_lossy().to_string();
 
     fs::remove_file(backup_path)
@@ -2626,22 +2859,6 @@ fn delete_backup_snapshot_file(
         backup_path: backup_path_string,
         file_name,
         remaining_snapshots,
-    })
-}
-
-fn read_backup_snapshot_file(backup_path: &Path) -> Result<BackupSnapshotFile, String> {
-    let file_name = backup_path
-        .file_name()
-        .and_then(|file_name| file_name.to_str())
-        .ok_or_else(|| "Backup snapshot file name is invalid.".to_string())?
-        .to_string();
-    let bytes = fs::read(backup_path)
-        .map_err(|error| format!("Failed to read local backup snapshot: {error}"))?;
-
-    Ok(BackupSnapshotFile {
-        backup_path: backup_path.to_string_lossy().to_string(),
-        file_name,
-        bytes,
     })
 }
 
@@ -2681,7 +2898,7 @@ fn is_backup_snapshot_file(path: &Path) -> bool {
         return false;
     };
 
-    file_name.starts_with("warp-tracker-backup-")
+    (file_name.starts_with("warp-tracker-backup-") || file_name == AUTO_BACKUP_FILE_NAME)
         && path.extension().and_then(|extension| extension.to_str()) == Some("json")
 }
 
@@ -3616,6 +3833,13 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("cloud backup policies table count");
+        let backup_sync_state_table_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'backup_sync_state'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("backup sync state table count");
 
         assert_eq!(applied_migrations, planned_migrations());
         assert_eq!(table_count, 1);
@@ -3624,6 +3848,7 @@ mod tests {
         assert_eq!(cloud_snapshot_table_count, 1);
         assert_eq!(cloud_event_table_count, 1);
         assert_eq!(cloud_policy_table_count, 1);
+        assert_eq!(backup_sync_state_table_count, 1);
     }
 
     #[test]
@@ -3905,6 +4130,39 @@ mod tests {
         assert_eq!(snapshots.len(), 1);
         assert_eq!(snapshots[0].warp_pulls, 2);
         assert_eq!(snapshots[0].backup_path, result.backup_path);
+
+        std::fs::remove_dir_all(backup_directory).ok();
+    }
+
+    #[test]
+    fn save_auto_backup_snapshot_skips_unchanged_content() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+        upsert_warp_item_catalog(
+            &mut connection,
+            &[
+                catalog_item("character-1001", "1001", "Pela", "character", 4),
+                catalog_item("light-cone-2001", "2001", "Data Bank", "light_cone", 3),
+            ],
+        )
+        .expect("catalog sync");
+        save_manual_import_draft_to_database(&mut connection, &manual_import_draft())
+            .expect("manual import");
+
+        let backup_directory = unique_test_dir("backup-autosave");
+        let first = save_auto_backup_snapshot_to_directory(&connection, &backup_directory)
+            .expect("first autosave");
+        let second = save_auto_backup_snapshot_to_directory(&connection, &backup_directory)
+            .expect("second autosave");
+        let snapshots = list_backup_snapshots_in_directory(&backup_directory).expect("backup list");
+
+        assert_eq!(first.file_name, AUTO_BACKUP_FILE_NAME);
+        assert!(first.changed);
+        assert!(!second.changed);
+        assert_eq!(first.content_hash, second.content_hash);
+        assert_eq!(snapshots.len(), 1);
+        assert!(snapshots[0].is_auto_save);
+        assert_eq!(snapshots[0].warp_pulls, 2);
 
         std::fs::remove_dir_all(backup_directory).ok();
     }
@@ -4484,7 +4742,7 @@ mod tests {
 
         assert_eq!(default_policy.provider, GOOGLE_DRIVE_PROVIDER);
         assert!(!default_policy.auto_backup_enabled);
-        assert_eq!(default_policy.trigger_name, MANUAL_IMPORT_SAVED_TRIGGER);
+        assert_eq!(default_policy.trigger_name, DATA_CHANGED_TRIGGER);
         assert_eq!(default_policy.min_interval_minutes, 0);
         assert!(enabled_policy.auto_backup_enabled);
         assert!(!disabled_policy.auto_backup_enabled);

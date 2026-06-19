@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
   Bell,
   LayoutDashboard,
+  RefreshCcw,
   Trash2,
+  X,
 } from 'lucide-react'
 import {
   BackupPanel,
@@ -43,12 +46,15 @@ import {
   cancelGoogleDriveBackupConnection,
   connectGoogleDriveBackup,
   disconnectGoogleDriveBackup,
+  getAutoBackupSyncStatus,
   getCloudBackupPolicy,
   getCloudBackupStatus,
   listGoogleDriveBackupSnapshots,
   restoreGoogleDriveBackupSnapshot,
+  runAutoBackup,
   updateCloudBackupPolicy,
   uploadLatestGoogleDriveBackup,
+  type AutoBackupSyncStatus,
   type UploadCloudBackupSnapshotResult,
 } from '../features/persistence/data/cloud-backup-status'
 import {
@@ -179,6 +185,15 @@ export function App() {
   const [cloudBackupPolicyUpdating, setCloudBackupPolicyUpdating] =
     useState(false)
   const [cloudBackupUploading, setCloudBackupUploading] = useState(false)
+  const [autoBackupRunning, setAutoBackupRunning] = useState(false)
+  const [autoBackupQueued, setAutoBackupQueued] = useState(false)
+  const [autoBackupRequestId, setAutoBackupRequestId] = useState(0)
+  const [autoBackupSyncStatus, setAutoBackupSyncStatus] =
+    useState<AutoBackupSyncStatus>()
+  const autoBackupRunningRef = useRef(false)
+  const autoBackupRunAgainRef = useRef(false)
+  const allowWindowCloseRef = useRef(false)
+  const [closeConfirmationOpen, setCloseConfirmationOpen] = useState(false)
   const [backupSnapshots, setBackupSnapshots] = useState<
     BackupSnapshotSummary[]
   >([])
@@ -280,9 +295,14 @@ export function App() {
     cloudBackupListing ||
     cloudBackupPolicyUpdating ||
     cloudBackupRestoring ||
-    cloudBackupUploading
+    cloudBackupUploading ||
+    autoBackupRunning
   const manualFallbackBannerType =
     activeBannerType === 'all' ? defaultManualFallbackBannerType : activeBannerType
+  const hasPendingAutoBackup =
+    autoBackupQueued ||
+    autoBackupRunning ||
+    (autoBackupSyncStatus?.hasPendingBackup ?? false)
 
   const fetchPersistedPulls = useCallback(() => {
     return listWarpPulls({
@@ -404,6 +424,85 @@ export function App() {
       setCloudBackupListing(false)
     }
   }, [])
+
+  const refreshAutoBackupSyncStatus = useCallback(async () => {
+    try {
+      const status = await getAutoBackupSyncStatus()
+      setAutoBackupSyncStatus(status)
+      setAutoBackupQueued(status.hasPendingBackup)
+      return status
+    } catch {
+      return undefined
+    }
+  }, [])
+
+  const runQueuedAutoBackup = useCallback(async () => {
+    if (autoBackupRunningRef.current) {
+      autoBackupRunAgainRef.current = true
+      return
+    }
+
+    autoBackupRunningRef.current = true
+    setAutoBackupRunning(true)
+
+    try {
+      const result = await runAutoBackup()
+      setAutoBackupSyncStatus(result.syncStatus)
+      setAutoBackupQueued(result.syncStatus.hasPendingBackup)
+      await refreshBackupSnapshots()
+
+      if (result.cloudRequired) {
+        await refreshCloudBackupStatus()
+        await refreshCloudBackupSnapshots().catch(() => undefined)
+      }
+
+      if (result.cloudError) {
+        setBackupNotice({
+          tone: 'error',
+          title: 'Drive autosave pending',
+          detail: result.cloudError,
+        })
+      }
+    } catch (error) {
+      setAutoBackupQueued(true)
+      setBackupNotice({
+        tone: 'error',
+        title: 'Autosave failed',
+        detail: getErrorMessage(error),
+      })
+    } finally {
+      autoBackupRunningRef.current = false
+      setAutoBackupRunning(false)
+
+      if (autoBackupRunAgainRef.current) {
+        autoBackupRunAgainRef.current = false
+        setAutoBackupRequestId((requestId) => requestId + 1)
+      }
+    }
+  }, [
+    refreshBackupSnapshots,
+    refreshCloudBackupSnapshots,
+    refreshCloudBackupStatus,
+  ])
+
+  const scheduleAutoBackup = useCallback((label: string) => {
+    setAutoBackupQueued(true)
+    setAutoBackupRequestId((requestId) => requestId + 1)
+
+    return `${label} saved. Backup will run automatically.`
+  }, [])
+
+  useEffect(() => {
+    if (autoBackupRequestId === 0) {
+      return undefined
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void runQueuedAutoBackup()
+    }, 900)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [autoBackupRequestId, runQueuedAutoBackup])
 
   useEffect(() => {
     let isActive = true
@@ -593,10 +692,73 @@ export function App() {
     }
   }, [])
 
+  useEffect(() => {
+    let isActive = true
+
+    getAutoBackupSyncStatus()
+      .then((status) => {
+        if (isActive) {
+          setAutoBackupSyncStatus(status)
+          setAutoBackupQueued(status.hasPendingBackup)
+        }
+      })
+      .catch(() => undefined)
+
+    return () => {
+      isActive = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let removeCloseListener: (() => void) | undefined
+
+    void getCurrentWindow()
+      .onCloseRequested((event) => {
+        if (allowWindowCloseRef.current || !hasPendingAutoBackup) {
+          return
+        }
+
+        event.preventDefault()
+        setCloseConfirmationOpen(true)
+      })
+      .then((unlisten) => {
+        removeCloseListener = unlisten
+      })
+
+    return () => {
+      removeCloseListener?.()
+    }
+  }, [hasPendingAutoBackup])
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!hasPendingAutoBackup) {
+        return
+      }
+
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasPendingAutoBackup])
+
   const handleManualNoteChange = (value: string) => {
     setManualNoteDraft(value)
     setManualImportSaveNotice(undefined)
   }
+
+  const handleConfirmCloseApp = useCallback(async () => {
+    allowWindowCloseRef.current = true
+    setCloseConfirmationOpen(false)
+
+    try {
+      await getCurrentWindow().close()
+    } catch {
+      window.close()
+    }
+  }, [])
 
   const handleScanGameHistorySource = useCallback(async () => {
     if (gameHistoryScanning) {
@@ -691,6 +853,7 @@ export function App() {
       setHistoryTotalPulls(pulls.total)
       setBannerSummaries(summaries)
       await refreshAccounts()
+      scheduleAutoBackup('Game import')
     } catch (error) {
       setGameHistoryImportError(getErrorMessage(error))
     } finally {
@@ -706,6 +869,7 @@ export function App() {
     historyRarityFilter,
     historySearchQuery,
     refreshAccounts,
+    scheduleAutoBackup,
   ])
 
   const handleBannerTypeChange = (bannerType: BannerFilterType) => {
@@ -839,6 +1003,7 @@ export function App() {
         setHistoryDeleteConfirmation(undefined)
         setHistorySelecting(false)
         setSelectedHistoryPullIds(new Set())
+        scheduleAutoBackup('History')
       } finally {
         setDeletingSelectedHistory(false)
       }
@@ -857,11 +1022,17 @@ export function App() {
       setHistoryDeleteConfirmation(undefined)
       setHistorySelecting(false)
       setSelectedHistoryPullIds(new Set())
+      scheduleAutoBackup('History')
     } finally {
       setDeletingAllHistory(false)
       setHistoryLoading(false)
     }
-  }, [historyDeleteConfirmation, refreshAccounts, refreshWarpHistory])
+  }, [
+    historyDeleteConfirmation,
+    refreshAccounts,
+    refreshWarpHistory,
+    scheduleAutoBackup,
+  ])
 
   const performRestoreTrashPull = useCallback(
     async (pull: TrashedWarpPull) => {
@@ -879,6 +1050,7 @@ export function App() {
           refreshWarpHistory(),
           refreshAccounts(),
         ])
+        scheduleAutoBackup('Trash restore')
       } catch (error) {
         setTrashError(getErrorMessage(error))
       } finally {
@@ -891,6 +1063,7 @@ export function App() {
       refreshAccounts,
       refreshTrashedPulls,
       refreshWarpHistory,
+      scheduleAutoBackup,
       restoringTrashPullId,
     ],
   )
@@ -959,6 +1132,7 @@ export function App() {
       )
       setTrashDeleteConfirmation(undefined)
       await refreshTrashedPulls()
+      scheduleAutoBackup('Trash')
     } catch (error) {
       setTrashError(getErrorMessage(error))
     } finally {
@@ -967,68 +1141,9 @@ export function App() {
   }, [
     permanentlyDeletingPullId,
     refreshTrashedPulls,
+    scheduleAutoBackup,
     trashDeleteConfirmation,
   ])
-
-  async function runAutoBackupAfterManualImport(insertedPulls: number) {
-    if (!cloudBackupPolicy.autoBackupEnabled) {
-      return undefined
-    }
-
-    if (insertedPulls < 1) {
-      return 'Auto backup skipped: no new pulls.'
-    }
-
-    if (!cloudBackupStatus.canUpload) {
-      const detail = 'Auto backup skipped: Google Drive is not ready.'
-
-      setBackupNotice({
-        tone: 'error',
-        title: 'Auto backup skipped',
-        detail,
-      })
-
-      return detail
-    }
-
-    setBackupNotice(undefined)
-    setBackupExporting(true)
-    setCloudBackupUploading(true)
-
-    try {
-      const exportResult = await exportBackupSnapshot()
-      await refreshBackupSnapshots()
-
-      const uploadResult = await uploadLatestGoogleDriveBackup()
-      await refreshCloudBackupStatus()
-      await refreshCloudBackupSnapshots().catch(() => undefined)
-
-      setBackupNotice({
-        tone: 'success',
-        title: 'Auto backup complete',
-        detail: [
-          formatCloudBackupUploadDetail(uploadResult),
-          `Local snapshot: ${exportResult.backupPath}`,
-        ].join('\n'),
-      })
-
-      return `Auto backup uploaded ${uploadResult.remoteFileName}.`
-    } catch (error) {
-      const fallbackStatus = await refreshCloudBackupStatus()
-      const detail = `${getErrorMessage(error)}\n${fallbackStatus.detail}`
-
-      setBackupNotice({
-        tone: 'error',
-        title: 'Auto backup failed',
-        detail,
-      })
-
-      return `Auto backup failed: ${getErrorMessage(error)}`
-    } finally {
-      setBackupExporting(false)
-      setCloudBackupUploading(false)
-    }
-  }
 
   const handleSaveManualImport = async () => {
     if (manualImportSaving) {
@@ -1060,9 +1175,10 @@ export function App() {
       )
       await refreshWarpHistory()
       await refreshAccounts()
-      const autoBackupDetail = await runAutoBackupAfterManualImport(
-        result.recordsInserted,
-      )
+      const autoBackupDetail =
+        result.recordsInserted > 0
+          ? scheduleAutoBackup('Manual import')
+          : undefined
 
       setManualImportSaveNotice({
         tone: 'success',
@@ -1171,6 +1287,7 @@ export function App() {
         setBannerSummaries([])
       }
       await refreshBackupSnapshots()
+      scheduleAutoBackup('JSON import')
 
       setBackupNotice({
         tone: 'success',
@@ -1196,6 +1313,7 @@ export function App() {
     fetchHistoryForAccount,
     refreshAccounts,
     refreshBackupSnapshots,
+    scheduleAutoBackup,
   ])
 
   const handleConnectGoogleDrive = useCallback(async () => {
@@ -1233,6 +1351,9 @@ export function App() {
 
       if (status.connectionStatus === 'connected') {
         await refreshCloudBackupSnapshots().catch(() => undefined)
+        if (cloudBackupPolicy.autoBackupEnabled) {
+          scheduleAutoBackup('Google Drive')
+        }
         setBackupNotice({
           tone: 'success',
           title: 'Google Drive connected',
@@ -1273,8 +1394,10 @@ export function App() {
     backupRestoring,
     cloudBackupBusy,
     cloudBackupStatus.canConnect,
+    cloudBackupPolicy.autoBackupEnabled,
     refreshCloudBackupSnapshots,
     refreshCloudBackupStatus,
+    scheduleAutoBackup,
   ])
 
   const handleCancelGoogleDriveConnection = useCallback(async () => {
@@ -1341,12 +1464,17 @@ export function App() {
           autoBackupEnabled: enabled,
         })
         setCloudBackupPolicy(policy)
+        if (enabled) {
+          scheduleAutoBackup('Auto backup')
+        } else {
+          await refreshAutoBackupSyncStatus()
+        }
         setBackupNotice({
           tone: 'success',
           title: 'Auto backup updated',
           detail: enabled
-            ? 'Automatic backup will run after manual imports with new pulls.'
-            : 'Automatic backup is off.',
+            ? 'Google Drive autosave will run after saved changes.'
+            : 'Google Drive autosave is off. Local autosave stays on.',
         })
       } catch (error) {
         setBackupNotice({
@@ -1361,6 +1489,8 @@ export function App() {
     [
       cloudBackupPolicyUpdating,
       cloudBackupStatus.canUpload,
+      refreshAutoBackupSyncStatus,
+      scheduleAutoBackup,
       setCloudBackupPolicy,
     ],
   )
@@ -1384,6 +1514,7 @@ export function App() {
       const status = await disconnectGoogleDriveBackup()
       setCloudBackupStatus(status)
       setCloudBackupSnapshots([])
+      await refreshAutoBackupSyncStatus()
       setBackupNotice({
         tone: 'success',
         title: 'Google Drive disconnected',
@@ -1406,6 +1537,7 @@ export function App() {
     backupRestoring,
     cloudBackupBusy,
     cloudBackupStatus.canDisconnect,
+    refreshAutoBackupSyncStatus,
     refreshCloudBackupStatus,
   ])
 
@@ -1426,6 +1558,7 @@ export function App() {
 
     try {
       const result = await uploadLatestGoogleDriveBackup()
+      await refreshAutoBackupSyncStatus()
       await refreshCloudBackupStatus()
       await refreshCloudBackupSnapshots().catch(() => undefined)
       setBackupNotice({
@@ -1450,6 +1583,7 @@ export function App() {
     backupRestoring,
     cloudBackupBusy,
     cloudBackupStatus.canUpload,
+    refreshAutoBackupSyncStatus,
     refreshCloudBackupStatus,
     refreshCloudBackupSnapshots,
   ])
@@ -1483,6 +1617,7 @@ export function App() {
         const result = await restoreGoogleDriveBackupSnapshot(snapshot)
         await refreshWarpHistory()
         await refreshAccounts()
+        scheduleAutoBackup('Cloud restore')
 
         setBackupNotice({
           tone: 'success',
@@ -1510,48 +1645,9 @@ export function App() {
       refreshCloudBackupStatus,
       refreshAccounts,
       refreshWarpHistory,
+      scheduleAutoBackup,
     ],
   )
-
-  const handleRefreshGoogleDriveBackups = useCallback(async () => {
-    if (
-      backupDeleting ||
-      backupExporting ||
-      backupImporting ||
-      backupRestoring ||
-      cloudBackupBusy ||
-      cloudBackupStatus.connectionStatus !== 'connected'
-    ) {
-      return
-    }
-
-    setBackupNotice(undefined)
-
-    try {
-      const snapshots = await refreshCloudBackupSnapshots()
-      setBackupNotice({
-        tone: 'success',
-        title: 'Cloud backups refreshed',
-        detail: `${snapshots.length} cloud snapshots found.`,
-      })
-    } catch (error) {
-      const fallbackStatus = await refreshCloudBackupStatus()
-      setBackupNotice({
-        tone: 'error',
-        title: 'Cloud refresh failed',
-        detail: `${getErrorMessage(error)}\n${fallbackStatus.detail}`,
-      })
-    }
-  }, [
-    backupDeleting,
-    backupExporting,
-    backupImporting,
-    backupRestoring,
-    cloudBackupBusy,
-    cloudBackupStatus.connectionStatus,
-    refreshCloudBackupSnapshots,
-    refreshCloudBackupStatus,
-  ])
 
   const performRestoreBackupSnapshot = useCallback(
     async (fileName: string) => {
@@ -1567,6 +1663,7 @@ export function App() {
         await refreshWarpHistory()
         await refreshAccounts()
         await refreshBackupSnapshots()
+        scheduleAutoBackup('Backup restore')
 
         setBackupNotice({
           tone: 'success',
@@ -1592,6 +1689,7 @@ export function App() {
       refreshAccounts,
       refreshBackupSnapshots,
       refreshWarpHistory,
+      scheduleAutoBackup,
     ],
   )
 
@@ -1842,15 +1940,13 @@ export function App() {
                 isCloudCancelling={cloudBackupCancelling}
                 isCloudConnecting={cloudBackupConnecting}
                 isCloudDisconnecting={cloudBackupDisconnecting}
-                isCloudListing={cloudBackupListing}
                 isCloudPolicyUpdating={cloudBackupPolicyUpdating}
                 isCloudRestoring={cloudBackupRestoring}
-                isCloudUploading={cloudBackupUploading}
+                isCloudUploading={cloudBackupUploading || autoBackupRunning}
                 isExporting={backupExporting}
                 isImporting={backupImporting}
                 isDeleting={backupDeleting}
                 isRestoring={backupRestoring}
-                latestBackup={backupSnapshots[0]}
                 notice={backupNotice}
                 restoringCloudFileId={restoringCloudBackupFileId}
                 restoringFileName={restoringBackupFileName}
@@ -1862,7 +1958,6 @@ export function App() {
                 onDisconnectGoogleDrive={handleDisconnectGoogleDrive}
                 onExportBackup={handleExportBackup}
                 onImportBackupJson={handleImportBackupJson}
-                onRefreshGoogleDriveBackups={handleRefreshGoogleDriveBackups}
                 onRestoreGoogleDriveBackup={handleRestoreGoogleDriveBackup}
                 onRestoreSnapshot={handleRestoreBackupSnapshot}
                 onUploadGoogleDriveBackup={handleUploadGoogleDriveBackup}
@@ -1943,6 +2038,10 @@ export function App() {
             ? 'Delete backup'
             : 'Restore backup'
         }
+        confirmIcon={
+          backupConfirmation?.kind === 'delete_snapshot' ? Trash2 : RefreshCcw
+        }
+        danger={backupConfirmation?.kind === 'delete_snapshot'}
         description={formatBackupConfirmationDescription(backupConfirmation)}
         isOpen={backupConfirmation !== undefined}
         isPending={backupDeleting || backupRestoring}
@@ -1956,6 +2055,8 @@ export function App() {
       />
       <ConfirmDialog
         confirmLabel="Restore item"
+        confirmIcon={RefreshCcw}
+        danger={false}
         description={
           trashRestoreConfirmation
             ? `${trashRestoreConfirmation.pull.itemName} will return to UID ${trashRestoreConfirmation.uid} history, and its banner pity will be recalculated.`
@@ -1979,6 +2080,21 @@ export function App() {
         onCancel={() => setTrashDeleteConfirmation(undefined)}
         onConfirm={handleConfirmPermanentTrashDelete}
         title="Delete permanently?"
+      />
+      <ConfirmDialog
+        confirmLabel="Close app"
+        confirmIcon={X}
+        danger={false}
+        description={formatCloseBackupWarningDescription(
+          autoBackupRunning,
+          autoBackupSyncStatus,
+        )}
+        isOpen={closeConfirmationOpen}
+        isPending={false}
+        onCancel={() => setCloseConfirmationOpen(false)}
+        onConfirm={handleConfirmCloseApp}
+        pendingLabel="Closing"
+        title="Backup is not finished"
       />
     </>
   )
@@ -2007,6 +2123,21 @@ function formatBackupReplaceDetail(result: RestoreBackupSnapshotResult) {
     `${result.accounts} accounts and ${result.importBatches} import batches restored.`,
     `Current local history was replaced from ${result.backupPath}.`,
   ].join('\n')
+}
+
+function formatCloseBackupWarningDescription(
+  autoBackupRunning: boolean,
+  status: AutoBackupSyncStatus | undefined,
+) {
+  if (autoBackupRunning) {
+    return 'Miku Warp is still saving the latest backup. Closing now may leave the newest changes waiting for the next app launch.'
+  }
+
+  if (status?.cloudRequired && !status.cloudUpToDate) {
+    return 'The latest local autosave is ready, but Google Drive backup is still pending. Closing now will keep local data safe and retry cloud backup next time.'
+  }
+
+  return 'The latest changes have not finished autosaving yet. Closing now may leave them waiting for the next app launch.'
 }
 
 function formatAccountMeta(account: WarpAccount | undefined) {

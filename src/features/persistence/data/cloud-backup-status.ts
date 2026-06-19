@@ -31,6 +31,28 @@ export type RestoreCloudBackupSnapshotInput = {
   size?: string
 }
 
+export type AutoBackupSyncStatus = {
+  contentHash: string
+  localUpToDate: boolean
+  cloudRequired: boolean
+  cloudUpToDate: boolean
+  hasPendingBackup: boolean
+  lastLocalBackupAt?: string
+  lastCloudBackupAt?: string
+}
+
+export type AutoBackupRunResult = {
+  contentHash: string
+  localChanged: boolean
+  localBackupPath: string
+  localExportedAt: string
+  warpPulls: number
+  cloudRequired: boolean
+  cloudUploaded: boolean
+  cloudError?: string
+  syncStatus: AutoBackupSyncStatus
+}
+
 export type UpdateCloudBackupPolicyInput = {
   provider: 'google_drive'
   autoBackupEnabled: boolean
@@ -68,6 +90,14 @@ export function uploadLatestGoogleDriveBackup() {
   return invokeTauri<UploadCloudBackupSnapshotResult>(
     'upload_latest_google_drive_backup',
   )
+}
+
+export function runAutoBackup() {
+  return invokeTauri<AutoBackupRunResult>('run_auto_backup')
+}
+
+export function getAutoBackupSyncStatus() {
+  return invokeTauri<AutoBackupSyncStatus>('get_auto_backup_sync_status')
 }
 
 export function listGoogleDriveBackupSnapshots() {

@@ -13,6 +13,7 @@ export type ExportBackupSnapshotResult = {
 
 export type BackupSnapshotSummary = ExportBackupSnapshotResult & {
   fileName: string
+  isAutoSave: boolean
   uids: string[]
 }
 

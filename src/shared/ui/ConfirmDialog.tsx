@@ -1,12 +1,15 @@
 import { useEffect, useRef } from 'react'
-import { AlertTriangle, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Trash2, X, type LucideIcon } from 'lucide-react'
 import { AppButton } from './AppButton'
 
 type ConfirmDialogProps = {
   confirmLabel: string
+  confirmIcon?: LucideIcon
+  danger?: boolean
   description: string
   isOpen: boolean
   isPending?: boolean
+  pendingLabel?: string
   title: string
   onCancel: () => void
   onConfirm: () => void
@@ -14,9 +17,12 @@ type ConfirmDialogProps = {
 
 export function ConfirmDialog({
   confirmLabel,
+  confirmIcon: ConfirmIcon = Trash2,
+  danger = true,
   description,
   isOpen,
   isPending = false,
+  pendingLabel,
   title,
   onCancel,
   onConfirm,
@@ -90,12 +96,12 @@ export function ConfirmDialog({
             Cancel
           </AppButton>
           <AppButton
-            className="app-button-danger"
+            className={danger ? 'app-button-danger' : undefined}
             disabled={isPending}
-            icon={Trash2}
+            icon={ConfirmIcon}
             onClick={onConfirm}
           >
-            {isPending ? 'Deleting' : confirmLabel}
+            {isPending ? (pendingLabel ?? 'Working') : confirmLabel}
           </AppButton>
         </footer>
       </section>

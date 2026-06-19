@@ -26,7 +26,7 @@ const GOOGLE_DRIVE_UPLOAD_ENDPOINT: &str = "https://www.googleapis.com/upload/dr
 const OAUTH_CALLBACK_TIMEOUT: Duration = Duration::from_secs(180);
 const OAUTH_RANDOM_TOKEN_BYTES: usize = 64;
 const DRIVE_MULTIPART_BOUNDARY_PREFIX: &str = "warp-tracker-backup";
-const CLOUD_BACKUP_FILE_NAME_PREFIX: &str = "warp-tracker-backup-";
+const CLOUD_BACKUP_AUTOSAVE_FILE_NAME: &str = "miku-warp-autosave.json";
 const CLOUD_BACKUP_LIST_PAGE_SIZE: &str = "20";
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
@@ -279,7 +279,7 @@ pub fn upload_google_drive_backup_snapshot(
         client_id,
         oauth_config.client_secret.as_deref(),
     )?;
-    let remote_file = upload_backup_snapshot_to_drive(file_name, bytes, &access_token)?;
+    let remote_file = upsert_backup_snapshot_to_drive(file_name, bytes, &access_token)?;
     let remote_file_id = remote_file
         .id
         .ok_or_else(|| "Google Drive upload did not return a remote file id.".to_string())?;
@@ -468,7 +468,7 @@ fn upload_backup_snapshot_to_drive(
     access_token: &str,
 ) -> Result<GoogleDriveFileResponse, String> {
     let boundary = create_drive_multipart_boundary();
-    let body = build_drive_multipart_upload_body(file_name, bytes, &boundary)?;
+    let body = build_drive_multipart_upload_body(file_name, bytes, &boundary, true)?;
     let upload_url = build_drive_upload_url()?;
     let authorization = format!("Bearer {access_token}");
     let content_type = format!("multipart/related; boundary={boundary}");
@@ -482,10 +482,67 @@ fn upload_backup_snapshot_to_drive(
         .map_err(|error| format!("Failed to read Google Drive upload response: {error}"))
 }
 
+fn upsert_backup_snapshot_to_drive(
+    file_name: &str,
+    bytes: &[u8],
+    access_token: &str,
+) -> Result<GoogleDriveFileResponse, String> {
+    let existing_file = find_backup_snapshot_from_drive(file_name, access_token)?;
+
+    if let Some(existing_file) = existing_file {
+        let remote_file_id = existing_file
+            .id
+            .ok_or_else(|| "Google Drive backup list returned a file without an id.".to_string())?;
+
+        return update_backup_snapshot_in_drive(&remote_file_id, file_name, bytes, access_token);
+    }
+
+    upload_backup_snapshot_to_drive(file_name, bytes, access_token)
+}
+
+fn update_backup_snapshot_in_drive(
+    remote_file_id: &str,
+    file_name: &str,
+    bytes: &[u8],
+    access_token: &str,
+) -> Result<GoogleDriveFileResponse, String> {
+    validate_google_drive_file_id(remote_file_id)?;
+
+    let boundary = create_drive_multipart_boundary();
+    let body = build_drive_multipart_upload_body(file_name, bytes, &boundary, false)?;
+    let upload_url = build_drive_update_url(remote_file_id)?;
+    let authorization = format!("Bearer {access_token}");
+    let content_type = format!("multipart/related; boundary={boundary}");
+
+    ureq::request("PATCH", &upload_url)
+        .set("Authorization", &authorization)
+        .set("Content-Type", &content_type)
+        .send_bytes(&body)
+        .map_err(|error| format!("Failed to update Google Drive backup snapshot: {error}"))?
+        .into_json::<GoogleDriveFileResponse>()
+        .map_err(|error| format!("Failed to read Google Drive update response: {error}"))
+}
+
+fn find_backup_snapshot_from_drive(
+    file_name: &str,
+    access_token: &str,
+) -> Result<Option<GoogleDriveFileResponse>, String> {
+    let list_url = build_drive_backup_list_url(Some(file_name))?;
+    let authorization = format!("Bearer {access_token}");
+    let file_list = ureq::get(&list_url)
+        .set("Authorization", &authorization)
+        .call()
+        .map_err(|error| format!("Failed to find Google Drive backup snapshot: {error}"))?
+        .into_json::<GoogleDriveFileListResponse>()
+        .map_err(|error| format!("Failed to read Google Drive backup lookup response: {error}"))?;
+
+    Ok(file_list.files.into_iter().next())
+}
+
 fn list_backup_snapshots_from_drive(
     access_token: &str,
 ) -> Result<Vec<CloudBackupSnapshotSummary>, String> {
-    let list_url = build_drive_backup_list_url()?;
+    let list_url = build_drive_backup_list_url(Some(CLOUD_BACKUP_AUTOSAVE_FILE_NAME))?;
     let authorization = format!("Bearer {access_token}");
     let file_list = ureq::get(&list_url)
         .set("Authorization", &authorization)
@@ -550,7 +607,12 @@ fn validate_google_drive_file_id(remote_file_id: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn build_drive_backup_list_url() -> Result<String, String> {
+fn build_drive_backup_list_url(file_name: Option<&str>) -> Result<String, String> {
+    let query = match file_name {
+        Some(file_name) => format!("name = '{}'", escape_drive_query_value(file_name)),
+        None => format!("name = '{CLOUD_BACKUP_AUTOSAVE_FILE_NAME}'"),
+    };
+
     Url::parse_with_params(
         GOOGLE_DRIVE_FILES_ENDPOINT,
         &[
@@ -558,10 +620,7 @@ fn build_drive_backup_list_url() -> Result<String, String> {
             ("pageSize", CLOUD_BACKUP_LIST_PAGE_SIZE),
             ("orderBy", "modifiedTime desc"),
             ("fields", "files(id,name,md5Checksum,modifiedTime,size)"),
-            (
-                "q",
-                &format!("name contains '{CLOUD_BACKUP_FILE_NAME_PREFIX}'"),
-            ),
+            ("q", &query),
         ],
     )
     .map(|url| url.to_string())
@@ -599,15 +658,37 @@ fn build_drive_upload_url() -> Result<String, String> {
     .map_err(|error| format!("Failed to build Google Drive upload URL: {error}"))
 }
 
+fn build_drive_update_url(remote_file_id: &str) -> Result<String, String> {
+    validate_google_drive_file_id(remote_file_id)?;
+
+    let mut url = Url::parse(GOOGLE_DRIVE_UPLOAD_ENDPOINT)
+        .map_err(|error| format!("Failed to build Google Drive update URL: {error}"))?;
+    url.path_segments_mut()
+        .map_err(|()| "Failed to append Google Drive file id to upload URL.".to_string())?
+        .push(remote_file_id);
+    url.query_pairs_mut()
+        .append_pair("uploadType", "multipart")
+        .append_pair("fields", "id,name,md5Checksum,modifiedTime,size");
+
+    Ok(url.to_string())
+}
+
 fn build_drive_multipart_upload_body(
     file_name: &str,
     bytes: &[u8],
     boundary: &str,
+    include_parent: bool,
 ) -> Result<Vec<u8>, String> {
-    let metadata = serde_json::json!({
-        "name": file_name,
-        "parents": ["appDataFolder"],
-    })
+    let metadata = if include_parent {
+        serde_json::json!({
+            "name": file_name,
+            "parents": ["appDataFolder"],
+        })
+    } else {
+        serde_json::json!({
+            "name": file_name,
+        })
+    }
     .to_string();
     let mut body = Vec::new();
 
@@ -620,6 +701,10 @@ fn build_drive_multipart_upload_body(
     body.extend_from_slice(format!("\r\n--{boundary}--\r\n").as_bytes());
 
     Ok(body)
+}
+
+fn escape_drive_query_value(value: &str) -> String {
+    value.replace('\\', "\\\\").replace('\'', "\\'")
 }
 
 fn create_drive_multipart_boundary() -> String {
@@ -1406,8 +1491,11 @@ mod tests {
 
     #[test]
     fn builds_google_drive_list_url_for_app_data_snapshots() {
-        let url = Url::parse(&build_drive_backup_list_url().expect("list url can be built"))
-            .expect("list url can be parsed");
+        let url = Url::parse(
+            &build_drive_backup_list_url(Some(CLOUD_BACKUP_AUTOSAVE_FILE_NAME))
+                .expect("list url can be built"),
+        )
+        .expect("list url can be parsed");
         let query_pairs = url
             .query_pairs()
             .map(|(key, value)| (key.into_owned(), value.into_owned()))
@@ -1423,7 +1511,7 @@ mod tests {
         );
         assert_eq!(
             query_pairs.get("q"),
-            Some(&"name contains 'warp-tracker-backup-'".to_string())
+            Some(&"name = 'miku-warp-autosave.json'".to_string())
         );
         assert_eq!(
             query_pairs.get("orderBy"),
@@ -1435,7 +1523,7 @@ mod tests {
     fn maps_google_drive_files_to_cloud_snapshot_summaries() {
         let summary = to_cloud_backup_snapshot_summary(GoogleDriveFileResponse {
             id: Some("remote-1".to_string()),
-            name: Some("warp-tracker-backup-20260606.json".to_string()),
+            name: Some("miku-warp-autosave.json".to_string()),
             md5_checksum: Some("checksum".to_string()),
             modified_time: Some("2026-06-06T14:00:00.000Z".to_string()),
             size: Some("1234".to_string()),
@@ -1443,7 +1531,7 @@ mod tests {
         .expect("file can be mapped");
 
         assert_eq!(summary.remote_file_id, "remote-1");
-        assert_eq!(summary.file_name, "warp-tracker-backup-20260606.json");
+        assert_eq!(summary.file_name, "miku-warp-autosave.json");
         assert_eq!(summary.remote_md5_checksum, Some("checksum".to_string()));
         assert_eq!(summary.size, Some("1234".to_string()));
     }
@@ -1477,18 +1565,34 @@ mod tests {
     #[test]
     fn builds_drive_multipart_body_with_app_data_parent_and_snapshot_bytes() {
         let body = build_drive_multipart_upload_body(
-            "warp-tracker-backup-20260606.json",
+            "miku-warp-autosave.json",
             br#"{"schemaVersion":1}"#,
             "boundary-token",
+            true,
         )
         .expect("multipart body can be built");
         let body_text = String::from_utf8(body).expect("body is utf8 for json snapshot");
 
         assert!(body_text.contains("--boundary-token\r\n"));
-        assert!(body_text.contains(r#""name":"warp-tracker-backup-20260606.json""#));
+        assert!(body_text.contains(r#""name":"miku-warp-autosave.json""#));
         assert!(body_text.contains(r#""parents":["appDataFolder"]"#));
         assert!(body_text.contains(r#"{"schemaVersion":1}"#));
         assert!(body_text.ends_with("--boundary-token--\r\n"));
+    }
+
+    #[test]
+    fn builds_drive_multipart_body_without_parent_for_update() {
+        let body = build_drive_multipart_upload_body(
+            "miku-warp-autosave.json",
+            br#"{"schemaVersion":1}"#,
+            "boundary-token",
+            false,
+        )
+        .expect("multipart body can be built");
+        let body_text = String::from_utf8(body).expect("body is utf8 for json snapshot");
+
+        assert!(body_text.contains(r#""name":"miku-warp-autosave.json""#));
+        assert!(!body_text.contains(r#""parents":["appDataFolder"]"#));
     }
 
     #[test]

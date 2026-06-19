@@ -24,6 +24,7 @@ export type BackupNotice = {
 export type BackupSnapshotInfo = {
   exportedAt: string
   fileName: string
+  isAutoSave: boolean
   uids: string[]
   warpPulls: number
 }
@@ -43,7 +44,6 @@ type BackupPanelProps = {
   isCloudCancelling: boolean
   isCloudConnecting: boolean
   isCloudDisconnecting: boolean
-  isCloudListing: boolean
   isCloudPolicyUpdating: boolean
   isCloudRestoring: boolean
   isCloudUploading: boolean
@@ -51,7 +51,6 @@ type BackupPanelProps = {
   isImporting: boolean
   isRestoring: boolean
   isDeleting: boolean
-  latestBackup?: BackupSnapshotInfo
   notice?: BackupNotice
   deletingFileName?: string
   restoringCloudFileId?: string
@@ -62,7 +61,6 @@ type BackupPanelProps = {
   onConnectGoogleDrive: () => void
   onDisconnectGoogleDrive: () => void
   onAutoBackupPolicyChange: (enabled: boolean) => void
-  onRefreshGoogleDriveBackups: () => void
   onRestoreGoogleDriveBackup: (snapshot: CloudBackupSnapshotInfo) => void
   onUploadGoogleDriveBackup: () => void
   onExportBackup: () => void
@@ -77,7 +75,6 @@ export function BackupPanel({
   isCloudCancelling,
   isCloudConnecting,
   isCloudDisconnecting,
-  isCloudListing,
   isCloudPolicyUpdating,
   isCloudRestoring,
   isCloudUploading,
@@ -85,7 +82,6 @@ export function BackupPanel({
   isImporting,
   isDeleting,
   isRestoring,
-  latestBackup,
   notice,
   deletingFileName,
   restoringCloudFileId,
@@ -96,7 +92,6 @@ export function BackupPanel({
   onCancelGoogleDrive,
   onConnectGoogleDrive,
   onDisconnectGoogleDrive,
-  onRefreshGoogleDriveBackups,
   onRestoreGoogleDriveBackup,
   onUploadGoogleDriveBackup,
   onExportBackup,
@@ -109,13 +104,12 @@ export function BackupPanel({
     isCloudConnecting ||
     isCloudCancelling ||
     isCloudDisconnecting ||
-    isCloudListing ||
     isCloudPolicyUpdating ||
     isCloudRestoring ||
     isCloudUploading
   const isBusy = isExporting || isImporting || isRestoring || isDeleting || isCloudBusy
   const visibleSnapshots = snapshots.slice(0, 3)
-  const visibleCloudSnapshots = cloudSnapshots.slice(0, 3)
+  const visibleCloudSnapshots = cloudSnapshots.slice(0, 1)
   const isGoogleDriveConnected =
     cloudBackupStatus.connectionStatus === 'connected'
   const autoBackupToggleDisabled =
@@ -199,7 +193,7 @@ export function BackupPanel({
           </div>
           <button
             aria-checked={cloudBackupPolicy.autoBackupEnabled}
-            aria-label="Auto backup after manual import"
+            aria-label="Auto backup to Google Drive"
             className={`switch-control${
               cloudBackupPolicy.autoBackupEnabled ? ' switch-control-on' : ''
             }`}
@@ -217,17 +211,9 @@ export function BackupPanel({
           <div className="backup-snapshot-list" aria-label="Cloud backups">
             <div className="backup-snapshot-row backup-snapshot-row-heading">
               <div>
-                <strong>Cloud backups</strong>
-                <span>{formatCloudSnapshotCount(cloudSnapshots.length)}</span>
+                <strong>Cloud backup</strong>
+                <span>Latest autosave</span>
               </div>
-              <AppButton
-                disabled={isBusy}
-                icon={RefreshCcw}
-                onClick={onRefreshGoogleDriveBackups}
-                variant="ghost"
-              >
-                {isCloudListing ? 'Refreshing' : 'Refresh'}
-              </AppButton>
             </div>
             {visibleCloudSnapshots.length > 0 ? (
               visibleCloudSnapshots.map((snapshot) => (
@@ -236,18 +222,16 @@ export function BackupPanel({
                   key={snapshot.remoteFileId}
                 >
                   <div>
-                    <strong title={snapshot.fileName}>
-                      {snapshot.fileName}
+                    <strong>
+                      {snapshot.remoteModifiedTime
+                        ? formatSnapshotTime(snapshot.remoteModifiedTime)
+                        : 'Time unavailable'}
                     </strong>
-                    <span>
-                      {formatCloudSnapshotMeta(
-                        snapshot.remoteModifiedTime,
-                        snapshot.size,
-                      )}
+                    <span title={snapshot.fileName}>
+                      {formatCloudSnapshotSize(snapshot.size)}
                     </span>
                   </div>
                   <div className="backup-snapshot-actions">
-                    <span className="status-pill">Cloud</span>
                     <AppButton
                       disabled={isBusy}
                       icon={RefreshCcw}
@@ -264,8 +248,8 @@ export function BackupPanel({
             ) : (
               <div className="backup-snapshot-row">
                 <div>
-                  <strong>No cloud snapshots</strong>
-                  <span>Upload a local snapshot first</span>
+                  <strong>No cloud autosave yet</strong>
+                  <span>It will upload after the next saved change</span>
                 </div>
               </div>
             )}
@@ -274,11 +258,7 @@ export function BackupPanel({
         <div className="tool-row">
           <div>
             <strong>Local backup</strong>
-            <span title={latestBackup?.fileName}>
-              {latestBackup
-                ? `Last backup: ${formatSnapshotTime(latestBackup.exportedAt)}`
-                : 'No local snapshot yet'}
-            </span>
+            <span>Autosave plus manual JSON exports</span>
           </div>
           <div className="backup-action-group">
             <AppButton
@@ -320,16 +300,18 @@ export function BackupPanel({
                       ? 'Restoring'
                       : 'Restore'}
                   </AppButton>
-                  <AppButton
-                    disabled={isBusy}
-                    icon={Trash2}
-                    onClick={() => onDeleteSnapshot(snapshot.fileName)}
-                    variant="ghost"
-                  >
-                    {deletingFileName === snapshot.fileName
-                      ? 'Deleting'
-                      : 'Delete'}
-                  </AppButton>
+                  {!snapshot.isAutoSave ? (
+                    <AppButton
+                      disabled={isBusy}
+                      icon={Trash2}
+                      onClick={() => onDeleteSnapshot(snapshot.fileName)}
+                      variant="ghost"
+                    >
+                      {deletingFileName === snapshot.fileName
+                        ? 'Deleting'
+                        : 'Delete'}
+                    </AppButton>
+                  ) : null}
                 </div>
               </div>
             ))}
@@ -412,31 +394,6 @@ function formatBackupUids(uids: string[]) {
   return `${uids.length} UIDs: ${uids.join(', ')}`
 }
 
-function formatCloudSnapshotCount(count: number) {
-  if (count === 0) {
-    return 'No snapshots'
-  }
-
-  if (count === 1) {
-    return '1 snapshot'
-  }
-
-  return `${count} snapshots`
-}
-
-function formatCloudSnapshotMeta(
-  modifiedTime: string | undefined,
-  size: string | undefined,
-) {
-  const parts = []
-
-  if (modifiedTime) {
-    parts.push(modifiedTime.replace('T', ' ').replace('.000Z', ' UTC'))
-  }
-
-  if (size) {
-    parts.push(`${size} bytes`)
-  }
-
-  return parts.length > 0 ? parts.join(' - ') : 'Metadata unavailable'
+function formatCloudSnapshotSize(size: string | undefined) {
+  return size ? `${size} bytes` : 'Size unavailable'
 }

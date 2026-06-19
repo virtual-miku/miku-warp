@@ -30,7 +30,7 @@ export type CloudBackupStatus = {
   detail: string
 }
 
-export type CloudBackupPolicyTrigger = 'manual_import_saved'
+export type CloudBackupPolicyTrigger = 'data_changed'
 
 export type CloudBackupPolicy = {
   provider: CloudBackupProvider
@@ -61,7 +61,7 @@ export function createInitialGoogleDriveBackupPolicy(): CloudBackupPolicy {
   return {
     provider: 'google_drive',
     autoBackupEnabled: false,
-    triggerName: 'manual_import_saved',
+    triggerName: 'data_changed',
     minIntervalMinutes: 0,
     updatedAt: '',
   }
@@ -72,14 +72,14 @@ export function getCloudBackupPolicyDetail(
   canUpload: boolean,
 ) {
   if (policy.autoBackupEnabled && canUpload) {
-    return 'After manual import'
+    return 'On every change'
   }
 
   if (policy.autoBackupEnabled) {
-    return 'Enabled, waiting for Drive'
+    return 'Drive pending'
   }
 
-  return canUpload ? 'Off' : 'Connect Drive first'
+  return canUpload ? 'Local autosave only' : 'Local autosave on'
 }
 
 export function getCloudBackupStatusLabel(

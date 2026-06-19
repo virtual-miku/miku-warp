@@ -47,12 +47,14 @@ describe('cloud backup status', () => {
 
     expect(policy.provider).toBe('google_drive')
     expect(policy.autoBackupEnabled).toBe(false)
-    expect(policy.triggerName).toBe('manual_import_saved')
+    expect(policy.triggerName).toBe('data_changed')
     expect(policy.minIntervalMinutes).toBe(0)
     expect(getCloudBackupPolicyDetail(policy, false)).toBe(
-      'Connect Drive first',
+      'Local autosave on',
     )
-    expect(getCloudBackupPolicyDetail(policy, true)).toBe('Off')
+    expect(getCloudBackupPolicyDetail(policy, true)).toBe(
+      'Local autosave only',
+    )
   })
 
   it('describes enabled auto backup policy readiness', () => {
@@ -61,11 +63,9 @@ describe('cloud backup status', () => {
       autoBackupEnabled: true,
     }
 
-    expect(getCloudBackupPolicyDetail(policy, true)).toBe(
-      'After manual import',
-    )
+    expect(getCloudBackupPolicyDetail(policy, true)).toBe('On every change')
     expect(getCloudBackupPolicyDetail(policy, false)).toBe(
-      'Enabled, waiting for Drive',
+      'Drive pending',
     )
   })
 })

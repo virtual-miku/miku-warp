@@ -2,6 +2,20 @@ pub mod cloud_backup;
 mod database;
 mod game_history;
 
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AutoBackupRunResult {
+    content_hash: String,
+    local_changed: bool,
+    local_backup_path: String,
+    local_exported_at: String,
+    warp_pulls: usize,
+    cloud_required: bool,
+    cloud_uploaded: bool,
+    cloud_error: Option<String>,
+    sync_status: database::AutoBackupSyncStatus,
+}
+
 #[tauri::command]
 fn get_cloud_backup_status() -> cloud_backup::CloudBackupStatus {
     cloud_backup::get_cloud_backup_status()
@@ -23,36 +37,129 @@ fn disconnect_google_drive_backup() -> Result<cloud_backup::CloudBackupStatus, S
 }
 
 #[tauri::command]
-fn upload_latest_google_drive_backup(
+async fn upload_latest_google_drive_backup(
     app: tauri::AppHandle,
 ) -> Result<cloud_backup::UploadCloudBackupSnapshotResult, String> {
-    let backup_snapshot = database::read_latest_backup_snapshot_file(&app)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let backup_snapshot = database::save_auto_backup_snapshot(&app)?;
 
-    let upload_result = cloud_backup::upload_google_drive_backup_snapshot(
-        &backup_snapshot.backup_path,
-        &backup_snapshot.file_name,
-        &backup_snapshot.bytes,
-    )?;
+        let upload_result = cloud_backup::upload_google_drive_backup_snapshot(
+            &backup_snapshot.backup_path,
+            &backup_snapshot.file_name,
+            &backup_snapshot.bytes,
+        )?;
+        let sync_status = database::mark_cloud_auto_backup_synced(
+            &app,
+            &backup_snapshot.content_hash,
+            upload_result.remote_modified_time.as_deref(),
+        )?;
 
-    record_cloud_backup_audit(
-        &app,
-        database::RecordCloudBackupSnapshotInput {
-            provider: "google_drive".to_string(),
-            remote_file_id: upload_result.remote_file_id.clone(),
-            file_name: upload_result.remote_file_name.clone(),
-            remote_md5_checksum: upload_result.remote_md5_checksum.clone(),
-            remote_modified_time: upload_result.remote_modified_time.clone(),
-            size_bytes: i64::try_from(upload_result.bytes_uploaded).ok(),
-            operation: "upload".to_string(),
-            status: "success".to_string(),
-            message: Some(format!(
-                "Uploaded local snapshot {}.",
-                upload_result.file_name
-            )),
-        },
-    );
+        record_cloud_backup_audit(
+            &app,
+            database::RecordCloudBackupSnapshotInput {
+                provider: "google_drive".to_string(),
+                remote_file_id: upload_result.remote_file_id.clone(),
+                file_name: upload_result.remote_file_name.clone(),
+                remote_md5_checksum: upload_result.remote_md5_checksum.clone(),
+                remote_modified_time: upload_result.remote_modified_time.clone(),
+                size_bytes: i64::try_from(upload_result.bytes_uploaded).ok(),
+                operation: "upload".to_string(),
+                status: "success".to_string(),
+                message: Some(format!(
+                    "Uploaded autosave backup after {} pulls. Pending: {}.",
+                    backup_snapshot.warp_pulls, sync_status.has_pending_backup
+                )),
+            },
+        );
 
-    Ok(upload_result)
+        Ok(upload_result)
+    })
+    .await
+    .map_err(|error| format!("Google Drive upload task failed: {error}"))?
+}
+
+#[tauri::command]
+async fn run_auto_backup(app: tauri::AppHandle) -> Result<AutoBackupRunResult, String> {
+    tauri::async_runtime::spawn_blocking(move || run_auto_backup_blocking(app))
+        .await
+        .map_err(|error| format!("Auto backup task failed: {error}"))?
+}
+
+fn run_auto_backup_blocking(app: tauri::AppHandle) -> Result<AutoBackupRunResult, String> {
+    let backup_snapshot = database::save_auto_backup_snapshot(&app)?;
+    let policy = database::get_cloud_backup_policy(&app)?;
+    let initial_sync_status = database::get_auto_backup_sync_status(&app)?;
+    let cloud_required = policy.auto_backup_enabled;
+    let mut cloud_uploaded = false;
+    let mut cloud_error = None;
+
+    if cloud_required && !initial_sync_status.cloud_up_to_date {
+        let cloud_status = cloud_backup::get_cloud_backup_status();
+
+        if cloud_status.can_upload {
+            match cloud_backup::upload_google_drive_backup_snapshot(
+                &backup_snapshot.backup_path,
+                &backup_snapshot.file_name,
+                &backup_snapshot.bytes,
+            ) {
+                Ok(upload_result) => {
+                    database::mark_cloud_auto_backup_synced(
+                        &app,
+                        &backup_snapshot.content_hash,
+                        upload_result.remote_modified_time.as_deref(),
+                    )?;
+                    record_cloud_backup_audit(
+                        &app,
+                        database::RecordCloudBackupSnapshotInput {
+                            provider: "google_drive".to_string(),
+                            remote_file_id: upload_result.remote_file_id.clone(),
+                            file_name: upload_result.remote_file_name.clone(),
+                            remote_md5_checksum: upload_result.remote_md5_checksum.clone(),
+                            remote_modified_time: upload_result.remote_modified_time.clone(),
+                            size_bytes: i64::try_from(upload_result.bytes_uploaded).ok(),
+                            operation: "upload".to_string(),
+                            status: "success".to_string(),
+                            message: Some(format!(
+                                "Autosave uploaded {}.",
+                                upload_result.remote_file_name
+                            )),
+                        },
+                    );
+                    cloud_uploaded = true;
+                }
+                Err(error) => {
+                    cloud_error = Some(error);
+                }
+            }
+        } else {
+            cloud_error = Some(if cloud_status.detail.trim().is_empty() {
+                "Google Drive is not connected.".to_string()
+            } else {
+                cloud_status.detail
+            });
+        }
+    }
+
+    let sync_status = database::get_auto_backup_sync_status(&app)?;
+
+    Ok(AutoBackupRunResult {
+        content_hash: backup_snapshot.content_hash,
+        local_changed: backup_snapshot.changed,
+        local_backup_path: backup_snapshot.backup_path,
+        local_exported_at: backup_snapshot.exported_at,
+        warp_pulls: backup_snapshot.warp_pulls,
+        cloud_required,
+        cloud_uploaded,
+        cloud_error,
+        sync_status,
+    })
+}
+
+#[tauri::command]
+fn get_auto_backup_sync_status(
+    app: tauri::AppHandle,
+) -> Result<database::AutoBackupSyncStatus, String> {
+    database::get_auto_backup_sync_status(&app)
 }
 
 #[tauri::command]
@@ -386,6 +493,7 @@ pub fn run() {
             delete_warp_pulls,
             disconnect_google_drive_backup,
             export_backup_snapshot,
+            get_auto_backup_sync_status,
             get_cloud_backup_status,
             get_cloud_backup_policy,
             get_database_status,
@@ -402,6 +510,7 @@ pub fn run() {
             restore_backup_snapshot,
             restore_latest_backup_snapshot,
             restore_trashed_warp_pull,
+            run_auto_backup,
             save_manual_import_draft,
             scan_game_history_source,
             sync_warp_item_catalog,
