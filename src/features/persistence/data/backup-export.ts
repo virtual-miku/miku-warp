@@ -1,5 +1,9 @@
 import { open } from '@tauri-apps/plugin-dialog'
-import { invokeTauri } from './tauri-invoke'
+import {
+  createDesktopRuntimeUnavailableError,
+  hasTauriInvoke,
+  invokeTauri,
+} from './tauri-invoke'
 
 export type ExportBackupSnapshotResult = {
   backupPath: string
@@ -83,6 +87,10 @@ export function restoreBackupSnapshot(fileName: string) {
 }
 
 export async function selectBackupJsonFile() {
+  if (!hasTauriInvoke()) {
+    throw createDesktopRuntimeUnavailableError('Backup file browsing')
+  }
+
   const selectedPath = await open({
     filters: [{ name: 'Miku Warp backup JSON', extensions: ['json'] }],
     multiple: false,

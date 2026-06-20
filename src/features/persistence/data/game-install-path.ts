@@ -1,5 +1,9 @@
 import { open } from '@tauri-apps/plugin-dialog'
-import { invokeTauri } from './tauri-invoke'
+import {
+  createDesktopRuntimeUnavailableError,
+  hasTauriInvoke,
+  invokeTauri,
+} from './tauri-invoke'
 
 export const DEFAULT_GAME_INSTALL_PATH =
   'C:\\Program Files\\HoYoPlay\\games\\Star Rail Games'
@@ -40,6 +44,10 @@ export function saveGameInstallPath(path: string) {
 }
 
 export async function selectGameInstallPath(currentPath: string) {
+  if (!hasTauriInvoke()) {
+    throw createDesktopRuntimeUnavailableError('Folder browsing')
+  }
+
   const selectedPath = await open({
     defaultPath: currentPath,
     directory: true,
