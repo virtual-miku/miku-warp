@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
 import {
-  getBannerLabel,
   getFiveStarHardPity,
   isRateUpBanner,
   type BannerType,
@@ -35,9 +34,6 @@ export function BannerStatsPanel({
 
   return (
     <section className="banner-detail-panel" aria-label="Banner statistics">
-      <header className="panel-header">
-        <h2>{getBannerLabel(bannerType)} stats</h2>
-      </header>
       <div className="banner-detail-grid">
         <StatItem
           label="Average pity"

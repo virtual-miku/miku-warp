@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import {
-  Bell,
+  Cloud,
+  FileInput,
   LayoutDashboard,
   RefreshCcw,
   Trash2,
@@ -144,7 +145,7 @@ type HistoryDeleteConfirmation =
       uid: string
     }
 
-type AppView = 'dashboard' | 'trash'
+type AppView = 'dashboard' | 'import' | 'backup' | 'trash'
 
 type TrashDeleteConfirmation = {
   accountId: string
@@ -1847,6 +1848,32 @@ export function App() {
               Dashboard
             </button>
             <button
+              aria-current={activeView === 'import' ? 'page' : undefined}
+              className={
+                activeView === 'import'
+                  ? 'sidebar-link sidebar-link-active'
+                  : 'sidebar-link'
+              }
+              onClick={() => handleViewChange('import')}
+              type="button"
+            >
+              <FileInput size={18} aria-hidden="true" />
+              Import
+            </button>
+            <button
+              aria-current={activeView === 'backup' ? 'page' : undefined}
+              className={
+                activeView === 'backup'
+                  ? 'sidebar-link sidebar-link-active'
+                  : 'sidebar-link'
+              }
+              onClick={() => handleViewChange('backup')}
+              type="button"
+            >
+              <Cloud size={18} aria-hidden="true" />
+              Backup
+            </button>
+            <button
               aria-current={activeView === 'trash' ? 'page' : undefined}
               className={
                 activeView === 'trash'
@@ -1898,129 +1925,143 @@ export function App() {
               />
 
               <section className="content-grid">
-            <div className="primary-column" id="dashboard">
-              <BannerSummaryGrid
-                activeBannerType={activeBannerType}
-                summaries={bannerSummaries}
-                onBannerTypeChange={handleBannerTypeChange}
-              />
-              {activeBannerType === 'all' ? (
-                <StellarJadeOverview totalPulls={activeAccountPullCount} />
-              ) : (
-                <>
-                  <PityOverview
-                    bannerType={activeBannerType}
-                    summary={pitySummary}
+                <div className="primary-column" id="dashboard">
+                  <BannerSummaryGrid
+                    activeBannerType={activeBannerType}
+                    summaries={bannerSummaries}
+                    onBannerTypeChange={handleBannerTypeChange}
                   />
-                  <BannerStatsPanel
-                    bannerType={activeBannerType}
-                    summary={activeBannerSummary}
+                  {activeBannerType === 'all' ? (
+                    <StellarJadeOverview totalPulls={activeAccountPullCount} />
+                  ) : (
+                    <>
+                      <PityOverview
+                        bannerType={activeBannerType}
+                        summary={pitySummary}
+                      />
+                      <BannerStatsPanel
+                        bannerType={activeBannerType}
+                        summary={activeBannerSummary}
+                      />
+                    </>
+                  )}
+                  <WarpTimeline
+                    pulls={timelinePulls}
+                    page={historyPage}
+                    pageSize={historyPageSize}
+                    rarityFilter={historyRarityFilter}
+                    searchQuery={historySearchQuery}
+                    totalPulls={historyTotalPulls}
+                    isLoading={historyLoading}
+                    canDeleteAll={activeAccountPullCount > 0}
+                    isDeletingAll={deletingAllHistory}
+                    isDeletingSelected={deletingSelectedHistory}
+                    isSelecting={historySelecting}
+                    selectedPullIds={selectedHistoryPullIds}
+                    showBannerLabel={activeBannerType === 'all'}
+                    onDeleteAll={handleDeleteAllHistory}
+                    onDeleteSelected={handleDeleteSelectedHistory}
+                    onOpenImport={() => setImportDialogOpen(true)}
+                    onPageChange={(page) => {
+                      setHistoryLoading(true)
+                      setHistoryPage(page)
+                      setSelectedHistoryPullIds(new Set())
+                    }}
+                    onRarityFilterChange={(rarityFilter) => {
+                      setHistoryLoading(true)
+                      setHistoryRarityFilter(rarityFilter)
+                      setHistoryPage(1)
+                      setSelectedHistoryPullIds(new Set())
+                    }}
+                    onSelectionModeChange={handleHistorySelectionModeChange}
+                    onSearchQueryChange={(searchQuery) => {
+                      setHistoryLoading(true)
+                      setHistorySearchQuery(searchQuery)
+                      setHistoryPage(1)
+                      setSelectedHistoryPullIds(new Set())
+                    }}
+                    onTogglePullSelection={handleToggleHistoryPullSelection}
                   />
-                </>
-              )}
-              <WarpTimeline
-                pulls={timelinePulls}
-                page={historyPage}
-                pageSize={historyPageSize}
-                rarityFilter={historyRarityFilter}
-                searchQuery={historySearchQuery}
-                totalPulls={historyTotalPulls}
-                isLoading={historyLoading}
-                canDeleteAll={activeAccountPullCount > 0}
-                isDeletingAll={deletingAllHistory}
-                isDeletingSelected={deletingSelectedHistory}
-                isSelecting={historySelecting}
-                selectedPullIds={selectedHistoryPullIds}
-                showBannerLabel={activeBannerType === 'all'}
-                onDeleteAll={handleDeleteAllHistory}
-                onDeleteSelected={handleDeleteSelectedHistory}
-                onOpenImport={() => setImportDialogOpen(true)}
-                onPageChange={(page) => {
-                  setHistoryLoading(true)
-                  setHistoryPage(page)
-                  setSelectedHistoryPullIds(new Set())
-                }}
-                onRarityFilterChange={(rarityFilter) => {
-                  setHistoryLoading(true)
-                  setHistoryRarityFilter(rarityFilter)
-                  setHistoryPage(1)
-                  setSelectedHistoryPullIds(new Set())
-                }}
-                onSelectionModeChange={handleHistorySelectionModeChange}
-                onSearchQueryChange={(searchQuery) => {
-                  setHistoryLoading(true)
-                  setHistorySearchQuery(searchQuery)
-                  setHistoryPage(1)
-                  setSelectedHistoryPullIds(new Set())
-                }}
-                onTogglePullSelection={handleToggleHistoryPullSelection}
-              />
-              <WarpResultGallery
-                accountId={activeAccount.id}
-                bannerType={activeBannerType}
-                refreshKey={warpResultRefreshKey}
-              />
-            </div>
-
-            <aside className="side-column" aria-label="Import and backup">
-              <ImportPanel
-                gameHistoryImportError={gameHistoryImportError}
-                gameHistoryImportResult={gameHistoryImportResult}
-                gameHistoryPathError={gameHistoryPathError}
-                gameHistoryScan={gameHistoryScan}
-                gameInstallPath={gameInstallPath}
-                isGameHistoryImporting={gameHistoryImporting}
-                isGameHistoryScanning={gameHistoryScanning}
-                isGamePathSelecting={gamePathSelecting}
-                manualImportPreview={manualImportPreview}
-                onImportGameHistory={handleImportGameHistory}
-                onSelectGamePath={handleSelectGamePath}
-                onScanGameHistory={handleScanGameHistorySource}
-                onOpenManualImport={() => setManualImportOpen(true)}
-              />
-              <BackupPanel
-                cloudBackupPolicy={cloudBackupPolicy}
-                cloudSnapshots={cloudBackupSnapshots}
-                cloudBackupStatus={cloudBackupStatus}
-                deletingFileName={deletingBackupFileName}
-                isCloudCancelling={cloudBackupCancelling}
-                isCloudConnecting={cloudBackupConnecting}
-                isCloudDisconnecting={cloudBackupDisconnecting}
-                isCloudPolicyUpdating={cloudBackupPolicyUpdating}
-                isCloudRestoring={cloudBackupRestoring}
-                isCloudUploading={cloudBackupUploading || autoBackupRunning}
-                isExporting={backupExporting}
-                isImporting={backupImporting}
-                isDeleting={backupDeleting}
-                isRestoring={backupRestoring}
-                notice={backupNotice}
-                restoringCloudFileId={restoringCloudBackupFileId}
-                restoringFileName={restoringBackupFileName}
-                snapshots={backupSnapshots}
-                onAutoBackupPolicyChange={handleAutoBackupPolicyChange}
-                onCancelGoogleDrive={handleCancelGoogleDriveConnection}
-                onConnectGoogleDrive={handleConnectGoogleDrive}
-                onDeleteSnapshot={handleDeleteBackupSnapshot}
-                onDisconnectGoogleDrive={handleDisconnectGoogleDrive}
-                onExportBackup={handleExportBackup}
-                onImportBackupJson={handleImportBackupJson}
-                onRestoreGoogleDriveBackup={handleRestoreGoogleDriveBackup}
-                onRestoreSnapshot={handleRestoreBackupSnapshot}
-                onUploadGoogleDriveBackup={handleUploadGoogleDriveBackup}
-              />
-              <section className="notice-panel" aria-label="Reminder">
-                <div className="notice-icon" aria-hidden="true">
-                  <Bell size={18} />
+                  <WarpResultGallery
+                    accountId={activeAccount.id}
+                    bannerType={activeBannerType}
+                    refreshKey={warpResultRefreshKey}
+                  />
                 </div>
-                <div>
-                  <strong>History window</strong>
-                  <span>No reminder set</span>
-                </div>
-              </section>
-            </aside>
               </section>
             </>
-          ) : (
+          ) : null}
+
+          {activeView === 'import' ? (
+            <>
+              <header className="workspace-header">
+                <div>
+                  <h1>Import</h1>
+                </div>
+              </header>
+              <section className="workspace-panel-page">
+                <ImportPanel
+                  gameHistoryImportError={gameHistoryImportError}
+                  gameHistoryImportResult={gameHistoryImportResult}
+                  gameHistoryPathError={gameHistoryPathError}
+                  gameHistoryScan={gameHistoryScan}
+                  gameInstallPath={gameInstallPath}
+                  isGameHistoryImporting={gameHistoryImporting}
+                  isGameHistoryScanning={gameHistoryScanning}
+                  isGamePathSelecting={gamePathSelecting}
+                  manualImportPreview={manualImportPreview}
+                  onImportGameHistory={handleImportGameHistory}
+                  onSelectGamePath={handleSelectGamePath}
+                  onScanGameHistory={handleScanGameHistorySource}
+                  onOpenManualImport={() => setManualImportOpen(true)}
+                />
+              </section>
+            </>
+          ) : null}
+
+          {activeView === 'backup' ? (
+            <>
+              <header className="workspace-header">
+                <div>
+                  <h1>Backup</h1>
+                </div>
+              </header>
+              <section className="workspace-panel-page">
+                <BackupPanel
+                  cloudBackupPolicy={cloudBackupPolicy}
+                  cloudSnapshots={cloudBackupSnapshots}
+                  cloudBackupStatus={cloudBackupStatus}
+                  deletingFileName={deletingBackupFileName}
+                  isCloudCancelling={cloudBackupCancelling}
+                  isCloudConnecting={cloudBackupConnecting}
+                  isCloudDisconnecting={cloudBackupDisconnecting}
+                  isCloudPolicyUpdating={cloudBackupPolicyUpdating}
+                  isCloudRestoring={cloudBackupRestoring}
+                  isCloudUploading={cloudBackupUploading || autoBackupRunning}
+                  isExporting={backupExporting}
+                  isImporting={backupImporting}
+                  isDeleting={backupDeleting}
+                  isRestoring={backupRestoring}
+                  notice={backupNotice}
+                  restoringCloudFileId={restoringCloudBackupFileId}
+                  restoringFileName={restoringBackupFileName}
+                  snapshots={backupSnapshots}
+                  onAutoBackupPolicyChange={handleAutoBackupPolicyChange}
+                  onCancelGoogleDrive={handleCancelGoogleDriveConnection}
+                  onConnectGoogleDrive={handleConnectGoogleDrive}
+                  onDeleteSnapshot={handleDeleteBackupSnapshot}
+                  onDisconnectGoogleDrive={handleDisconnectGoogleDrive}
+                  onExportBackup={handleExportBackup}
+                  onImportBackupJson={handleImportBackupJson}
+                  onRestoreGoogleDriveBackup={handleRestoreGoogleDriveBackup}
+                  onRestoreSnapshot={handleRestoreBackupSnapshot}
+                  onUploadGoogleDriveBackup={handleUploadGoogleDriveBackup}
+                />
+              </section>
+            </>
+          ) : null}
+
+          {activeView === 'trash' ? (
             <>
               <header className="workspace-header">
                 <div>
@@ -2044,7 +2085,7 @@ export function App() {
                 totalPulls={trashTotalPulls}
               />
             </>
-          )}
+          ) : null}
         </section>
       </main>
 

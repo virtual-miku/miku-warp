@@ -50,9 +50,7 @@
 .brand strong,
 .brand span,
 .account-panel strong,
-.account-panel span,
-.notice-panel strong,
-.notice-panel span {
+.account-panel span {
   display: block;
 }
 
@@ -62,8 +60,7 @@
 }
 
 .brand span,
-.account-panel span,
-.notice-panel span {
+.account-panel span {
   color: var(--text-muted);
   font-size: 13px;
 }
@@ -99,7 +96,6 @@
 }
 
 .account-panel,
-.notice-panel,
 .tool-panel,
 .history-panel,
 .pity-card {
@@ -201,13 +197,13 @@
 
 .content-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
   align-items: start;
 }
 
 .primary-column,
-.side-column {
+.workspace-panel-page {
   min-width: 0;
   display: grid;
   gap: 18px;
@@ -360,7 +356,7 @@
 .banner-detail-panel {
   display: grid;
   gap: 10px;
-  padding-bottom: 14px;
+  padding: 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
@@ -370,7 +366,7 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   gap: 8px;
-  padding: 0 14px;
+  padding: 0;
 }
 
 .banner-detail-item {
@@ -1301,25 +1297,6 @@
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 750;
-}
-
-.notice-panel {
-  min-height: 72px;
-  display: flex;
-  gap: 12px;
-  padding: 14px;
-  border-radius: 8px;
-}
-
-.notice-icon {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 auto;
-  display: grid;
-  place-items: center;
-  border-radius: 8px;
-  background: var(--warning-bg);
-  color: var(--warning);
 }
 
 .modal-backdrop {
