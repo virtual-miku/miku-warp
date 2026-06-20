@@ -27,20 +27,6 @@ $env:MIKU_WARP_GOOGLE_CLIENT_SECRET="your-desktop-client-secret"
 npm run desktop
 ```
 
-These variables are runtime-only. Neither `npm run build` nor
-`npm run desktop:build` embeds their values, even when the variables are still
-set in the current PowerShell session. You can build from the same terminal
-without clearing them:
-
-```powershell
-npm run desktop:build
-```
-
-The resulting public package has Google Drive disabled until a release-safe
-OAuth configuration is implemented. If a distributed Google OAuth client
-requires a Client Secret, use a backend OAuth broker instead of relying on
-environment variables or embedding the value in the desktop binary.
-
 ## Structure
 
 - `src/app`: app shell and composition.
