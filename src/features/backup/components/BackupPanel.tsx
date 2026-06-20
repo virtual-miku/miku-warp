@@ -126,9 +126,6 @@ export function BackupPanel({
       id="backup"
       aria-label="Google Drive backup"
     >
-      <header className="panel-header">
-        <h2>Backup</h2>
-      </header>
       <div className="tool-panel-body">
         <div className="backup-section">
           <div className="tool-row">

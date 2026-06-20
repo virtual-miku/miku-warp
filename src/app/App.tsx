@@ -6,8 +6,10 @@ import {
   LayoutDashboard,
   RefreshCcw,
   Trash2,
+  UsersRound,
   X,
 } from 'lucide-react'
+import { AccountManagementPanel } from '../features/accounts/components/AccountManagementPanel'
 import {
   BackupPanel,
   type CloudBackupSnapshotInfo,
@@ -148,7 +150,7 @@ type HistoryDeleteConfirmation =
       uid: string
     }
 
-type AppView = 'dashboard' | 'import' | 'backup' | 'trash'
+type AppView = 'dashboard' | 'accounts' | 'import' | 'backup' | 'trash'
 
 type TrashDeleteConfirmation = {
   accountId: string
@@ -1059,6 +1061,11 @@ export function App() {
     setManualImportSaveNotice(undefined)
   }
 
+  const handleOpenAccount = (accountId: string) => {
+    handleAccountChange(accountId)
+    setActiveView('dashboard')
+  }
+
   const handleHistorySelectionModeChange = (isSelecting: boolean) => {
     setHistorySelecting(isSelecting)
     setSelectedHistoryPullIds(new Set())
@@ -1963,6 +1970,19 @@ export function App() {
               Dashboard
             </button>
             <button
+              aria-current={activeView === 'accounts' ? 'page' : undefined}
+              className={
+                activeView === 'accounts'
+                  ? 'sidebar-link sidebar-link-active'
+                  : 'sidebar-link'
+              }
+              onClick={() => handleViewChange('accounts')}
+              type="button"
+            >
+              <UsersRound size={18} aria-hidden="true" />
+              Accounts
+            </button>
+            <button
               aria-current={activeView === 'import' ? 'page' : undefined}
               className={
                 activeView === 'import'
@@ -2104,6 +2124,21 @@ export function App() {
                   />
                 </div>
               </section>
+            </>
+          ) : null}
+
+          {activeView === 'accounts' ? (
+            <>
+              <header className="workspace-header">
+                <div>
+                  <h1>Accounts</h1>
+                </div>
+              </header>
+              <AccountManagementPanel
+                accounts={accounts}
+                activeAccountId={activeAccount.id}
+                onOpenAccount={handleOpenAccount}
+              />
             </>
           ) : null}
 

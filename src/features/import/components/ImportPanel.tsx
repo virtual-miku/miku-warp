@@ -37,9 +37,6 @@ type ImportDialogProps = ImportPanelProps & {
 export function ImportPanel(props: ImportPanelProps) {
   return (
     <section className="tool-panel" id="import" aria-label="Import sources">
-      <header className="panel-header">
-        <h2>Import</h2>
-      </header>
       <ImportControls {...props} />
     </section>
   )
@@ -139,8 +136,8 @@ function ImportControls({
   )
 
   return (
-      <div className="tool-panel-body">
-        <div className="game-path-field">
+    <div className="tool-panel-body">
+      <div className="game-path-field">
           <div className="game-path-heading">
             <strong>Game folder</strong>
             <div className="game-path-actions">
@@ -152,6 +149,11 @@ function ImportControls({
                   isGameHistoryImporting
                 }
                 icon={Search}
+                className={
+                  !gameInstallPathReady
+                    ? 'app-button-flow-next'
+                    : undefined
+                }
                 onClick={onFindGamePath}
                 variant="ghost"
               >
@@ -175,7 +177,9 @@ function ImportControls({
           <span className="game-path-value" title={gameInstallPath}>
             {gameInstallPath}
           </span>
-          <small>Choose the folder containing StarRail_Data.</small>
+          {!gameInstallPathReady ? (
+            <small>Choose the folder containing StarRail_Data.</small>
+          ) : null}
           {gamePathCandidates.length > 1 ? (
             <div
               className="game-path-candidate-list"
@@ -213,6 +217,11 @@ function ImportControls({
               </span>
             </div>
             <AppButton
+              className={
+                !gameHistorySourceFound
+                  ? 'app-button-flow-next'
+                  : undefined
+              }
               disabled={isGameHistoryScanning}
               icon={History}
               onClick={onScanGameHistory}
@@ -246,6 +255,7 @@ function ImportControls({
                 </span>
               </div>
               <AppButton
+                className="app-button-flow-next"
                 disabled={isGameHistoryImporting || isGameHistoryScanning}
                 icon={History}
                 onClick={onImportGameHistory}
@@ -266,8 +276,8 @@ function ImportControls({
           >
             <strong>
               {gameHistoryImportError
-                  ? 'Game import failed'
-                  : 'Game import saved'}
+                ? 'Game import failed'
+                : 'Game import saved'}
             </strong>
             <p>
               {gameHistoryImportError ??
