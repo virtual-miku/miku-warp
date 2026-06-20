@@ -846,8 +846,13 @@ export function App() {
   useEffect(() => {
     let isActive = true
     let removeCloseListener: (() => void) | undefined
+    const currentWindow = getTauriWindow()
 
-    void getCurrentWindow()
+    if (!currentWindow) {
+      return undefined
+    }
+
+    void currentWindow
       .onCloseRequested((event) => {
         if (
           allowWindowCloseRef.current ||
@@ -934,7 +939,14 @@ export function App() {
     setCloseConfirmationOpen(false)
 
     try {
-      await getCurrentWindow().close()
+      const currentWindow = getTauriWindow()
+
+      if (currentWindow) {
+        await currentWindow.close()
+        return
+      }
+
+      window.close()
     } catch {
       window.close()
     }
@@ -3210,6 +3222,34 @@ function getBackupTrashFileNames(confirmation: BackupTrashConfirmation) {
   return confirmation.fileNames
 }
 
+type BrowserWindowWithTauri = Window & {
+  __TAURI__?: unknown
+  __TAURI_INTERNALS__?: unknown
+}
+
+function isTauriRuntime() {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  const maybeTauriWindow = window as BrowserWindowWithTauri
+
+  return Boolean(
+    maybeTauriWindow.__TAURI__ || maybeTauriWindow.__TAURI_INTERNALS__,
+  )
+}
+
+function getTauriWindow() {
+  if (!isTauriRuntime()) {
+    return undefined
+  }
+
+  try {
+    return getCurrentWindow()
+  } catch {
+    return undefined
+  }
+}
 function formatCloudBackupUploadDetail(
   result: UploadCloudBackupSnapshotResult,
 ) {
