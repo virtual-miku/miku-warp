@@ -12,7 +12,8 @@ import type { WarpPull } from '../domain/warp-pull'
 
 const resultColumnMinWidth = 62
 const resultColumnGap = 10
-const initialResultRows = 2
+const initialResultRows = 3
+const additionalResultRows = 3
 const catalogIconByIdentity = new Map(
   itemCatalog.map((item) => [
     createCatalogItemKey(item.name, item.itemType, item.rarity),
@@ -84,7 +85,9 @@ function WarpResultList({
   rarity,
 }: WarpResultListProps) {
   const galleryBodyRef = useRef<HTMLDivElement>(null)
-  const [resultBatchSize, setResultBatchSize] = useState(0)
+  const [columnCount, setColumnCount] = useState(0)
+  const [visibleRows, setVisibleRows] = useState(initialResultRows)
+  const [retryKey, setRetryKey] = useState(0)
   const [pulls, setPulls] = useState<WarpPull[]>([])
   const [totalPulls, setTotalPulls] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
@@ -97,14 +100,12 @@ function WarpResultList({
       return
     }
 
-    const updateBatchSize = () => {
-      const contentWidth = galleryBody.getBoundingClientRect().width - 32
-
-      if (contentWidth < resultColumnMinWidth) {
-        return
-      }
-
-      const columnCount = Math.max(
+    const updateColumnCount = () => {
+      const contentWidth = Math.max(
+        0,
+        galleryBody.getBoundingClientRect().width - 32,
+      )
+      const nextColumnCount = Math.max(
         1,
         Math.floor(
           (contentWidth + resultColumnGap) /
@@ -112,21 +113,21 @@ function WarpResultList({
         ),
       )
 
-      setResultBatchSize((currentSize) =>
-        currentSize > 0 ? currentSize : columnCount * initialResultRows,
-      )
+      setColumnCount(nextColumnCount)
     }
 
-    updateBatchSize()
+    updateColumnCount()
 
-    const resizeObserver = new ResizeObserver(updateBatchSize)
+    const resizeObserver = new ResizeObserver(updateColumnCount)
     resizeObserver.observe(galleryBody)
 
     return () => resizeObserver.disconnect()
   }, [])
 
   useEffect(() => {
-    if (resultBatchSize === 0) {
+    const resultLimit = columnCount * visibleRows
+
+    if (resultLimit === 0) {
       return
     }
 
@@ -135,7 +136,7 @@ function WarpResultList({
     listWarpPulls({
       accountId,
       bannerType: bannerType === 'all' ? undefined : bannerType,
-      limit: resultBatchSize,
+      limit: resultLimit,
       offset: 0,
       rarity,
     })
@@ -159,41 +160,37 @@ function WarpResultList({
     return () => {
       isActive = false
     }
-  }, [accountId, bannerType, rarity, resultBatchSize])
+  }, [accountId, bannerType, columnCount, rarity, retryKey, visibleRows])
 
-  const handleLoadMore = async () => {
-    if (isLoading || (!hasError && pulls.length >= totalPulls)) {
+  const handleLoadMore = () => {
+    if (isLoading) {
+      return
+    }
+
+    if (hasError) {
+      setIsLoading(true)
+      setHasError(false)
+      setRetryKey((currentKey) => currentKey + 1)
       return
     }
 
     setIsLoading(true)
-    setHasError(false)
-
-    try {
-      const result = await listWarpPulls({
-        accountId,
-        bannerType: bannerType === 'all' ? undefined : bannerType,
-        limit: resultBatchSize,
-        offset: pulls.length,
-        rarity,
-      })
-
-      setPulls((currentPulls) => mergeUniquePulls(currentPulls, result.pulls))
-      setTotalPulls(result.total)
-    } catch {
-      setHasError(true)
-    } finally {
-      setIsLoading(false)
-    }
+    setVisibleRows((currentRows) => currentRows + additionalResultRows)
   }
 
   const hasMore = pulls.length < totalPulls
+  const visiblePulls = getVisiblePulls(pulls, columnCount, totalPulls)
+  const expandLabel = isLoading
+    ? 'Loading more results'
+    : hasError
+      ? 'Try loading results again'
+      : 'Show more results'
 
   return (
     <div className="warp-result-gallery-body" ref={galleryBodyRef}>
-      {pulls.length > 0 ? (
+      {visiblePulls.length > 0 ? (
         <div className="warp-result-grid" role="list">
-          {pulls.map((pull) => (
+          {visiblePulls.map((pull) => (
             <WarpResultItem key={pull.id} pull={pull} />
           ))}
         </div>
@@ -209,14 +206,15 @@ function WarpResultList({
 
       {hasMore || hasError ? (
         <button
-          aria-label={isLoading ? 'Loading more results' : 'Show more results'}
+          aria-label={expandLabel}
           className={`icon-button warp-result-expand warp-result-expand-${rarity}`}
           disabled={isLoading}
           onClick={() => void handleLoadMore()}
-          title="Show more results"
+          title={expandLabel}
           type="button"
         >
-          <ChevronDown size={18} aria-hidden="true" />
+          <span>{hasError ? 'Try again' : 'Show more'}</span>
+          <ChevronDown size={16} aria-hidden="true" />
         </button>
       ) : null}
     </div>
@@ -283,10 +281,15 @@ function createCatalogItemKey(
   return `${itemType}:${rarity}:${itemName}`
 }
 
-function mergeUniquePulls(currentPulls: WarpPull[], nextPulls: WarpPull[]) {
-  const knownPullIds = new Set(currentPulls.map((pull) => pull.id))
-  return [
-    ...currentPulls,
-    ...nextPulls.filter((pull) => !knownPullIds.has(pull.id)),
-  ]
+function getVisiblePulls(
+  pulls: WarpPull[],
+  columnCount: number,
+  totalPulls: number,
+) {
+  if (columnCount === 0 || pulls.length >= totalPulls) {
+    return pulls
+  }
+
+  const completeRowCount = Math.floor(pulls.length / columnCount) * columnCount
+  return pulls.slice(0, completeRowCount)
 }
