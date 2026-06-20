@@ -969,12 +969,15 @@ export function App() {
       }
       setActiveAccount(nextAccount)
       saveActiveAccount(nextAccount)
+      setHistoryPage(1)
+      setHistorySelecting(false)
+      setSelectedHistoryPullIds(new Set())
       const [pulls, summaries] = await Promise.all([
         listWarpPulls({
           accountId: result.accountId,
           bannerType: activeBannerType === 'all' ? undefined : activeBannerType,
           limit: historyPageSize,
-          offset: (historyPage - 1) * historyPageSize,
+          offset: 0,
           rarity: historyRarityFilter === 'all' ? undefined : historyRarityFilter,
           search: historySearchQuery,
         }),
@@ -985,6 +988,8 @@ export function App() {
       setBannerSummaries(summaries)
       await refreshAccounts()
       scheduleAutoBackup('Game import')
+      setImportDialogOpen(false)
+      setActiveView('dashboard')
     } catch (error) {
       setGameHistoryImportError(getErrorMessage(error))
     } finally {
@@ -997,7 +1002,6 @@ export function App() {
     gameHistoryImporting,
     gameInstallPath,
     gameInstallPathReady,
-    historyPage,
     historyRarityFilter,
     historySearchQuery,
     refreshAccounts,

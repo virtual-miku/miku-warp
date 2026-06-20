@@ -1044,11 +1044,6 @@
   font-size: 11px;
 }
 
-.game-path-field small strong {
-  color: var(--text-strong);
-  font-weight: 800;
-}
-
 .game-path-candidate-list {
   display: grid;
   gap: 6px;
@@ -1352,6 +1347,11 @@
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 750;
+}
+
+.status-pill-success {
+  background: var(--status-good-bg);
+  color: var(--status-good);
 }
 
 .modal-backdrop {

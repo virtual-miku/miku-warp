@@ -134,8 +134,8 @@ function ImportControls({
   const gameHistoryTitle =
     gameHistoryScan?.matchedCachePath ?? gameHistoryScan?.urlPreview
   const gameHistorySourceFound = gameHistoryScan?.status === 'found'
-  const hasGameHistoryMessage = Boolean(
-    gameHistoryPathError || gameHistoryImportError || gameHistoryImportResult,
+  const hasGameImportMessage = Boolean(
+    gameHistoryImportError || gameHistoryImportResult,
   )
 
   return (
@@ -175,9 +175,7 @@ function ImportControls({
           <span className="game-path-value" title={gameInstallPath}>
             {gameInstallPath}
           </span>
-          <small>
-            Choose the folder containing <strong>StarRail_Data</strong>.
-          </small>
+          <small>Choose the folder containing StarRail_Data.</small>
           {gamePathCandidates.length > 1 ? (
             <div
               className="game-path-candidate-list"
@@ -194,6 +192,12 @@ function ImportControls({
                   <span>{candidate.source}</span>
                 </button>
               ))}
+            </div>
+          ) : null}
+          {gameHistoryPathError ? (
+            <div className="backup-message backup-message-error">
+              <strong>Folder selection failed</strong>
+              <p>{gameHistoryPathError}</p>
             </div>
           ) : null}
         </div>
@@ -225,7 +229,9 @@ function ImportControls({
                 <strong>Game source</strong>
                 <span>{formatGameHistorySourceMeta(gameHistoryScan)}</span>
               </div>
-              <span className="status-pill">
+              <span
+                className={getGameHistoryScanStatusClass(gameHistoryScan)}
+              >
                 {getGameHistoryScanStatusLabel(gameHistoryScan)}
               </span>
             </div>
@@ -249,27 +255,22 @@ function ImportControls({
             </div>
           </>
         ) : null}
-        {hasGameHistoryMessage ? (
+        {hasGameImportMessage ? (
           <div
             className={[
               'backup-message',
-              gameHistoryPathError || gameHistoryImportError
-                ? 'backup-message-error'
-                : undefined,
+              gameHistoryImportError ? 'backup-message-error' : undefined,
             ]
               .filter(Boolean)
               .join(' ')}
           >
             <strong>
-              {gameHistoryPathError
-                ? 'Folder selection failed'
-                : gameHistoryImportError
+              {gameHistoryImportError
                   ? 'Game import failed'
                   : 'Game import saved'}
             </strong>
             <p>
-              {gameHistoryPathError ??
-                gameHistoryImportError ??
+              {gameHistoryImportError ??
                 formatGameHistoryImportDetail(gameHistoryImportResult)}
             </p>
           </div>
@@ -297,6 +298,10 @@ function formatGameHistoryScanDetail(
 
   if (!scan) {
     return 'Local cache'
+  }
+
+  if (scan.status === 'found') {
+    return 'History source found. Press Import below to fetch warp records.'
   }
 
   return scan.detail
@@ -336,6 +341,14 @@ function getGameHistoryScanStatusLabel(
   }
 
   return 'Not found'
+}
+
+function getGameHistoryScanStatusClass(
+  scan: GameHistorySourceScanResult | undefined,
+) {
+  return scan?.status === 'found'
+    ? 'status-pill status-pill-success'
+    : 'status-pill'
 }
 
 function formatGameHistoryImportMeta(
