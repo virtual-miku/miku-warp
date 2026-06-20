@@ -1076,6 +1076,10 @@
   display: block;
 }
 
+.tool-row > .status-pill {
+  display: inline-flex;
+}
+
 .manual-import-row {
   margin-top: 4px;
   padding-top: 14px;
@@ -1632,34 +1636,39 @@
   overflow: hidden;
 }
 
-.manual-summary-grid {
+.manual-target-account-field {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.manual-summary-card {
-  min-height: 72px;
-  display: grid;
-  align-content: space-between;
+  gap: 6px;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
 }
 
-.manual-summary-card span,
+.manual-target-account-field label {
+  color: var(--text-strong);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.manual-target-account-field select {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.manual-target-account-field span,
 .manual-import-footer,
 .manual-preview-row span,
 .manual-issue-row span {
   color: var(--text-muted);
   font-size: 12px;
-}
-
-.manual-summary-card strong {
-  color: var(--text-strong);
-  font-size: 22px;
-  line-height: 1.1;
 }
 
 .manual-rarity-strip {
@@ -2088,10 +2097,6 @@
 
   .modal-panel {
     max-height: calc(100vh - 24px);
-  }
-
-  .manual-summary-grid {
-    grid-template-columns: 1fr;
   }
 
   .manual-preview-row {

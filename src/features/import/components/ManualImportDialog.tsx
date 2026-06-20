@@ -36,17 +36,28 @@ export type ManualImportSaveNotice = {
   detail: string
 }
 
+export type ManualImportTargetAccount = {
+  id: string
+  uid: string
+  region?: string
+  nickname?: string
+  totalPulls?: number
+}
+
 type ManualImportDialogProps = {
+  accounts: ManualImportTargetAccount[]
+  fallbackBannerType: BannerType
   isOpen: boolean
   isSaving: boolean
   note: string
-  onSave: () => void
+  onSave: (accountId: string) => void
   onClose: () => void
   onNoteChange: (value: string) => void
   onSaveNoticeClose: () => void
-  fallbackBannerType: BannerType
+  onTargetAccountChange: (accountId: string) => void
   preview: ManualImportPreview
   saveNotice?: ManualImportSaveNotice
+  targetAccountId: string
 }
 
 export function ManualImportDialog({
@@ -57,9 +68,12 @@ export function ManualImportDialog({
   onClose,
   onNoteChange,
   onSaveNoticeClose,
+  onTargetAccountChange,
+  accounts,
   fallbackBannerType,
   preview,
   saveNotice,
+  targetAccountId,
 }: ManualImportDialogProps) {
   const [activeCategoryKey, setActiveCategoryKey] =
     useState<ManualImportPreviewCategoryKey | 'all'>('all')
@@ -96,10 +110,6 @@ export function ManualImportDialog({
     activeRarityFilter,
   )
   const selectedTotalPulls = filteredPreviewRows.length
-  const selectedRecognizedPulls = filteredPreviewRows.filter(
-    (pull) => pull.item,
-  ).length
-  const selectedGroupCount = countPreviewGroups(filteredPreviewRows)
   const pageCount = Math.max(1, Math.ceil(selectedTotalPulls / previewPageSize))
   const activePage = Math.min(previewPage, pageCount)
   const previewRows = filteredPreviewRows.slice(
@@ -109,7 +119,11 @@ export function ManualImportDialog({
   const firstVisibleRow =
     selectedTotalPulls === 0 ? 0 : (activePage - 1) * previewPageSize + 1
   const lastVisibleRow = Math.min(activePage * previewPageSize, selectedTotalPulls)
-  const canSave = status === 'ready' && preview.totalPulls > 0 && !isSaving
+  const targetAccount =
+    accounts.find((account) => account.id === targetAccountId) ?? accounts[0]
+  const selectedTargetAccountId = targetAccount?.id ?? targetAccountId
+  const canSave =
+    status === 'ready' && preview.totalPulls > 0 && !isSaving && Boolean(targetAccount)
   const handleCategoryChange = (
     nextCategoryKey: ManualImportPreviewCategoryKey | 'all',
   ) => {
@@ -164,23 +178,25 @@ export function ManualImportDialog({
           </section>
 
           <section className="manual-import-preview" aria-label="Manual import preview">
-            <div className="manual-summary-grid">
-              <article className="manual-summary-card">
-                <span>Status</span>
-                <strong>{statusLabel}</strong>
-              </article>
-              <article className="manual-summary-card">
-                <span>Pulls</span>
-                <strong>{selectedTotalPulls}</strong>
-              </article>
-              <article className="manual-summary-card">
-                <span>Groups</span>
-                <strong>{selectedGroupCount}</strong>
-              </article>
-              <article className="manual-summary-card">
-                <span>Matched</span>
-                <strong>{selectedRecognizedPulls}</strong>
-              </article>
+            <div className="manual-target-account-field">
+              <label htmlFor="manual-import-target-account">
+                Import to UID
+              </label>
+              <select
+                id="manual-import-target-account"
+                onChange={(event) => onTargetAccountChange(event.target.value)}
+                value={selectedTargetAccountId}
+              >
+                {accounts.map((account) => (
+                  <option key={account.id} value={account.id}>
+                    UID {account.uid} - {formatTargetAccountMeta(account)}
+                  </option>
+                ))}
+              </select>
+              <span>
+                {preview.totalPulls} detected pulls will be added to this UID.
+                Status: {statusLabel}.
+              </span>
             </div>
 
             <div className="manual-category-tabs" role="tablist" aria-label="Preview categories">
@@ -314,7 +330,11 @@ export function ManualImportDialog({
                   <ChevronRight size={16} aria-hidden="true" />
                 </button>
               </div>
-              <AppButton icon={Save} disabled={!canSave} onClick={onSave}>
+              <AppButton
+                icon={Save}
+                disabled={!canSave}
+                onClick={() => onSave(selectedTargetAccountId)}
+              >
                 {isSaving ? 'Saving' : 'Import'}
               </AppButton>
             </footer>
@@ -432,14 +452,14 @@ function filterRowsByRarity(
   return rows.filter((row) => row.item?.rarity === rarityFilter)
 }
 
-function countPreviewGroups(rows: ManualImportPreviewRow[]) {
-  return new Set(
-    rows.map((row) =>
-      JSON.stringify([
-        row.effectiveBannerType ?? 'unassigned',
-        row.groupLineNumber,
-        row.groupTimestamp,
-      ]),
-    ),
-  ).size
+function formatTargetAccountMeta(account: ManualImportTargetAccount) {
+  const pulls =
+    account.totalPulls === undefined
+      ? 'current account'
+      : account.totalPulls === 1
+        ? '1 pull'
+        : `${account.totalPulls} pulls`
+  const region = account.region ?? 'asia'
+
+  return `${pulls}, ${region.toUpperCase()}`
 }

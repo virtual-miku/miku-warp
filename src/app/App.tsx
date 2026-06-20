@@ -27,6 +27,7 @@ import {
 } from '../features/import/components/ImportPanel'
 import {
   ManualImportDialog,
+  type ManualImportTargetAccount,
   type ManualImportSaveNotice,
 } from '../features/import/components/ManualImportDialog'
 import { manualNoteSample } from '../features/import/data/manual-note-sample'
@@ -172,6 +173,12 @@ type BackupConfirmation =
       snapshot: BackupSnapshotSummary
     }
 
+type ManualImportConfirmation = {
+  accountId: string
+  totalPulls: number
+  uid: string
+}
+
 export function App() {
   const [activeView, setActiveView] = useState<AppView>('dashboard')
   const [activeBannerType, setActiveBannerType] =
@@ -233,6 +240,10 @@ export function App() {
   const [gameInstallPath, setGameInstallPath] = useState(loadGameInstallPath)
   const [activeAccount, setActiveAccount] =
     useState<ManualImportAccountInput>(() => loadActiveAccount(defaultAccount))
+  const [manualImportTargetAccountId, setManualImportTargetAccountId] =
+    useState(activeAccount.id)
+  const [manualImportConfirmation, setManualImportConfirmation] =
+    useState<ManualImportConfirmation>()
   const [accounts, setAccounts] = useState<WarpAccount[]>([])
   const [cloudBackupStatus, setCloudBackupStatus] =
     useState<CloudBackupStatus>(() => createInitialGoogleDriveBackupStatus())
@@ -291,6 +302,27 @@ export function App() {
     [accounts, activeAccount.id],
   )
   const activeAccountPullCount = activeAccountSummary?.totalPulls ?? historyTotalPulls
+  const manualImportAccountOptions = useMemo<ManualImportTargetAccount[]>(() => {
+    const options = accounts.map<ManualImportTargetAccount>((account) => ({
+      id: account.id,
+      uid: account.uid,
+      region: account.region,
+      nickname: account.nickname,
+      totalPulls: account.totalPulls,
+    }))
+
+    if (!options.some((account) => account.id === activeAccount.id)) {
+      options.unshift({
+        id: activeAccount.id,
+        uid: activeAccount.uid,
+        region: activeAccount.region,
+        nickname: activeAccount.nickname,
+        totalPulls: activeAccountPullCount,
+      })
+    }
+
+    return options
+  }, [accounts, activeAccount, activeAccountPullCount])
   const pitySummary = useMemo(
     () =>
       activeBannerSummary
@@ -783,8 +815,9 @@ export function App() {
 
   const handleOpenManualImport = useCallback(() => {
     setManualImportSaveNotice(undefined)
+    setManualImportTargetAccountId(activeAccount.id)
     setManualImportOpen(true)
-  }, [])
+  }, [activeAccount.id])
 
   const applyGameInstallPath = useCallback((path: string) => {
     setGameInstallPath(path)
@@ -1288,13 +1321,47 @@ export function App() {
     trashDeleteConfirmation,
   ])
 
-  const handleSaveManualImport = async () => {
+  const handleRequestManualImportSave = (accountId: string) => {
     if (manualImportSaving) {
       return
     }
 
+    const targetAccount = manualImportAccountOptions.find(
+      (account) => account.id === accountId,
+    )
+
+    if (!targetAccount) {
+      setManualImportSaveNotice({
+        tone: 'error',
+        title: 'Choose UID',
+        detail: 'Select the UID that should receive this manual import.',
+      })
+      return
+    }
+
+    setManualImportTargetAccountId(targetAccount.id)
+    setManualImportConfirmation({
+      accountId: targetAccount.id,
+      totalPulls: manualImportPreview.totalPulls,
+      uid: targetAccount.uid,
+    })
+  }
+
+  const handleSaveManualImport = async (targetAccountId: string) => {
+    if (manualImportSaving) {
+      return
+    }
+
+    const targetAccount =
+      manualImportAccountOptions.find(
+        (account) => account.id === targetAccountId,
+      ) ?? manualImportAccountOptions[0]
+    const saveAccount = targetAccount
+      ? toManualImportAccountInput(targetAccount)
+      : activeAccount
+
     const draft = buildManualImportDraft(manualImportPreview, {
-      accountId: activeAccount.id,
+      accountId: saveAccount.id,
       fallbackBannerType: manualFallbackBannerType,
       timezone: 'Asia/Jakarta',
     })
@@ -1314,10 +1381,21 @@ export function App() {
     try {
       const catalogResult = await syncWarpItemCatalog(itemCatalog)
       const result = await saveManualImportDraft(
-        toSaveManualImportDraftPayload(activeAccount, draft),
+        toSaveManualImportDraftPayload(saveAccount, draft),
       )
-      await refreshWarpHistory()
-      await refreshAccounts()
+      setActiveAccount(saveAccount)
+      saveActiveAccount(saveAccount)
+      setHistoryPage(1)
+      setHistorySelecting(false)
+      setSelectedHistoryPullIds(new Set())
+      const [historyResult] = await Promise.all([
+        fetchHistoryForAccount(saveAccount.id, 1),
+        refreshAccounts(),
+      ])
+      const [pulls, summaries] = historyResult
+      setPersistedPulls(pulls.pulls)
+      setHistoryTotalPulls(pulls.total)
+      setBannerSummaries(summaries)
       const autoBackupDetail =
         result.recordsInserted > 0
           ? scheduleAutoBackup('Manual import')
@@ -1343,6 +1421,16 @@ export function App() {
     } finally {
       setManualImportSaving(false)
     }
+  }
+
+  const handleConfirmManualImport = async () => {
+    if (!manualImportConfirmation) {
+      return
+    }
+
+    const { accountId } = manualImportConfirmation
+    setManualImportConfirmation(undefined)
+    await handleSaveManualImport(accountId)
   }
 
   const handleExportBackup = useCallback(async () => {
@@ -2245,16 +2333,33 @@ export function App() {
       </main>
 
       <ManualImportDialog
+        accounts={manualImportAccountOptions}
+        fallbackBannerType={manualFallbackBannerType}
         isOpen={manualImportOpen}
         isSaving={manualImportSaving}
         note={manualNoteDraft}
-        onSave={handleSaveManualImport}
+        onSave={handleRequestManualImportSave}
         onClose={() => setManualImportOpen(false)}
         onNoteChange={handleManualNoteChange}
         onSaveNoticeClose={() => setManualImportSaveNotice(undefined)}
-        fallbackBannerType={manualFallbackBannerType}
+        onTargetAccountChange={setManualImportTargetAccountId}
         preview={manualImportPreview}
         saveNotice={manualImportSaveNotice}
+        targetAccountId={manualImportTargetAccountId}
+      />
+      <ConfirmDialog
+        confirmLabel="Import"
+        confirmIcon={FileInput}
+        danger={false}
+        description={formatManualImportConfirmationDescription(
+          manualImportConfirmation,
+        )}
+        isOpen={manualImportConfirmation !== undefined}
+        isPending={manualImportSaving}
+        onCancel={() => setManualImportConfirmation(undefined)}
+        onConfirm={handleConfirmManualImport}
+        pendingLabel="Importing"
+        title="Import manual note?"
       />
       <ConfirmDialog
         confirmLabel={
@@ -2425,6 +2530,27 @@ function formatHistoryDeleteDescription(
   }
 
   return `All ${confirmation.totalPulls} history records for UID ${confirmation.uid} will be moved to Trash. Other UIDs will not be affected, and these items can be restored for 6 months.`
+}
+
+function formatManualImportConfirmationDescription(
+  confirmation: ManualImportConfirmation | undefined,
+) {
+  if (!confirmation) {
+    return ''
+  }
+
+  return `${confirmation.totalPulls} detected pulls will be imported into UID ${confirmation.uid}. Existing matching pulls will be skipped as duplicates.`
+}
+
+function toManualImportAccountInput(
+  account: ManualImportTargetAccount,
+): ManualImportAccountInput {
+  return {
+    id: account.id,
+    uid: account.uid,
+    region: account.region ?? 'asia',
+    nickname: account.nickname ?? 'Trailblazer',
+  }
 }
 
 function formatBackupConfirmationDescription(
