@@ -1,9 +1,27 @@
 import { open } from '@tauri-apps/plugin-dialog'
+import { invokeTauri } from './tauri-invoke'
 
 export const DEFAULT_GAME_INSTALL_PATH =
   'C:\\Program Files\\HoYoPlay\\games\\Star Rail Games'
 
 const STORAGE_KEY = 'warp-tracker.game-install-path'
+
+export type GameInstallPathCandidate = {
+  path: string
+  source: string
+}
+
+export type FindGameInstallPathsResult = {
+  candidates: GameInstallPathCandidate[]
+  selectedPath?: string
+  detail: string
+}
+
+export type ValidateGameInstallPathResult = {
+  isValid: boolean
+  path: string
+  detail: string
+}
 
 export function loadGameInstallPath() {
   try {
@@ -30,4 +48,19 @@ export async function selectGameInstallPath(currentPath: string) {
   })
 
   return typeof selectedPath === 'string' ? selectedPath : undefined
+}
+
+export function findGameInstallPaths(currentPath: string) {
+  return invokeTauri<FindGameInstallPathsResult>('find_game_install_paths', {
+    input: { currentPath },
+  })
+}
+
+export function validateGameInstallPath(gamePath: string) {
+  return invokeTauri<ValidateGameInstallPathResult>(
+    'validate_game_install_path',
+    {
+      input: { gamePath },
+    },
+  )
 }

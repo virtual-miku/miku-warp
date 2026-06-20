@@ -221,6 +221,22 @@ fn scan_game_history_source(
 }
 
 #[tauri::command]
+async fn find_game_install_paths(
+    input: game_history::FindGameInstallPathsInput,
+) -> Result<game_history::FindGameInstallPathsResult, String> {
+    tauri::async_runtime::spawn_blocking(move || game_history::find_game_install_paths(input))
+        .await
+        .map_err(|error| format!("Game folder scan task failed: {error}"))
+}
+
+#[tauri::command]
+fn validate_game_install_path(
+    input: game_history::ValidateGameInstallPathInput,
+) -> game_history::ValidateGameInstallPathResult {
+    game_history::validate_game_install_path(input)
+}
+
+#[tauri::command]
 async fn import_game_history(
     app: tauri::AppHandle,
     input: game_history::ImportGameHistoryInput,
@@ -513,8 +529,10 @@ pub fn run() {
             run_auto_backup,
             save_manual_import_draft,
             scan_game_history_source,
+            find_game_install_paths,
             sync_warp_item_catalog,
             update_cloud_backup_policy,
+            validate_game_install_path,
             upload_latest_google_drive_backup
         ])
         .run(tauri::generate_context!())

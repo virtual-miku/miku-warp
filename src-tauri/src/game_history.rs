@@ -13,6 +13,8 @@ const CACHE_FILE_NAME: &str = "data_2";
 const MAX_CACHE_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_SCAN_DEPTH: usize = 8;
 const MAX_CACHE_FILES: usize = 24;
+const MAX_GAME_INSTALL_SCAN_DEPTH: usize = 5;
+const MAX_GAME_INSTALL_CANDIDATES: usize = 12;
 const ACTIVE_CACHE_FILES_TO_CHECK: usize = 1;
 const DEFAULT_MAX_PAGES_PER_BANNER: usize = 50;
 const MAX_PAGES_PER_BANNER: usize = 200;
@@ -39,6 +41,41 @@ pub struct ImportGameHistoryInput {
 #[serde(rename_all = "camelCase")]
 pub struct ScanGameHistorySourceInput {
     pub game_path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FindGameInstallPathsInput {
+    pub current_path: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GameInstallPathCandidate {
+    pub path: String,
+    pub source: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FindGameInstallPathsResult {
+    pub candidates: Vec<GameInstallPathCandidate>,
+    pub selected_path: Option<String>,
+    pub detail: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ValidateGameInstallPathInput {
+    pub game_path: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ValidateGameInstallPathResult {
+    pub is_valid: bool,
+    pub path: String,
+    pub detail: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -148,6 +185,75 @@ struct GachaLogRecord {
 
 pub fn scan_game_history_source(game_path: Option<&str>) -> GameHistorySourceScanResult {
     scan_game_history_source_from_roots(candidate_game_roots(game_path))
+}
+
+pub fn find_game_install_paths(input: FindGameInstallPathsInput) -> FindGameInstallPathsResult {
+    let current_path = input.current_path.as_deref();
+    let mut candidates = Vec::new();
+    let mut seen = HashSet::new();
+
+    for root in candidate_game_install_search_roots(current_path) {
+        find_game_install_paths_in(
+            &root,
+            0,
+            &mut candidates,
+            &mut seen,
+            game_install_search_source(&root),
+        );
+
+        if candidates.len() >= MAX_GAME_INSTALL_CANDIDATES {
+            break;
+        }
+    }
+
+    let selected_path = if candidates.len() == 1 {
+        candidates.first().map(|candidate| candidate.path.clone())
+    } else {
+        None
+    };
+
+    let detail = match candidates.len() {
+        0 => "No Honkai: Star Rail game folder was found automatically. Choose it manually."
+            .to_string(),
+        1 => "One game folder was found.".to_string(),
+        count => format!("{count} game folders were found. Choose the one you use."),
+    };
+
+    FindGameInstallPathsResult {
+        candidates,
+        selected_path,
+        detail,
+    }
+}
+
+pub fn validate_game_install_path(
+    input: ValidateGameInstallPathInput,
+) -> ValidateGameInstallPathResult {
+    let trimmed_path = input.game_path.trim();
+
+    if trimmed_path.is_empty() {
+        return ValidateGameInstallPathResult {
+            is_valid: false,
+            path: String::new(),
+            detail: "Choose the folder containing StarRail_Data.".to_string(),
+        };
+    }
+
+    if let Some(path) = normalize_game_install_path(trimmed_path) {
+        return ValidateGameInstallPathResult {
+            is_valid: true,
+            path: path_to_label(&path),
+            detail: "Game folder is ready.".to_string(),
+        };
+    }
+
+    ValidateGameInstallPathResult {
+        is_valid: false,
+        path: trimmed_path.to_string(),
+        detail:
+            "That folder does not contain StarRail_Data. Choose the Honkai: Star Rail game folder."
+                .to_string(),
+    }
 }
 
 pub fn fetch_game_history_from_cache(
@@ -497,6 +603,142 @@ fn candidate_game_roots(game_path: Option<&str>) -> Vec<PathBuf> {
     roots
 }
 
+fn candidate_game_install_search_roots(current_path: Option<&str>) -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+
+    if let Some(path) = current_path
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        let current_path = PathBuf::from(path);
+        push_unique_path(&mut roots, current_path.clone());
+        if let Some(parent) = current_path.parent() {
+            push_unique_path(&mut roots, parent.to_path_buf());
+        }
+    }
+
+    for key in ["WARP_TRACKER_HSR_GAME_PATH", "GAME_PATH"] {
+        if let Ok(value) = env::var(key) {
+            push_unique_path(&mut roots, PathBuf::from(value));
+        }
+    }
+
+    for key in ["ProgramFiles", "ProgramFiles(x86)"] {
+        if let Ok(value) = env::var(key) {
+            let root = PathBuf::from(value);
+            push_unique_path(
+                &mut roots,
+                root.join("HoYoPlay").join("games").join("Star Rail Games"),
+            );
+            push_unique_path(&mut roots, root.join("HoYoPlay").join("games"));
+            push_unique_path(&mut roots, root.join("Star Rail").join("Games"));
+            push_unique_path(&mut roots, root.join("Epic Games").join("HonkaiStarRail"));
+        }
+    }
+
+    for drive in 'C'..='Z' {
+        let drive_root = PathBuf::from(format!("{drive}:\\"));
+
+        if !drive_root.exists() {
+            continue;
+        }
+
+        push_unique_path(
+            &mut roots,
+            drive_root
+                .join("Program Files")
+                .join("HoYoPlay")
+                .join("games"),
+        );
+        push_unique_path(
+            &mut roots,
+            drive_root
+                .join("Program Files (x86)")
+                .join("HoYoPlay")
+                .join("games"),
+        );
+        push_unique_path(&mut roots, drive_root.join("HoYoPlay").join("games"));
+        push_unique_path(&mut roots, drive_root.join("Games"));
+        push_unique_path(&mut roots, drive_root.join("Game"));
+    }
+
+    roots
+}
+
+fn normalize_game_install_path(path: &str) -> Option<PathBuf> {
+    let path = PathBuf::from(path);
+
+    if has_star_rail_data_dir(&path) {
+        return Some(path);
+    }
+
+    if path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .is_some_and(|name| name.eq_ignore_ascii_case("StarRail_Data"))
+        && path.is_dir()
+    {
+        return path.parent().map(Path::to_path_buf);
+    }
+
+    None
+}
+
+fn has_star_rail_data_dir(path: &Path) -> bool {
+    path.join("StarRail_Data").is_dir()
+}
+
+fn game_install_search_source(path: &Path) -> String {
+    if path.exists() {
+        path_to_label(path)
+    } else {
+        "Known install location".to_string()
+    }
+}
+
+fn find_game_install_paths_in(
+    path: &Path,
+    depth: usize,
+    candidates: &mut Vec<GameInstallPathCandidate>,
+    seen: &mut HashSet<String>,
+    source: String,
+) {
+    if depth > MAX_GAME_INSTALL_SCAN_DEPTH || candidates.len() >= MAX_GAME_INSTALL_CANDIDATES {
+        return;
+    }
+
+    let Ok(metadata) = fs::metadata(path) else {
+        return;
+    };
+
+    if !metadata.is_dir() {
+        return;
+    }
+
+    if let Some(game_root) = normalize_game_install_path(&path_to_label(path)) {
+        let label = path_to_label(&game_root);
+        if seen.insert(label.clone()) {
+            candidates.push(GameInstallPathCandidate {
+                path: label,
+                source,
+            });
+        }
+        return;
+    }
+
+    let Ok(entries) = fs::read_dir(path) else {
+        return;
+    };
+
+    for entry in entries.flatten() {
+        find_game_install_paths_in(&entry.path(), depth + 1, candidates, seen, source.clone());
+
+        if candidates.len() >= MAX_GAME_INSTALL_CANDIDATES {
+            break;
+        }
+    }
+}
+
 fn push_unique_path(paths: &mut Vec<PathBuf>, candidate: PathBuf) {
     if candidate.as_os_str().is_empty() {
         return;
@@ -788,6 +1030,43 @@ mod tests {
         let roots = candidate_game_roots(Some(&path_to_label(&selected_path)));
 
         assert_eq!(roots, vec![selected_path]);
+    }
+
+    #[test]
+    fn validates_game_install_path_with_star_rail_data() {
+        let root = create_temp_root("valid-game-install-path");
+        fs::create_dir_all(root.join("StarRail_Data")).expect("star rail data");
+
+        let result = validate_game_install_path(ValidateGameInstallPathInput {
+            game_path: path_to_label(&root),
+        });
+
+        assert!(result.is_valid);
+        assert_eq!(result.path, path_to_label(&root));
+
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn finds_multiple_game_install_path_candidates() {
+        let root = create_temp_root("game-install-candidates");
+        let stable = root.join("Star Rail Games");
+        let beta = root.join("Star Rail Beta Games");
+        fs::create_dir_all(stable.join("StarRail_Data")).expect("stable data");
+        fs::create_dir_all(beta.join("StarRail_Data")).expect("beta data");
+
+        let mut candidates = Vec::new();
+        let mut seen = HashSet::new();
+        find_game_install_paths_in(&root, 0, &mut candidates, &mut seen, "test".to_string());
+        let paths = candidates
+            .iter()
+            .map(|candidate| candidate.path.as_str())
+            .collect::<HashSet<_>>();
+
+        assert!(paths.contains(path_to_label(&stable).as_str()));
+        assert!(paths.contains(path_to_label(&beta).as_str()));
+
+        let _ = fs::remove_dir_all(root);
     }
 
     fn write_cache_file(root: &Path, content: &str) -> PathBuf {

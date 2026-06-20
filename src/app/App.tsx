@@ -68,9 +68,12 @@ import {
   type GameHistorySourceScanResult,
 } from '../features/persistence/data/game-history-source'
 import {
+  findGameInstallPaths,
   loadGameInstallPath,
   saveGameInstallPath,
   selectGameInstallPath,
+  validateGameInstallPath,
+  type GameInstallPathCandidate,
 } from '../features/persistence/data/game-install-path'
 import { syncWarpItemCatalog } from '../features/persistence/data/warp-item-catalog-sync'
 import {
@@ -219,7 +222,12 @@ export function App() {
   const [gameHistoryImportError, setGameHistoryImportError] = useState<string>()
   const [gameHistoryPathError, setGameHistoryPathError] = useState<string>()
   const [gameHistoryScanning, setGameHistoryScanning] = useState(false)
+  const [gamePathScanning, setGamePathScanning] = useState(false)
   const [gamePathSelecting, setGamePathSelecting] = useState(false)
+  const [gameInstallPathReady, setGameInstallPathReady] = useState(false)
+  const [gamePathCandidates, setGamePathCandidates] = useState<
+    GameInstallPathCandidate[]
+  >([])
   const [gameInstallPath, setGameInstallPath] = useState(loadGameInstallPath)
   const [activeAccount, setActiveAccount] =
     useState<ManualImportAccountInput>(() => loadActiveAccount(defaultAccount))
@@ -771,6 +779,54 @@ export function App() {
     setManualImportSaveNotice(undefined)
   }
 
+  const handleOpenManualImport = useCallback(() => {
+    setManualImportSaveNotice(undefined)
+    setManualImportOpen(true)
+  }, [])
+
+  const applyGameInstallPath = useCallback((path: string) => {
+    setGameInstallPath(path)
+    saveGameInstallPath(path)
+    setGameInstallPathReady(true)
+    setGamePathCandidates([])
+    setGameHistoryScan(undefined)
+    setGameHistoryImportResult(undefined)
+    setGameHistoryImportError(undefined)
+    setGameHistoryPathError(undefined)
+  }, [])
+
+  useEffect(() => {
+    let isActive = true
+
+    validateGameInstallPath(gameInstallPath)
+      .then((result) => {
+        if (!isActive) {
+          return
+        }
+
+        if (result.isValid) {
+          if (result.path !== gameInstallPath) {
+            applyGameInstallPath(result.path)
+          } else {
+            setGameInstallPathReady(true)
+          }
+        } else {
+          setGameInstallPathReady(false)
+          setGameHistoryScan(undefined)
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setGameInstallPathReady(false)
+          setGameHistoryScan(undefined)
+        }
+      })
+
+    return () => {
+      isActive = false
+    }
+  }, [applyGameInstallPath, gameInstallPath])
+
   const handleConfirmCloseApp = useCallback(async () => {
     allowWindowCloseRef.current = true
     setCloseConfirmationOpen(false)
@@ -783,7 +839,7 @@ export function App() {
   }, [])
 
   const handleScanGameHistorySource = useCallback(async () => {
-    if (gameHistoryScanning) {
+    if (gameHistoryScanning || !gameInstallPathReady) {
       return
     }
 
@@ -803,10 +859,15 @@ export function App() {
     } finally {
       setGameHistoryScanning(false)
     }
-  }, [gameHistoryScanning, gameInstallPath])
+  }, [gameHistoryScanning, gameInstallPath, gameInstallPathReady])
 
   const handleSelectGamePath = useCallback(async () => {
-    if (gamePathSelecting || gameHistoryScanning || gameHistoryImporting) {
+    if (
+      gamePathSelecting ||
+      gamePathScanning ||
+      gameHistoryScanning ||
+      gameHistoryImporting
+    ) {
       return
     }
 
@@ -817,11 +878,13 @@ export function App() {
       const selectedPath = await selectGameInstallPath(gameInstallPath)
 
       if (selectedPath) {
-        setGameInstallPath(selectedPath)
-        saveGameInstallPath(selectedPath)
-        setGameHistoryScan(undefined)
-        setGameHistoryImportResult(undefined)
-        setGameHistoryImportError(undefined)
+        const result = await validateGameInstallPath(selectedPath)
+
+        if (result.isValid) {
+          applyGameInstallPath(result.path)
+        } else {
+          setGameHistoryPathError(result.detail)
+        }
       }
     } catch (error) {
       setGameHistoryPathError(getErrorMessage(error))
@@ -829,14 +892,60 @@ export function App() {
       setGamePathSelecting(false)
     }
   }, [
+    applyGameInstallPath,
     gameHistoryImporting,
     gameHistoryScanning,
     gameInstallPath,
+    gamePathScanning,
     gamePathSelecting,
   ])
 
+  const handleFindGamePath = useCallback(async () => {
+    if (
+      gamePathScanning ||
+      gamePathSelecting ||
+      gameHistoryScanning ||
+      gameHistoryImporting
+    ) {
+      return
+    }
+
+    setGamePathScanning(true)
+    setGameHistoryPathError(undefined)
+
+    try {
+      const result = await findGameInstallPaths(gameInstallPath)
+      setGamePathCandidates(result.candidates)
+
+      if (result.selectedPath) {
+        applyGameInstallPath(result.selectedPath)
+      } else if (result.candidates.length === 0) {
+        setGameHistoryPathError(result.detail)
+      }
+    } catch (error) {
+      setGameHistoryPathError(getErrorMessage(error))
+      setGamePathCandidates([])
+    } finally {
+      setGamePathScanning(false)
+    }
+  }, [
+    applyGameInstallPath,
+    gameHistoryImporting,
+    gameHistoryScanning,
+    gameInstallPath,
+    gamePathScanning,
+    gamePathSelecting,
+  ])
+
+  const handleUseGamePathCandidate = useCallback(
+    (candidate: GameInstallPathCandidate) => {
+      applyGameInstallPath(candidate.path)
+    },
+    [applyGameInstallPath],
+  )
+
   const handleImportGameHistory = useCallback(async () => {
-    if (gameHistoryImporting) {
+    if (gameHistoryImporting || !gameInstallPathReady) {
       return
     }
 
@@ -887,6 +996,7 @@ export function App() {
     activeBannerType,
     gameHistoryImporting,
     gameInstallPath,
+    gameInstallPathReady,
     historyPage,
     historyRarityFilter,
     historySearchQuery,
@@ -1212,6 +1322,7 @@ export function App() {
           .filter(Boolean)
           .join('\n'),
       })
+      setManualImportOpen(false)
     } catch (error) {
       setManualImportSaveNotice({
         tone: 'error',
@@ -2006,14 +2117,19 @@ export function App() {
                   gameHistoryPathError={gameHistoryPathError}
                   gameHistoryScan={gameHistoryScan}
                   gameInstallPath={gameInstallPath}
+                  gameInstallPathReady={gameInstallPathReady}
+                  gamePathCandidates={gamePathCandidates}
                   isGameHistoryImporting={gameHistoryImporting}
                   isGameHistoryScanning={gameHistoryScanning}
+                  isGamePathScanning={gamePathScanning}
                   isGamePathSelecting={gamePathSelecting}
                   manualImportPreview={manualImportPreview}
+                  onFindGamePath={handleFindGamePath}
                   onImportGameHistory={handleImportGameHistory}
                   onSelectGamePath={handleSelectGamePath}
                   onScanGameHistory={handleScanGameHistorySource}
-                  onOpenManualImport={() => setManualImportOpen(true)}
+                  onUseGamePathCandidate={handleUseGamePathCandidate}
+                  onOpenManualImport={handleOpenManualImport}
                 />
               </section>
             </>
@@ -2141,18 +2257,23 @@ export function App() {
         gameHistoryPathError={gameHistoryPathError}
         gameHistoryScan={gameHistoryScan}
         gameInstallPath={gameInstallPath}
+        gameInstallPathReady={gameInstallPathReady}
+        gamePathCandidates={gamePathCandidates}
         isGameHistoryImporting={gameHistoryImporting}
         isGameHistoryScanning={gameHistoryScanning}
+        isGamePathScanning={gamePathScanning}
         isGamePathSelecting={gamePathSelecting}
         isOpen={importDialogOpen}
         manualImportPreview={manualImportPreview}
         onClose={() => setImportDialogOpen(false)}
+        onFindGamePath={handleFindGamePath}
         onImportGameHistory={handleImportGameHistory}
         onSelectGamePath={handleSelectGamePath}
         onScanGameHistory={handleScanGameHistorySource}
+        onUseGamePathCandidate={handleUseGamePathCandidate}
         onOpenManualImport={() => {
           setImportDialogOpen(false)
-          setManualImportOpen(true)
+          handleOpenManualImport()
         }}
       />
       <ConfirmDialog

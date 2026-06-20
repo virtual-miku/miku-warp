@@ -1018,6 +1018,14 @@
   gap: 10px;
 }
 
+.game-path-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .game-path-heading strong {
   color: var(--text-strong);
   font-size: 14px;
@@ -1032,6 +1040,53 @@
 }
 
 .game-path-field small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.game-path-field small strong {
+  color: var(--text-strong);
+  font-weight: 800;
+}
+
+.game-path-candidate-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.game-path-candidate {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--button-border);
+  border-radius: 8px;
+  background: var(--button-bg);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.game-path-candidate:hover {
+  border-color: var(--accent);
+}
+
+.game-path-candidate strong,
+.game-path-candidate span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.game-path-candidate strong {
+  color: var(--text-strong);
+  font-size: 12px;
+}
+
+.game-path-candidate span {
   color: var(--text-muted);
   font-size: 11px;
 }

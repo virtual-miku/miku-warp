@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react'
-import { FileInput, FolderSearch, History, X } from 'lucide-react'
+import { FileInput, FolderSearch, History, Search, X } from 'lucide-react'
 import { AppButton } from '../../../shared/ui/AppButton'
 import type {
   GameHistorySourceScanResult,
   ImportGameHistoryResult,
 } from '../../persistence/data/game-history-source'
+import type { GameInstallPathCandidate } from '../../persistence/data/game-install-path'
 import type { ManualImportPreview } from '../domain/manual-note-parser'
 
 export type ImportPanelProps = {
@@ -13,13 +14,18 @@ export type ImportPanelProps = {
   gameHistoryPathError?: string
   gameHistoryScan?: GameHistorySourceScanResult
   gameInstallPath: string
+  gameInstallPathReady: boolean
+  gamePathCandidates: GameInstallPathCandidate[]
   isGameHistoryImporting: boolean
+  isGamePathScanning: boolean
   isGamePathSelecting: boolean
   isGameHistoryScanning: boolean
   manualImportPreview: ManualImportPreview
+  onFindGamePath: () => void
   onImportGameHistory: () => void
   onSelectGamePath: () => void
   onScanGameHistory: () => void
+  onUseGamePathCandidate: (candidate: GameInstallPathCandidate) => void
   onOpenManualImport: () => void
 }
 
@@ -111,90 +117,138 @@ function ImportControls({
   gameHistoryPathError,
   gameHistoryScan,
   gameInstallPath,
+  gameInstallPathReady,
+  gamePathCandidates,
   isGameHistoryImporting,
+  isGamePathScanning,
   isGamePathSelecting,
   isGameHistoryScanning,
   manualImportPreview,
+  onFindGamePath,
   onImportGameHistory,
   onSelectGamePath,
   onScanGameHistory,
+  onUseGamePathCandidate,
   onOpenManualImport,
 }: ImportPanelProps) {
   const gameHistoryTitle =
     gameHistoryScan?.matchedCachePath ?? gameHistoryScan?.urlPreview
+  const gameHistorySourceFound = gameHistoryScan?.status === 'found'
   const hasGameHistoryMessage = Boolean(
     gameHistoryPathError || gameHistoryImportError || gameHistoryImportResult,
   )
 
   return (
-    <div className="tool-panel-body">
+      <div className="tool-panel-body">
         <div className="game-path-field">
           <div className="game-path-heading">
             <strong>Game folder</strong>
-            <AppButton
-              disabled={
-                isGamePathSelecting ||
-                isGameHistoryScanning ||
-                isGameHistoryImporting
-              }
-              icon={FolderSearch}
-              onClick={onSelectGamePath}
-              variant="ghost"
-            >
-              {isGamePathSelecting ? 'Opening' : 'Browse'}
-            </AppButton>
+            <div className="game-path-actions">
+              <AppButton
+                disabled={
+                  isGamePathScanning ||
+                  isGamePathSelecting ||
+                  isGameHistoryScanning ||
+                  isGameHistoryImporting
+                }
+                icon={Search}
+                onClick={onFindGamePath}
+                variant="ghost"
+              >
+                {isGamePathScanning ? 'Scanning' : 'Scan'}
+              </AppButton>
+              <AppButton
+                disabled={
+                  isGamePathSelecting ||
+                  isGamePathScanning ||
+                  isGameHistoryScanning ||
+                  isGameHistoryImporting
+                }
+                icon={FolderSearch}
+                onClick={onSelectGamePath}
+                variant="ghost"
+              >
+                {isGamePathSelecting ? 'Opening' : 'Browse'}
+              </AppButton>
+            </div>
           </div>
           <span className="game-path-value" title={gameInstallPath}>
             {gameInstallPath}
           </span>
-          <small>Choose the folder containing StarRail_Data.</small>
+          <small>
+            Choose the folder containing <strong>StarRail_Data</strong>.
+          </small>
+          {gamePathCandidates.length > 1 ? (
+            <div
+              className="game-path-candidate-list"
+              aria-label="Detected game folders"
+            >
+              {gamePathCandidates.map((candidate) => (
+                <button
+                  className="game-path-candidate"
+                  key={candidate.path}
+                  onClick={() => onUseGamePathCandidate(candidate)}
+                  type="button"
+                >
+                  <strong>{candidate.path}</strong>
+                  <span>{candidate.source}</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
-        <div className="tool-row">
-          <div>
-            <strong>Game history</strong>
-            <span title={gameHistoryTitle}>
-              {formatGameHistoryScanDetail(
-                gameHistoryScan,
-                isGameHistoryScanning,
-              )}
-            </span>
+        {gameInstallPathReady ? (
+          <div className="tool-row">
+            <div>
+              <strong>Game history</strong>
+              <span title={gameHistoryTitle}>
+                {formatGameHistoryScanDetail(
+                  gameHistoryScan,
+                  isGameHistoryScanning,
+                )}
+              </span>
+            </div>
+            <AppButton
+              disabled={isGameHistoryScanning}
+              icon={History}
+              onClick={onScanGameHistory}
+              variant="ghost"
+            >
+              {isGameHistoryScanning ? 'Scanning' : 'Scan'}
+            </AppButton>
           </div>
-          <AppButton
-            disabled={isGameHistoryScanning}
-            icon={History}
-            onClick={onScanGameHistory}
-            variant="ghost"
-          >
-            {isGameHistoryScanning ? 'Scanning' : 'Scan'}
-          </AppButton>
-        </div>
-        <div className="tool-row">
-          <div>
-            <strong>Game source</strong>
-            <span>{formatGameHistorySourceMeta(gameHistoryScan)}</span>
-          </div>
-          <span className="status-pill">
-            {getGameHistoryScanStatusLabel(gameHistoryScan)}
-          </span>
-        </div>
-        <div className="tool-row">
-          <div>
-            <strong>Game import</strong>
-            <span>
-              {formatGameHistoryImportMeta(
-                gameHistoryImportResult,
-                isGameHistoryImporting,
-              )}
-            </span>
-          </div>
-          <AppButton
-            disabled={isGameHistoryImporting || isGameHistoryScanning}
-            icon={History}
-            onClick={onImportGameHistory}
-          >
-            {isGameHistoryImporting ? 'Importing' : 'Import'}
-          </AppButton>
-        </div>
+        ) : null}
+        {gameHistorySourceFound ? (
+          <>
+            <div className="tool-row">
+              <div>
+                <strong>Game source</strong>
+                <span>{formatGameHistorySourceMeta(gameHistoryScan)}</span>
+              </div>
+              <span className="status-pill">
+                {getGameHistoryScanStatusLabel(gameHistoryScan)}
+              </span>
+            </div>
+            <div className="tool-row">
+              <div>
+                <strong>Game import</strong>
+                <span>
+                  {formatGameHistoryImportMeta(
+                    gameHistoryImportResult,
+                    isGameHistoryImporting,
+                  )}
+                </span>
+              </div>
+              <AppButton
+                disabled={isGameHistoryImporting || isGameHistoryScanning}
+                icon={History}
+                onClick={onImportGameHistory}
+              >
+                {isGameHistoryImporting ? 'Importing' : 'Import'}
+              </AppButton>
+            </div>
+          </>
+        ) : null}
         {hasGameHistoryMessage ? (
           <div
             className={[

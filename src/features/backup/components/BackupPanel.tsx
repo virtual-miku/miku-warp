@@ -222,7 +222,7 @@ export function BackupPanel({
                     <div>
                       <strong>
                         {snapshot.remoteModifiedTime
-                          ? formatSnapshotTime(snapshot.remoteModifiedTime)
+                          ? `Backup ${formatSnapshotTime(snapshot.remoteModifiedTime)}`
                           : 'Time unavailable'}
                       </strong>
                       <span title={snapshot.fileName}>
@@ -284,7 +284,9 @@ export function BackupPanel({
               {visibleSnapshots.map((snapshot) => (
                 <div className="backup-snapshot-row" key={snapshot.fileName}>
                   <div>
-                    <strong>{formatSnapshotTime(snapshot.exportedAt)}</strong>
+                    <strong>
+                      Backup {formatSnapshotTime(snapshot.exportedAt)}
+                    </strong>
                     <span title={snapshot.fileName}>
                       {formatBackupSizeKilobytes(snapshot.sizeBytes)}
                     </span>
