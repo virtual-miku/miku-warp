@@ -386,6 +386,14 @@ fn list_accounts(app: tauri::AppHandle) -> Result<Vec<database::AccountRow>, Str
 }
 
 #[tauri::command]
+fn update_account_avatar(
+    app: tauri::AppHandle,
+    input: database::UpdateAccountAvatarInput,
+) -> Result<database::UpdateAccountAvatarResult, String> {
+    database::update_account_avatar(&app, input)
+}
+
+#[tauri::command]
 fn list_warp_banner_summaries(
     app: tauri::AppHandle,
     query: database::ListWarpBannerSummariesInput,
@@ -558,6 +566,7 @@ pub fn run() {
             find_game_install_paths,
             sync_warp_item_catalog,
             update_cloud_backup_policy,
+            update_account_avatar,
             validate_game_install_path,
             upload_latest_google_drive_backup
         ])

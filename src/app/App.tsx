@@ -10,6 +10,9 @@ import {
   X,
 } from 'lucide-react'
 import { AccountManagementPanel } from '../features/accounts/components/AccountManagementPanel'
+import { AccountAvatar } from '../features/accounts/components/AccountAvatar'
+import { AccountAvatarDialog } from '../features/accounts/components/AccountAvatarDialog'
+import { accountAvatarOptions } from '../features/accounts/data/account-avatar-options'
 import {
   BackupPanel,
   type CloudBackupSnapshotInfo,
@@ -89,6 +92,7 @@ import {
   listAccounts,
   listWarpBannerSummaries,
   listWarpPulls,
+  updateAccountAvatar,
   type WarpAccount,
   type WarpBannerSummary,
 } from '../features/persistence/data/warp-pull-history'
@@ -275,6 +279,9 @@ export function App() {
   const [manualImportConfirmation, setManualImportConfirmation] =
     useState<ManualImportConfirmation>()
   const [accounts, setAccounts] = useState<WarpAccount[]>([])
+  const [avatarDialogAccountId, setAvatarDialogAccountId] = useState<string>()
+  const [avatarSaving, setAvatarSaving] = useState(false)
+  const [avatarSaveError, setAvatarSaveError] = useState<string>()
   const [cloudBackupStatus, setCloudBackupStatus] =
     useState<CloudBackupStatus>(() => createInitialGoogleDriveBackupStatus())
   const [cloudBackupPolicy, setCloudBackupPolicy] =
@@ -350,6 +357,10 @@ export function App() {
   const activeAccountSummary = useMemo(
     () => accounts.find((account) => account.id === activeAccount.id),
     [accounts, activeAccount.id],
+  )
+  const avatarDialogAccount = useMemo(
+    () => accounts.find((account) => account.id === avatarDialogAccountId),
+    [accounts, avatarDialogAccountId],
   )
   const activeAccountPullCount = activeAccountSummary?.totalPulls ?? historyTotalPulls
   const manualImportAccountOptions = useMemo<ManualImportTargetAccount[]>(() => {
@@ -1186,6 +1197,43 @@ export function App() {
     handleAccountChange(accountId)
     setActiveView('dashboard')
   }
+
+  const handleOpenAvatarPicker = useCallback((accountId: string) => {
+    setAvatarSaveError(undefined)
+    setAvatarDialogAccountId(accountId)
+  }, [])
+
+  const handleCloseAvatarPicker = useCallback(() => {
+    if (avatarSaving) {
+      return
+    }
+
+    setAvatarDialogAccountId(undefined)
+    setAvatarSaveError(undefined)
+  }, [avatarSaving])
+
+  const handleSelectAccountAvatar = useCallback(
+    async (avatarPath: string | undefined) => {
+      if (!avatarDialogAccount || avatarSaving) {
+        return
+      }
+
+      setAvatarSaving(true)
+      setAvatarSaveError(undefined)
+
+      try {
+        await updateAccountAvatar(avatarDialogAccount.id, avatarPath)
+        await refreshAccounts()
+        scheduleAutoBackup('Account avatar')
+        setAvatarDialogAccountId(undefined)
+      } catch (error) {
+        setAvatarSaveError(getErrorMessage(error))
+      } finally {
+        setAvatarSaving(false)
+      }
+    },
+    [avatarDialogAccount, avatarSaving, refreshAccounts, scheduleAutoBackup],
+  )
 
   const handleHistorySelectionModeChange = (isSelecting: boolean) => {
     setHistorySelecting(isSelecting)
@@ -2554,9 +2602,19 @@ export function App() {
           </nav>
 
           <section className="account-panel" aria-label="Selected account">
-            <span className="eyebrow">Active UID</span>
-            <strong>{activeAccount.uid}</strong>
-            <span>{formatAccountMeta(activeAccountSummary)}</span>
+            <div className="account-panel-main">
+              <div className="account-panel-avatar" aria-hidden="true">
+                <AccountAvatar
+                  avatarPath={activeAccountSummary?.avatarPath}
+                  fallbackSize={18}
+                />
+              </div>
+              <div className="account-panel-copy">
+                <span className="eyebrow">Active UID</span>
+                <strong>{activeAccount.uid}</strong>
+                <span>{formatAccountMeta(activeAccountSummary)}</span>
+              </div>
+            </div>
             {accounts.length > 0 ? (
               <select
                 aria-label="Switch active UID"
@@ -2668,6 +2726,7 @@ export function App() {
                 accounts={accounts}
                 activeAccountId={activeAccount.id}
                 onOpenAccount={handleOpenAccount}
+                onOpenAvatarPicker={handleOpenAvatarPicker}
               />
             </>
           ) : null}
@@ -2803,6 +2862,15 @@ export function App() {
         </section>
       </main>
 
+      <AccountAvatarDialog
+        account={avatarDialogAccount}
+        avatars={accountAvatarOptions}
+        error={avatarSaveError}
+        isOpen={avatarDialogAccountId !== undefined}
+        isSaving={avatarSaving}
+        onClose={handleCloseAvatarPicker}
+        onSelectAvatar={handleSelectAccountAvatar}
+      />
       <ManualImportDialog
         accounts={manualImportAccountOptions}
         fallbackBannerType={manualFallbackBannerType}

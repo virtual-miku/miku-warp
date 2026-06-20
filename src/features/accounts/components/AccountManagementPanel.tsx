@@ -1,17 +1,20 @@
-import { CheckCircle2, UserRound } from 'lucide-react'
+import { CheckCircle2 } from 'lucide-react'
 import { AppButton } from '../../../shared/ui/AppButton'
 import type { WarpAccount } from '../../persistence/data/warp-pull-history'
+import { AccountAvatar } from './AccountAvatar'
 
 type AccountManagementPanelProps = {
   accounts: WarpAccount[]
   activeAccountId: string
   onOpenAccount: (accountId: string) => void
+  onOpenAvatarPicker: (accountId: string) => void
 }
 
 export function AccountManagementPanel({
   accounts,
   activeAccountId,
   onOpenAccount,
+  onOpenAvatarPicker,
 }: AccountManagementPanelProps) {
   return (
     <section className="account-management-panel" aria-label="Accounts">
@@ -29,8 +32,15 @@ export function AccountManagementPanel({
                 }
                 key={account.id}
               >
-                <div className="account-management-icon" aria-hidden="true">
-                  <UserRound size={20} />
+                <div className="account-management-icon">
+                  <button
+                    aria-label={`Choose avatar for UID ${account.uid}`}
+                    className="account-management-icon-button"
+                    onClick={() => onOpenAvatarPicker(account.id)}
+                    type="button"
+                  >
+                    <AccountAvatar avatarPath={account.avatarPath} />
+                  </button>
                 </div>
                 <div className="account-management-copy">
                   <strong>UID {account.uid}</strong>

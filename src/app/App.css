@@ -109,6 +109,41 @@
   border-radius: 8px;
 }
 
+.account-panel-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.account-panel-avatar {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--panel-bg);
+  color: var(--accent);
+}
+
+.account-panel-avatar img,
+.account-management-icon img,
+.account-avatar-option img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.account-panel-copy {
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
 .account-select {
   width: 100%;
   min-height: 36px;
@@ -158,10 +193,29 @@
   height: 40px;
   display: grid;
   place-items: center;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 50%;
   background: var(--surface);
   color: var(--accent);
+}
+
+.account-management-icon-button {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.account-management-icon:hover {
+  border-color: var(--accent);
 }
 
 .account-management-copy {
@@ -1429,6 +1483,8 @@
 }
 
 .app-button:focus-visible,
+.account-avatar-option:focus-visible,
+.account-management-icon-button:focus-visible,
 .banner-tab:focus-visible,
 .manual-category-tab:focus-visible,
 .rarity-chip-button:focus-visible,
@@ -1517,6 +1573,53 @@
   overflow: auto;
 }
 
+.account-avatar-dialog {
+  width: min(720px, 100%);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.account-avatar-dialog-content {
+  min-height: 0;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  overflow: auto;
+}
+
+.account-avatar-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.account-avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+  gap: 10px;
+}
+
+.account-avatar-option {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: 0;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  background: var(--panel-bg);
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.account-avatar-option:hover {
+  border-color: var(--accent);
+}
+
+.account-avatar-option-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+}
 .modal-header {
   min-height: 68px;
   display: flex;

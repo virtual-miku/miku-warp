@@ -1,4 +1,4 @@
-import { access, cp, mkdir, readFile, rm } from 'node:fs/promises'
+import { access, cp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -13,6 +13,11 @@ const catalogPath = path.resolve(
   'src/features/warp-history/data/generated/star-rail-item-catalog.json',
 )
 const publicPath = path.resolve(frontendRoot, 'public')
+const avatarDirectory = 'icon/avatar'
+const avatarCatalogPath = path.resolve(
+  frontendRoot,
+  'src/features/accounts/data/generated/account-avatar-options.json',
+)
 
 const catalog = JSON.parse(await readFile(catalogPath, 'utf8'))
 const iconPaths = Array.from(
@@ -23,7 +28,10 @@ const iconPaths = Array.from(
   ),
 ).sort()
 const sparseDirectories = Array.from(
-  new Set(iconPaths.map((iconPath) => path.posix.dirname(iconPath))),
+  new Set([
+    ...iconPaths.map((iconPath) => path.posix.dirname(iconPath)),
+    avatarDirectory,
+  ]),
 ).sort()
 
 await mkdir(path.dirname(cachePath), { recursive: true })
@@ -61,10 +69,64 @@ for (const iconPath of iconPaths) {
   copied += 1
 }
 
+const avatarFiles = await readDirectoryFiles(path.join(cachePath, avatarDirectory))
+const avatars = []
+
+for (const fileName of avatarFiles.filter((fileName) => fileName.endsWith('.png')).sort(compareFileNames)) {
+  const avatarPath = path.posix.join(avatarDirectory, fileName)
+  const sourcePath = path.join(cachePath, avatarPath)
+  const targetPath = path.join(publicPath, avatarPath)
+  const id = path.basename(fileName, '.png')
+
+  await mkdir(path.dirname(targetPath), { recursive: true })
+  await cp(sourcePath, targetPath)
+  avatars.push({
+    id,
+    label: `Avatar ${id}`,
+    path: avatarPath,
+  })
+}
+
+await mkdir(path.dirname(avatarCatalogPath), { recursive: true })
+await writeFile(
+  avatarCatalogPath,
+  `${JSON.stringify(
+    {
+      schemaVersion: 1,
+      source: {
+        name: 'Mar-7th/StarRailRes',
+        repository: STAR_RAIL_RES_REPOSITORY.replace(/\.git$/, ''),
+        branch: 'master',
+        path: avatarDirectory,
+      },
+      generatedAt: new Date().toISOString(),
+      avatars,
+    },
+    null,
+    2,
+  )}\n`,
+)
+
 console.log(`Synced ${copied} StarRailRes icons into ${path.join(publicPath, 'icon')}.`)
+console.log(`Synced ${avatars.length} StarRailRes avatars into ${path.join(publicPath, avatarDirectory)}.`)
 
 if (missing > 0) {
   console.warn(`Skipped ${missing} missing icon files from StarRailRes.`)
+}
+
+async function readDirectoryFiles(targetPath) {
+  try {
+    return await readdir(targetPath)
+  } catch {
+    return []
+  }
+}
+
+function compareFileNames(left, right) {
+  return left.localeCompare(right, undefined, {
+    numeric: true,
+    sensitivity: 'base',
+  })
 }
 
 async function pathExists(targetPath) {

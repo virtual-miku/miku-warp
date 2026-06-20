@@ -1,0 +1,1447 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "name": "Mar-7th/StarRailRes",
+    "repository": "https://github.com/Mar-7th/StarRailRes",
+    "branch": "master",
+    "path": "icon/avatar"
+  },
+  "generatedAt": "2026-06-20T23:09:34.596Z",
+  "avatars": [
+    {
+      "id": "1001",
+      "label": "Avatar 1001",
+      "path": "icon/avatar/1001.png"
+    },
+    {
+      "id": "1002",
+      "label": "Avatar 1002",
+      "path": "icon/avatar/1002.png"
+    },
+    {
+      "id": "1003",
+      "label": "Avatar 1003",
+      "path": "icon/avatar/1003.png"
+    },
+    {
+      "id": "1004",
+      "label": "Avatar 1004",
+      "path": "icon/avatar/1004.png"
+    },
+    {
+      "id": "1005",
+      "label": "Avatar 1005",
+      "path": "icon/avatar/1005.png"
+    },
+    {
+      "id": "1006",
+      "label": "Avatar 1006",
+      "path": "icon/avatar/1006.png"
+    },
+    {
+      "id": "1008",
+      "label": "Avatar 1008",
+      "path": "icon/avatar/1008.png"
+    },
+    {
+      "id": "1009",
+      "label": "Avatar 1009",
+      "path": "icon/avatar/1009.png"
+    },
+    {
+      "id": "1013",
+      "label": "Avatar 1013",
+      "path": "icon/avatar/1013.png"
+    },
+    {
+      "id": "1014",
+      "label": "Avatar 1014",
+      "path": "icon/avatar/1014.png"
+    },
+    {
+      "id": "1015",
+      "label": "Avatar 1015",
+      "path": "icon/avatar/1015.png"
+    },
+    {
+      "id": "1101",
+      "label": "Avatar 1101",
+      "path": "icon/avatar/1101.png"
+    },
+    {
+      "id": "1102",
+      "label": "Avatar 1102",
+      "path": "icon/avatar/1102.png"
+    },
+    {
+      "id": "1103",
+      "label": "Avatar 1103",
+      "path": "icon/avatar/1103.png"
+    },
+    {
+      "id": "1104",
+      "label": "Avatar 1104",
+      "path": "icon/avatar/1104.png"
+    },
+    {
+      "id": "1105",
+      "label": "Avatar 1105",
+      "path": "icon/avatar/1105.png"
+    },
+    {
+      "id": "1106",
+      "label": "Avatar 1106",
+      "path": "icon/avatar/1106.png"
+    },
+    {
+      "id": "1107",
+      "label": "Avatar 1107",
+      "path": "icon/avatar/1107.png"
+    },
+    {
+      "id": "1108",
+      "label": "Avatar 1108",
+      "path": "icon/avatar/1108.png"
+    },
+    {
+      "id": "1109",
+      "label": "Avatar 1109",
+      "path": "icon/avatar/1109.png"
+    },
+    {
+      "id": "1110",
+      "label": "Avatar 1110",
+      "path": "icon/avatar/1110.png"
+    },
+    {
+      "id": "1111",
+      "label": "Avatar 1111",
+      "path": "icon/avatar/1111.png"
+    },
+    {
+      "id": "1112",
+      "label": "Avatar 1112",
+      "path": "icon/avatar/1112.png"
+    },
+    {
+      "id": "1201",
+      "label": "Avatar 1201",
+      "path": "icon/avatar/1201.png"
+    },
+    {
+      "id": "1202",
+      "label": "Avatar 1202",
+      "path": "icon/avatar/1202.png"
+    },
+    {
+      "id": "1203",
+      "label": "Avatar 1203",
+      "path": "icon/avatar/1203.png"
+    },
+    {
+      "id": "1204",
+      "label": "Avatar 1204",
+      "path": "icon/avatar/1204.png"
+    },
+    {
+      "id": "1205",
+      "label": "Avatar 1205",
+      "path": "icon/avatar/1205.png"
+    },
+    {
+      "id": "1206",
+      "label": "Avatar 1206",
+      "path": "icon/avatar/1206.png"
+    },
+    {
+      "id": "1207",
+      "label": "Avatar 1207",
+      "path": "icon/avatar/1207.png"
+    },
+    {
+      "id": "1208",
+      "label": "Avatar 1208",
+      "path": "icon/avatar/1208.png"
+    },
+    {
+      "id": "1209",
+      "label": "Avatar 1209",
+      "path": "icon/avatar/1209.png"
+    },
+    {
+      "id": "1210",
+      "label": "Avatar 1210",
+      "path": "icon/avatar/1210.png"
+    },
+    {
+      "id": "1211",
+      "label": "Avatar 1211",
+      "path": "icon/avatar/1211.png"
+    },
+    {
+      "id": "1212",
+      "label": "Avatar 1212",
+      "path": "icon/avatar/1212.png"
+    },
+    {
+      "id": "1213",
+      "label": "Avatar 1213",
+      "path": "icon/avatar/1213.png"
+    },
+    {
+      "id": "1214",
+      "label": "Avatar 1214",
+      "path": "icon/avatar/1214.png"
+    },
+    {
+      "id": "1215",
+      "label": "Avatar 1215",
+      "path": "icon/avatar/1215.png"
+    },
+    {
+      "id": "1217",
+      "label": "Avatar 1217",
+      "path": "icon/avatar/1217.png"
+    },
+    {
+      "id": "1218",
+      "label": "Avatar 1218",
+      "path": "icon/avatar/1218.png"
+    },
+    {
+      "id": "1220",
+      "label": "Avatar 1220",
+      "path": "icon/avatar/1220.png"
+    },
+    {
+      "id": "1221",
+      "label": "Avatar 1221",
+      "path": "icon/avatar/1221.png"
+    },
+    {
+      "id": "1222",
+      "label": "Avatar 1222",
+      "path": "icon/avatar/1222.png"
+    },
+    {
+      "id": "1223",
+      "label": "Avatar 1223",
+      "path": "icon/avatar/1223.png"
+    },
+    {
+      "id": "1224",
+      "label": "Avatar 1224",
+      "path": "icon/avatar/1224.png"
+    },
+    {
+      "id": "1225",
+      "label": "Avatar 1225",
+      "path": "icon/avatar/1225.png"
+    },
+    {
+      "id": "1301",
+      "label": "Avatar 1301",
+      "path": "icon/avatar/1301.png"
+    },
+    {
+      "id": "1302",
+      "label": "Avatar 1302",
+      "path": "icon/avatar/1302.png"
+    },
+    {
+      "id": "1303",
+      "label": "Avatar 1303",
+      "path": "icon/avatar/1303.png"
+    },
+    {
+      "id": "1304",
+      "label": "Avatar 1304",
+      "path": "icon/avatar/1304.png"
+    },
+    {
+      "id": "1305",
+      "label": "Avatar 1305",
+      "path": "icon/avatar/1305.png"
+    },
+    {
+      "id": "1306",
+      "label": "Avatar 1306",
+      "path": "icon/avatar/1306.png"
+    },
+    {
+      "id": "1307",
+      "label": "Avatar 1307",
+      "path": "icon/avatar/1307.png"
+    },
+    {
+      "id": "1308",
+      "label": "Avatar 1308",
+      "path": "icon/avatar/1308.png"
+    },
+    {
+      "id": "1309",
+      "label": "Avatar 1309",
+      "path": "icon/avatar/1309.png"
+    },
+    {
+      "id": "1310",
+      "label": "Avatar 1310",
+      "path": "icon/avatar/1310.png"
+    },
+    {
+      "id": "1312",
+      "label": "Avatar 1312",
+      "path": "icon/avatar/1312.png"
+    },
+    {
+      "id": "1313",
+      "label": "Avatar 1313",
+      "path": "icon/avatar/1313.png"
+    },
+    {
+      "id": "1314",
+      "label": "Avatar 1314",
+      "path": "icon/avatar/1314.png"
+    },
+    {
+      "id": "1315",
+      "label": "Avatar 1315",
+      "path": "icon/avatar/1315.png"
+    },
+    {
+      "id": "1317",
+      "label": "Avatar 1317",
+      "path": "icon/avatar/1317.png"
+    },
+    {
+      "id": "1321",
+      "label": "Avatar 1321",
+      "path": "icon/avatar/1321.png"
+    },
+    {
+      "id": "1401",
+      "label": "Avatar 1401",
+      "path": "icon/avatar/1401.png"
+    },
+    {
+      "id": "1402",
+      "label": "Avatar 1402",
+      "path": "icon/avatar/1402.png"
+    },
+    {
+      "id": "1403",
+      "label": "Avatar 1403",
+      "path": "icon/avatar/1403.png"
+    },
+    {
+      "id": "1404",
+      "label": "Avatar 1404",
+      "path": "icon/avatar/1404.png"
+    },
+    {
+      "id": "1405",
+      "label": "Avatar 1405",
+      "path": "icon/avatar/1405.png"
+    },
+    {
+      "id": "1406",
+      "label": "Avatar 1406",
+      "path": "icon/avatar/1406.png"
+    },
+    {
+      "id": "1407",
+      "label": "Avatar 1407",
+      "path": "icon/avatar/1407.png"
+    },
+    {
+      "id": "1408",
+      "label": "Avatar 1408",
+      "path": "icon/avatar/1408.png"
+    },
+    {
+      "id": "1409",
+      "label": "Avatar 1409",
+      "path": "icon/avatar/1409.png"
+    },
+    {
+      "id": "1410",
+      "label": "Avatar 1410",
+      "path": "icon/avatar/1410.png"
+    },
+    {
+      "id": "1412",
+      "label": "Avatar 1412",
+      "path": "icon/avatar/1412.png"
+    },
+    {
+      "id": "1413",
+      "label": "Avatar 1413",
+      "path": "icon/avatar/1413.png"
+    },
+    {
+      "id": "1414",
+      "label": "Avatar 1414",
+      "path": "icon/avatar/1414.png"
+    },
+    {
+      "id": "1415",
+      "label": "Avatar 1415",
+      "path": "icon/avatar/1415.png"
+    },
+    {
+      "id": "1501",
+      "label": "Avatar 1501",
+      "path": "icon/avatar/1501.png"
+    },
+    {
+      "id": "1502",
+      "label": "Avatar 1502",
+      "path": "icon/avatar/1502.png"
+    },
+    {
+      "id": "1504",
+      "label": "Avatar 1504",
+      "path": "icon/avatar/1504.png"
+    },
+    {
+      "id": "1505",
+      "label": "Avatar 1505",
+      "path": "icon/avatar/1505.png"
+    },
+    {
+      "id": "1506",
+      "label": "Avatar 1506",
+      "path": "icon/avatar/1506.png"
+    },
+    {
+      "id": "1507",
+      "label": "Avatar 1507",
+      "path": "icon/avatar/1507.png"
+    },
+    {
+      "id": "8001",
+      "label": "Avatar 8001",
+      "path": "icon/avatar/8001.png"
+    },
+    {
+      "id": "8002",
+      "label": "Avatar 8002",
+      "path": "icon/avatar/8002.png"
+    },
+    {
+      "id": "8003",
+      "label": "Avatar 8003",
+      "path": "icon/avatar/8003.png"
+    },
+    {
+      "id": "8004",
+      "label": "Avatar 8004",
+      "path": "icon/avatar/8004.png"
+    },
+    {
+      "id": "8005",
+      "label": "Avatar 8005",
+      "path": "icon/avatar/8005.png"
+    },
+    {
+      "id": "8006",
+      "label": "Avatar 8006",
+      "path": "icon/avatar/8006.png"
+    },
+    {
+      "id": "8007",
+      "label": "Avatar 8007",
+      "path": "icon/avatar/8007.png"
+    },
+    {
+      "id": "8008",
+      "label": "Avatar 8008",
+      "path": "icon/avatar/8008.png"
+    },
+    {
+      "id": "8009",
+      "label": "Avatar 8009",
+      "path": "icon/avatar/8009.png"
+    },
+    {
+      "id": "8010",
+      "label": "Avatar 8010",
+      "path": "icon/avatar/8010.png"
+    },
+    {
+      "id": "202002",
+      "label": "Avatar 202002",
+      "path": "icon/avatar/202002.png"
+    },
+    {
+      "id": "202017",
+      "label": "Avatar 202017",
+      "path": "icon/avatar/202017.png"
+    },
+    {
+      "id": "IconHead_200107",
+      "label": "Avatar IconHead_200107",
+      "path": "icon/avatar/IconHead_200107.png"
+    },
+    {
+      "id": "IconHead_200108",
+      "label": "Avatar IconHead_200108",
+      "path": "icon/avatar/IconHead_200108.png"
+    },
+    {
+      "id": "IconHead_200109",
+      "label": "Avatar IconHead_200109",
+      "path": "icon/avatar/IconHead_200109.png"
+    },
+    {
+      "id": "IconHead_200110",
+      "label": "Avatar IconHead_200110",
+      "path": "icon/avatar/IconHead_200110.png"
+    },
+    {
+      "id": "IconHead_200111",
+      "label": "Avatar IconHead_200111",
+      "path": "icon/avatar/IconHead_200111.png"
+    },
+    {
+      "id": "IconHead_200112",
+      "label": "Avatar IconHead_200112",
+      "path": "icon/avatar/IconHead_200112.png"
+    },
+    {
+      "id": "IconHead_200113",
+      "label": "Avatar IconHead_200113",
+      "path": "icon/avatar/IconHead_200113.png"
+    },
+    {
+      "id": "IconHead_200114",
+      "label": "Avatar IconHead_200114",
+      "path": "icon/avatar/IconHead_200114.png"
+    },
+    {
+      "id": "IconHead_200115",
+      "label": "Avatar IconHead_200115",
+      "path": "icon/avatar/IconHead_200115.png"
+    },
+    {
+      "id": "IconHead_200116",
+      "label": "Avatar IconHead_200116",
+      "path": "icon/avatar/IconHead_200116.png"
+    },
+    {
+      "id": "IconHead_200117",
+      "label": "Avatar IconHead_200117",
+      "path": "icon/avatar/IconHead_200117.png"
+    },
+    {
+      "id": "IconHead_200118",
+      "label": "Avatar IconHead_200118",
+      "path": "icon/avatar/IconHead_200118.png"
+    },
+    {
+      "id": "IconHead_200119",
+      "label": "Avatar IconHead_200119",
+      "path": "icon/avatar/IconHead_200119.png"
+    },
+    {
+      "id": "IconHead_200120",
+      "label": "Avatar IconHead_200120",
+      "path": "icon/avatar/IconHead_200120.png"
+    },
+    {
+      "id": "IconHead_200121",
+      "label": "Avatar IconHead_200121",
+      "path": "icon/avatar/IconHead_200121.png"
+    },
+    {
+      "id": "IconHead_200122",
+      "label": "Avatar IconHead_200122",
+      "path": "icon/avatar/IconHead_200122.png"
+    },
+    {
+      "id": "IconHead_200123",
+      "label": "Avatar IconHead_200123",
+      "path": "icon/avatar/IconHead_200123.png"
+    },
+    {
+      "id": "IconHead_200124",
+      "label": "Avatar IconHead_200124",
+      "path": "icon/avatar/IconHead_200124.png"
+    },
+    {
+      "id": "IconHead_200125",
+      "label": "Avatar IconHead_200125",
+      "path": "icon/avatar/IconHead_200125.png"
+    },
+    {
+      "id": "IconHead_200126",
+      "label": "Avatar IconHead_200126",
+      "path": "icon/avatar/IconHead_200126.png"
+    },
+    {
+      "id": "IconHead_200127",
+      "label": "Avatar IconHead_200127",
+      "path": "icon/avatar/IconHead_200127.png"
+    },
+    {
+      "id": "IconHead_200128",
+      "label": "Avatar IconHead_200128",
+      "path": "icon/avatar/IconHead_200128.png"
+    },
+    {
+      "id": "IconHead_200129",
+      "label": "Avatar IconHead_200129",
+      "path": "icon/avatar/IconHead_200129.png"
+    },
+    {
+      "id": "IconHead_200130",
+      "label": "Avatar IconHead_200130",
+      "path": "icon/avatar/IconHead_200130.png"
+    },
+    {
+      "id": "IconHead_200131",
+      "label": "Avatar IconHead_200131",
+      "path": "icon/avatar/IconHead_200131.png"
+    },
+    {
+      "id": "IconHead_200132",
+      "label": "Avatar IconHead_200132",
+      "path": "icon/avatar/IconHead_200132.png"
+    },
+    {
+      "id": "IconHead_200133",
+      "label": "Avatar IconHead_200133",
+      "path": "icon/avatar/IconHead_200133.png"
+    },
+    {
+      "id": "IconHead_200134",
+      "label": "Avatar IconHead_200134",
+      "path": "icon/avatar/IconHead_200134.png"
+    },
+    {
+      "id": "IconHead_200135",
+      "label": "Avatar IconHead_200135",
+      "path": "icon/avatar/IconHead_200135.png"
+    },
+    {
+      "id": "IconHead_200136",
+      "label": "Avatar IconHead_200136",
+      "path": "icon/avatar/IconHead_200136.png"
+    },
+    {
+      "id": "IconHead_200137",
+      "label": "Avatar IconHead_200137",
+      "path": "icon/avatar/IconHead_200137.png"
+    },
+    {
+      "id": "IconHead_200138",
+      "label": "Avatar IconHead_200138",
+      "path": "icon/avatar/IconHead_200138.png"
+    },
+    {
+      "id": "IconHead_200139",
+      "label": "Avatar IconHead_200139",
+      "path": "icon/avatar/IconHead_200139.png"
+    },
+    {
+      "id": "IconHead_200140",
+      "label": "Avatar IconHead_200140",
+      "path": "icon/avatar/IconHead_200140.png"
+    },
+    {
+      "id": "IconHead_200141",
+      "label": "Avatar IconHead_200141",
+      "path": "icon/avatar/IconHead_200141.png"
+    },
+    {
+      "id": "IconHead_200142",
+      "label": "Avatar IconHead_200142",
+      "path": "icon/avatar/IconHead_200142.png"
+    },
+    {
+      "id": "IconHead_200143",
+      "label": "Avatar IconHead_200143",
+      "path": "icon/avatar/IconHead_200143.png"
+    },
+    {
+      "id": "IconHead_200144",
+      "label": "Avatar IconHead_200144",
+      "path": "icon/avatar/IconHead_200144.png"
+    },
+    {
+      "id": "IconHead_200145",
+      "label": "Avatar IconHead_200145",
+      "path": "icon/avatar/IconHead_200145.png"
+    },
+    {
+      "id": "IconHead_200146",
+      "label": "Avatar IconHead_200146",
+      "path": "icon/avatar/IconHead_200146.png"
+    },
+    {
+      "id": "IconHead_200147",
+      "label": "Avatar IconHead_200147",
+      "path": "icon/avatar/IconHead_200147.png"
+    },
+    {
+      "id": "IconHead_200148",
+      "label": "Avatar IconHead_200148",
+      "path": "icon/avatar/IconHead_200148.png"
+    },
+    {
+      "id": "IconHead_200149",
+      "label": "Avatar IconHead_200149",
+      "path": "icon/avatar/IconHead_200149.png"
+    },
+    {
+      "id": "IconHead_200150",
+      "label": "Avatar IconHead_200150",
+      "path": "icon/avatar/IconHead_200150.png"
+    },
+    {
+      "id": "IconHead_200151",
+      "label": "Avatar IconHead_200151",
+      "path": "icon/avatar/IconHead_200151.png"
+    },
+    {
+      "id": "IconHead_200152",
+      "label": "Avatar IconHead_200152",
+      "path": "icon/avatar/IconHead_200152.png"
+    },
+    {
+      "id": "IconHead_200153",
+      "label": "Avatar IconHead_200153",
+      "path": "icon/avatar/IconHead_200153.png"
+    },
+    {
+      "id": "IconHead_200154",
+      "label": "Avatar IconHead_200154",
+      "path": "icon/avatar/IconHead_200154.png"
+    },
+    {
+      "id": "IconHead_200155",
+      "label": "Avatar IconHead_200155",
+      "path": "icon/avatar/IconHead_200155.png"
+    },
+    {
+      "id": "IconHead_200156",
+      "label": "Avatar IconHead_200156",
+      "path": "icon/avatar/IconHead_200156.png"
+    },
+    {
+      "id": "IconHead_200157",
+      "label": "Avatar IconHead_200157",
+      "path": "icon/avatar/IconHead_200157.png"
+    },
+    {
+      "id": "IconHead_200158",
+      "label": "Avatar IconHead_200158",
+      "path": "icon/avatar/IconHead_200158.png"
+    },
+    {
+      "id": "IconHead_202001",
+      "label": "Avatar IconHead_202001",
+      "path": "icon/avatar/IconHead_202001.png"
+    },
+    {
+      "id": "IconHead_202002",
+      "label": "Avatar IconHead_202002",
+      "path": "icon/avatar/IconHead_202002.png"
+    },
+    {
+      "id": "IconHead_202003",
+      "label": "Avatar IconHead_202003",
+      "path": "icon/avatar/IconHead_202003.png"
+    },
+    {
+      "id": "IconHead_202004",
+      "label": "Avatar IconHead_202004",
+      "path": "icon/avatar/IconHead_202004.png"
+    },
+    {
+      "id": "IconHead_202005",
+      "label": "Avatar IconHead_202005",
+      "path": "icon/avatar/IconHead_202005.png"
+    },
+    {
+      "id": "IconHead_202006",
+      "label": "Avatar IconHead_202006",
+      "path": "icon/avatar/IconHead_202006.png"
+    },
+    {
+      "id": "IconHead_202007",
+      "label": "Avatar IconHead_202007",
+      "path": "icon/avatar/IconHead_202007.png"
+    },
+    {
+      "id": "IconHead_202008",
+      "label": "Avatar IconHead_202008",
+      "path": "icon/avatar/IconHead_202008.png"
+    },
+    {
+      "id": "IconHead_202009",
+      "label": "Avatar IconHead_202009",
+      "path": "icon/avatar/IconHead_202009.png"
+    },
+    {
+      "id": "IconHead_202010",
+      "label": "Avatar IconHead_202010",
+      "path": "icon/avatar/IconHead_202010.png"
+    },
+    {
+      "id": "IconHead_202011",
+      "label": "Avatar IconHead_202011",
+      "path": "icon/avatar/IconHead_202011.png"
+    },
+    {
+      "id": "IconHead_202012",
+      "label": "Avatar IconHead_202012",
+      "path": "icon/avatar/IconHead_202012.png"
+    },
+    {
+      "id": "IconHead_202013",
+      "label": "Avatar IconHead_202013",
+      "path": "icon/avatar/IconHead_202013.png"
+    },
+    {
+      "id": "IconHead_202014",
+      "label": "Avatar IconHead_202014",
+      "path": "icon/avatar/IconHead_202014.png"
+    },
+    {
+      "id": "IconHead_202015",
+      "label": "Avatar IconHead_202015",
+      "path": "icon/avatar/IconHead_202015.png"
+    },
+    {
+      "id": "IconHead_202016",
+      "label": "Avatar IconHead_202016",
+      "path": "icon/avatar/IconHead_202016.png"
+    },
+    {
+      "id": "IconHead_202017",
+      "label": "Avatar IconHead_202017",
+      "path": "icon/avatar/IconHead_202017.png"
+    },
+    {
+      "id": "IconHead_202018",
+      "label": "Avatar IconHead_202018",
+      "path": "icon/avatar/IconHead_202018.png"
+    },
+    {
+      "id": "IconHead_202019",
+      "label": "Avatar IconHead_202019",
+      "path": "icon/avatar/IconHead_202019.png"
+    },
+    {
+      "id": "IconHead_202020",
+      "label": "Avatar IconHead_202020",
+      "path": "icon/avatar/IconHead_202020.png"
+    },
+    {
+      "id": "IconHead_202021",
+      "label": "Avatar IconHead_202021",
+      "path": "icon/avatar/IconHead_202021.png"
+    },
+    {
+      "id": "IconHead_202022",
+      "label": "Avatar IconHead_202022",
+      "path": "icon/avatar/IconHead_202022.png"
+    },
+    {
+      "id": "IconHead_202023",
+      "label": "Avatar IconHead_202023",
+      "path": "icon/avatar/IconHead_202023.png"
+    },
+    {
+      "id": "IconHead_202024",
+      "label": "Avatar IconHead_202024",
+      "path": "icon/avatar/IconHead_202024.png"
+    },
+    {
+      "id": "IconHead_202025",
+      "label": "Avatar IconHead_202025",
+      "path": "icon/avatar/IconHead_202025.png"
+    },
+    {
+      "id": "IconHead_202028",
+      "label": "Avatar IconHead_202028",
+      "path": "icon/avatar/IconHead_202028.png"
+    },
+    {
+      "id": "IconHead_202029",
+      "label": "Avatar IconHead_202029",
+      "path": "icon/avatar/IconHead_202029.png"
+    },
+    {
+      "id": "IconHead_202030",
+      "label": "Avatar IconHead_202030",
+      "path": "icon/avatar/IconHead_202030.png"
+    },
+    {
+      "id": "IconHead_202031",
+      "label": "Avatar IconHead_202031",
+      "path": "icon/avatar/IconHead_202031.png"
+    },
+    {
+      "id": "IconHead_202033",
+      "label": "Avatar IconHead_202033",
+      "path": "icon/avatar/IconHead_202033.png"
+    },
+    {
+      "id": "IconHead_202034",
+      "label": "Avatar IconHead_202034",
+      "path": "icon/avatar/IconHead_202034.png"
+    },
+    {
+      "id": "IconHead_202035",
+      "label": "Avatar IconHead_202035",
+      "path": "icon/avatar/IconHead_202035.png"
+    },
+    {
+      "id": "IconHead_202036",
+      "label": "Avatar IconHead_202036",
+      "path": "icon/avatar/IconHead_202036.png"
+    },
+    {
+      "id": "IconHead_202037",
+      "label": "Avatar IconHead_202037",
+      "path": "icon/avatar/IconHead_202037.png"
+    },
+    {
+      "id": "IconHead_202038",
+      "label": "Avatar IconHead_202038",
+      "path": "icon/avatar/IconHead_202038.png"
+    },
+    {
+      "id": "IconHead_202039",
+      "label": "Avatar IconHead_202039",
+      "path": "icon/avatar/IconHead_202039.png"
+    },
+    {
+      "id": "IconHead_202040",
+      "label": "Avatar IconHead_202040",
+      "path": "icon/avatar/IconHead_202040.png"
+    },
+    {
+      "id": "IconHead_202041",
+      "label": "Avatar IconHead_202041",
+      "path": "icon/avatar/IconHead_202041.png"
+    },
+    {
+      "id": "IconHead_202042",
+      "label": "Avatar IconHead_202042",
+      "path": "icon/avatar/IconHead_202042.png"
+    },
+    {
+      "id": "IconHead_202043",
+      "label": "Avatar IconHead_202043",
+      "path": "icon/avatar/IconHead_202043.png"
+    },
+    {
+      "id": "IconHead_202044",
+      "label": "Avatar IconHead_202044",
+      "path": "icon/avatar/IconHead_202044.png"
+    },
+    {
+      "id": "IconHead_202045",
+      "label": "Avatar IconHead_202045",
+      "path": "icon/avatar/IconHead_202045.png"
+    },
+    {
+      "id": "IconHead_202046",
+      "label": "Avatar IconHead_202046",
+      "path": "icon/avatar/IconHead_202046.png"
+    },
+    {
+      "id": "IconHead_202048",
+      "label": "Avatar IconHead_202048",
+      "path": "icon/avatar/IconHead_202048.png"
+    },
+    {
+      "id": "IconHead_202049",
+      "label": "Avatar IconHead_202049",
+      "path": "icon/avatar/IconHead_202049.png"
+    },
+    {
+      "id": "IconHead_202050",
+      "label": "Avatar IconHead_202050",
+      "path": "icon/avatar/IconHead_202050.png"
+    },
+    {
+      "id": "IconHead_202051",
+      "label": "Avatar IconHead_202051",
+      "path": "icon/avatar/IconHead_202051.png"
+    },
+    {
+      "id": "IconHead_202060",
+      "label": "Avatar IconHead_202060",
+      "path": "icon/avatar/IconHead_202060.png"
+    },
+    {
+      "id": "IconHeadS1_1001",
+      "label": "Avatar IconHeadS1_1001",
+      "path": "icon/avatar/IconHeadS1_1001.png"
+    },
+    {
+      "id": "IconHeadS1_1002",
+      "label": "Avatar IconHeadS1_1002",
+      "path": "icon/avatar/IconHeadS1_1002.png"
+    },
+    {
+      "id": "IconHeadS1_1003",
+      "label": "Avatar IconHeadS1_1003",
+      "path": "icon/avatar/IconHeadS1_1003.png"
+    },
+    {
+      "id": "IconHeadS1_1004",
+      "label": "Avatar IconHeadS1_1004",
+      "path": "icon/avatar/IconHeadS1_1004.png"
+    },
+    {
+      "id": "IconHeadS1_8001",
+      "label": "Avatar IconHeadS1_8001",
+      "path": "icon/avatar/IconHeadS1_8001.png"
+    },
+    {
+      "id": "IconHeadS1_8002",
+      "label": "Avatar IconHeadS1_8002",
+      "path": "icon/avatar/IconHeadS1_8002.png"
+    },
+    {
+      "id": "Monster_3001010",
+      "label": "Avatar Monster_3001010",
+      "path": "icon/avatar/Monster_3001010.png"
+    },
+    {
+      "id": "Monster_3001020",
+      "label": "Avatar Monster_3001020",
+      "path": "icon/avatar/Monster_3001020.png"
+    },
+    {
+      "id": "Monster_3002010",
+      "label": "Avatar Monster_3002010",
+      "path": "icon/avatar/Monster_3002010.png"
+    },
+    {
+      "id": "Monster_3002030",
+      "label": "Avatar Monster_3002030",
+      "path": "icon/avatar/Monster_3002030.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Abraham",
+      "label": "Avatar UI_Message_Contacts_Abraham",
+      "path": "icon/avatar/UI_Message_Contacts_Abraham.png"
+    },
+    {
+      "id": "UI_Message_Contacts_AdvertBoard",
+      "label": "Avatar UI_Message_Contacts_AdvertBoard",
+      "path": "icon/avatar/UI_Message_Contacts_AdvertBoard.png"
+    },
+    {
+      "id": "UI_Message_Contacts_AglaeaServant",
+      "label": "Avatar UI_Message_Contacts_AglaeaServant",
+      "path": "icon/avatar/UI_Message_Contacts_AglaeaServant.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Aideen",
+      "label": "Avatar UI_Message_Contacts_Aideen",
+      "path": "icon/avatar/UI_Message_Contacts_Aideen.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Aierfei",
+      "label": "Avatar UI_Message_Contacts_Aierfei",
+      "path": "icon/avatar/UI_Message_Contacts_Aierfei.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Anonymous",
+      "label": "Avatar UI_Message_Contacts_Anonymous",
+      "path": "icon/avatar/UI_Message_Contacts_Anonymous.png"
+    },
+    {
+      "id": "UI_Message_Contacts_BandMember01",
+      "label": "Avatar UI_Message_Contacts_BandMember01",
+      "path": "icon/avatar/UI_Message_Contacts_BandMember01.png"
+    },
+    {
+      "id": "UI_Message_Contacts_BandMember02",
+      "label": "Avatar UI_Message_Contacts_BandMember02",
+      "path": "icon/avatar/UI_Message_Contacts_BandMember02.png"
+    },
+    {
+      "id": "UI_Message_Contacts_BandMember03",
+      "label": "Avatar UI_Message_Contacts_BandMember03",
+      "path": "icon/avatar/UI_Message_Contacts_BandMember03.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Bukaixin",
+      "label": "Avatar UI_Message_Contacts_Bukaixin",
+      "path": "icon/avatar/UI_Message_Contacts_Bukaixin.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Chaletka",
+      "label": "Avatar UI_Message_Contacts_Chaletka",
+      "path": "icon/avatar/UI_Message_Contacts_Chaletka.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Chengjie",
+      "label": "Avatar UI_Message_Contacts_Chengjie",
+      "path": "icon/avatar/UI_Message_Contacts_Chengjie.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Cyrene",
+      "label": "Avatar UI_Message_Contacts_Cyrene",
+      "path": "icon/avatar/UI_Message_Contacts_Cyrene.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Dafanqi",
+      "label": "Avatar UI_Message_Contacts_Dafanqi",
+      "path": "icon/avatar/UI_Message_Contacts_Dafanqi.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Dahao",
+      "label": "Avatar UI_Message_Contacts_Dahao",
+      "path": "icon/avatar/UI_Message_Contacts_Dahao.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Daiqing",
+      "label": "Avatar UI_Message_Contacts_Daiqing",
+      "path": "icon/avatar/UI_Message_Contacts_Daiqing.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Danshu",
+      "label": "Avatar UI_Message_Contacts_Danshu",
+      "path": "icon/avatar/UI_Message_Contacts_Danshu.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Demetria",
+      "label": "Avatar UI_Message_Contacts_Demetria",
+      "path": "icon/avatar/UI_Message_Contacts_Demetria.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Dennis",
+      "label": "Avatar UI_Message_Contacts_Dennis",
+      "path": "icon/avatar/UI_Message_Contacts_Dennis.png"
+    },
+    {
+      "id": "UI_Message_Contacts_DesolaTheSecond",
+      "label": "Avatar UI_Message_Contacts_DesolaTheSecond",
+      "path": "icon/avatar/UI_Message_Contacts_DesolaTheSecond.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Diting",
+      "label": "Avatar UI_Message_Contacts_Diting",
+      "path": "icon/avatar/UI_Message_Contacts_Diting.png"
+    },
+    {
+      "id": "UI_Message_Contacts_DoctorDig",
+      "label": "Avatar UI_Message_Contacts_DoctorDig",
+      "path": "icon/avatar/UI_Message_Contacts_DoctorDig.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Donne",
+      "label": "Avatar UI_Message_Contacts_Donne",
+      "path": "icon/avatar/UI_Message_Contacts_Donne.png"
+    },
+    {
+      "id": "UI_Message_Contacts_DreamOffice",
+      "label": "Avatar UI_Message_Contacts_DreamOffice",
+      "path": "icon/avatar/UI_Message_Contacts_DreamOffice.png"
+    },
+    {
+      "id": "UI_Message_Contacts_DreamStore",
+      "label": "Avatar UI_Message_Contacts_DreamStore",
+      "path": "icon/avatar/UI_Message_Contacts_DreamStore.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Emilie",
+      "label": "Avatar UI_Message_Contacts_Emilie",
+      "path": "icon/avatar/UI_Message_Contacts_Emilie.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Engineer",
+      "label": "Avatar UI_Message_Contacts_Engineer",
+      "path": "icon/avatar/UI_Message_Contacts_Engineer.png"
+    },
+    {
+      "id": "UI_Message_Contacts_FightFest",
+      "label": "Avatar UI_Message_Contacts_FightFest",
+      "path": "icon/avatar/UI_Message_Contacts_FightFest.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Giovanni",
+      "label": "Avatar UI_Message_Contacts_Giovanni",
+      "path": "icon/avatar/UI_Message_Contacts_Giovanni.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Guangjin",
+      "label": "Avatar UI_Message_Contacts_Guangjin",
+      "path": "icon/avatar/UI_Message_Contacts_Guangjin.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Hekate",
+      "label": "Avatar UI_Message_Contacts_Hekate",
+      "path": "icon/avatar/UI_Message_Contacts_Hekate.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Jetta",
+      "label": "Avatar UI_Message_Contacts_Jetta",
+      "path": "icon/avatar/UI_Message_Contacts_Jetta.png"
+    },
+    {
+      "id": "UI_Message_Contacts_JieZhongKe",
+      "label": "Avatar UI_Message_Contacts_JieZhongKe",
+      "path": "icon/avatar/UI_Message_Contacts_JieZhongKe.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Jingyana",
+      "label": "Avatar UI_Message_Contacts_Jingyana",
+      "path": "icon/avatar/UI_Message_Contacts_Jingyana.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Julian",
+      "label": "Avatar UI_Message_Contacts_Julian",
+      "path": "icon/avatar/UI_Message_Contacts_Julian.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Kenebo",
+      "label": "Avatar UI_Message_Contacts_Kenebo",
+      "path": "icon/avatar/UI_Message_Contacts_Kenebo.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Leonard",
+      "label": "Avatar UI_Message_Contacts_Leonard",
+      "path": "icon/avatar/UI_Message_Contacts_Leonard.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Liangmu",
+      "label": "Avatar UI_Message_Contacts_Liangmu",
+      "path": "icon/avatar/UI_Message_Contacts_Liangmu.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Luhui",
+      "label": "Avatar UI_Message_Contacts_Luhui",
+      "path": "icon/avatar/UI_Message_Contacts_Luhui.png"
+    },
+    {
+      "id": "UI_Message_Contacts_LuxuryStore",
+      "label": "Avatar UI_Message_Contacts_LuxuryStore",
+      "path": "icon/avatar/UI_Message_Contacts_LuxuryStore.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Lvfulong",
+      "label": "Avatar UI_Message_Contacts_Lvfulong",
+      "path": "icon/avatar/UI_Message_Contacts_Lvfulong.png"
+    },
+    {
+      "id": "UI_Message_Contacts_MasterGongshu",
+      "label": "Avatar UI_Message_Contacts_MasterGongshu",
+      "path": "icon/avatar/UI_Message_Contacts_MasterGongshu.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Micah",
+      "label": "Avatar UI_Message_Contacts_Micah",
+      "path": "icon/avatar/UI_Message_Contacts_Micah.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Mingxi",
+      "label": "Avatar UI_Message_Contacts_Mingxi",
+      "path": "icon/avatar/UI_Message_Contacts_Mingxi.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Montana",
+      "label": "Avatar UI_Message_Contacts_Montana",
+      "path": "icon/avatar/UI_Message_Contacts_Montana.png"
+    },
+    {
+      "id": "UI_Message_Contacts_MrXiYan",
+      "label": "Avatar UI_Message_Contacts_MrXiYan",
+      "path": "icon/avatar/UI_Message_Contacts_MrXiYan.png"
+    },
+    {
+      "id": "UI_Message_Contacts_NPCSoldier",
+      "label": "Avatar UI_Message_Contacts_NPCSoldier",
+      "path": "icon/avatar/UI_Message_Contacts_NPCSoldier.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Oleg",
+      "label": "Avatar UI_Message_Contacts_Oleg",
+      "path": "icon/avatar/UI_Message_Contacts_Oleg.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Pam",
+      "label": "Avatar UI_Message_Contacts_Pam",
+      "path": "icon/avatar/UI_Message_Contacts_Pam.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Pamela",
+      "label": "Avatar UI_Message_Contacts_Pamela",
+      "path": "icon/avatar/UI_Message_Contacts_Pamela.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Qingni",
+      "label": "Avatar UI_Message_Contacts_Qingni",
+      "path": "icon/avatar/UI_Message_Contacts_Qingni.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Qingzu",
+      "label": "Avatar UI_Message_Contacts_Qingzu",
+      "path": "icon/avatar/UI_Message_Contacts_Qingzu.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Regin",
+      "label": "Avatar UI_Message_Contacts_Regin",
+      "path": "icon/avatar/UI_Message_Contacts_Regin.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Richesandhonor",
+      "label": "Avatar UI_Message_Contacts_Richesandhonor",
+      "path": "icon/avatar/UI_Message_Contacts_Richesandhonor.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Rocky",
+      "label": "Avatar UI_Message_Contacts_Rocky",
+      "path": "icon/avatar/UI_Message_Contacts_Rocky.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Screwllum",
+      "label": "Avatar UI_Message_Contacts_Screwllum",
+      "path": "icon/avatar/UI_Message_Contacts_Screwllum.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Sionbhan",
+      "label": "Avatar UI_Message_Contacts_Sionbhan",
+      "path": "icon/avatar/UI_Message_Contacts_Sionbhan.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Tantan",
+      "label": "Avatar UI_Message_Contacts_Tantan",
+      "path": "icon/avatar/UI_Message_Contacts_Tantan.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Taode",
+      "label": "Avatar UI_Message_Contacts_Taode",
+      "path": "icon/avatar/UI_Message_Contacts_Taode.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Tina",
+      "label": "Avatar UI_Message_Contacts_Tina",
+      "path": "icon/avatar/UI_Message_Contacts_Tina.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Uma",
+      "label": "Avatar UI_Message_Contacts_Uma",
+      "path": "icon/avatar/UI_Message_Contacts_Uma.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Velite",
+      "label": "Avatar UI_Message_Contacts_Velite",
+      "path": "icon/avatar/UI_Message_Contacts_Velite.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Virginia",
+      "label": "Avatar UI_Message_Contacts_Virginia",
+      "path": "icon/avatar/UI_Message_Contacts_Virginia.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Wenmingde",
+      "label": "Avatar UI_Message_Contacts_Wenmingde",
+      "path": "icon/avatar/UI_Message_Contacts_Wenmingde.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Wnfurui",
+      "label": "Avatar UI_Message_Contacts_Wnfurui",
+      "path": "icon/avatar/UI_Message_Contacts_Wnfurui.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Woolsey",
+      "label": "Avatar UI_Message_Contacts_Woolsey",
+      "path": "icon/avatar/UI_Message_Contacts_Woolsey.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Wosen",
+      "label": "Avatar UI_Message_Contacts_Wosen",
+      "path": "icon/avatar/UI_Message_Contacts_Wosen.png"
+    },
+    {
+      "id": "UI_Message_Contacts_XiaoCong",
+      "label": "Avatar UI_Message_Contacts_XiaoCong",
+      "path": "icon/avatar/UI_Message_Contacts_XiaoCong.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Xiaohan",
+      "label": "Avatar UI_Message_Contacts_Xiaohan",
+      "path": "icon/avatar/UI_Message_Contacts_Xiaohan.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Xikui",
+      "label": "Avatar UI_Message_Contacts_Xikui",
+      "path": "icon/avatar/UI_Message_Contacts_Xikui.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Yancui",
+      "label": "Avatar UI_Message_Contacts_Yancui",
+      "path": "icon/avatar/UI_Message_Contacts_Yancui.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Yueyuan",
+      "label": "Avatar UI_Message_Contacts_Yueyuan",
+      "path": "icon/avatar/UI_Message_Contacts_Yueyuan.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Yujin",
+      "label": "Avatar UI_Message_Contacts_Yujin",
+      "path": "icon/avatar/UI_Message_Contacts_Yujin.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Zhangzhang",
+      "label": "Avatar UI_Message_Contacts_Zhangzhang",
+      "path": "icon/avatar/UI_Message_Contacts_Zhangzhang.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Zhongshan",
+      "label": "Avatar UI_Message_Contacts_Zhongshan",
+      "path": "icon/avatar/UI_Message_Contacts_Zhongshan.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Ziqiao",
+      "label": "Avatar UI_Message_Contacts_Ziqiao",
+      "path": "icon/avatar/UI_Message_Contacts_Ziqiao.png"
+    },
+    {
+      "id": "UI_Message_DelicayExpress",
+      "label": "Avatar UI_Message_DelicayExpress",
+      "path": "icon/avatar/UI_Message_DelicayExpress.png"
+    },
+    {
+      "id": "UI_Message_Group_Default",
+      "label": "Avatar UI_Message_Group_Default",
+      "path": "icon/avatar/UI_Message_Group_Default.png"
+    },
+    {
+      "id": "UI_Message_Group_Train",
+      "label": "Avatar UI_Message_Group_Train",
+      "path": "icon/avatar/UI_Message_Group_Train.png"
+    },
+    {
+      "id": "WebIcon_Npc_3",
+      "label": "Avatar WebIcon_Npc_3",
+      "path": "icon/avatar/WebIcon_Npc_3.png"
+    },
+    {
+      "id": "WebIcon_Npc_4",
+      "label": "Avatar WebIcon_Npc_4",
+      "path": "icon/avatar/WebIcon_Npc_4.png"
+    },
+    {
+      "id": "WebIcon_Npc_5",
+      "label": "Avatar WebIcon_Npc_5",
+      "path": "icon/avatar/WebIcon_Npc_5.png"
+    },
+    {
+      "id": "WebIcon_Npc_6",
+      "label": "Avatar WebIcon_Npc_6",
+      "path": "icon/avatar/WebIcon_Npc_6.png"
+    }
+  ]
+}

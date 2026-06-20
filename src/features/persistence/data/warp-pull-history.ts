@@ -27,6 +27,7 @@ export type WarpAccount = {
   uid: string
   region?: string
   nickname?: string
+  avatarPath?: string
   totalPulls: number
   lastPullAt?: string
 }
@@ -49,6 +50,11 @@ export type DeleteAccountWarpHistoryResult = {
   accountId: string
   deletedPulls: number
   deletedImportBatches: number
+}
+
+export type UpdateAccountAvatarResult = {
+  accountId: string
+  avatarPath?: string
 }
 
 export type WarpBannerSummary = {
@@ -105,5 +111,14 @@ export function listWarpBannerSummaries(
 ) {
   return invokeTauri<WarpBannerSummary[]>('list_warp_banner_summaries', {
     query,
+  })
+}
+
+export function updateAccountAvatar(
+  accountId: string,
+  avatarPath: string | undefined,
+) {
+  return invokeTauri<UpdateAccountAvatarResult>('update_account_avatar', {
+    input: { accountId, avatarPath: avatarPath ?? null },
   })
 }

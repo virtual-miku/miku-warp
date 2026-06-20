@@ -28,6 +28,8 @@ const WARP_HISTORY_TRASH_VERSION: &str = "0005_warp_history_trash";
 const WARP_HISTORY_TRASH_SQL: &str = include_str!("../migrations/0005_warp_history_trash.sql");
 const AUTO_BACKUP_SYNC_VERSION: &str = "0006_auto_backup_sync";
 const AUTO_BACKUP_SYNC_SQL: &str = include_str!("../migrations/0006_auto_backup_sync.sql");
+const ACCOUNT_AVATAR_VERSION: &str = "0007_account_avatar";
+const ACCOUNT_AVATAR_SQL: &str = include_str!("../migrations/0007_account_avatar.sql");
 const GOOGLE_DRIVE_PROVIDER: &str = "google_drive";
 const DATA_CHANGED_TRIGGER: &str = "data_changed";
 
@@ -169,6 +171,7 @@ pub struct AccountRow {
     pub uid: String,
     pub region: Option<String>,
     pub nickname: Option<String>,
+    pub avatar_path: Option<String>,
     pub total_pulls: i64,
     pub last_pull_at: Option<String>,
 }
@@ -197,6 +200,20 @@ pub struct DeleteWarpPullsInput {
 #[serde(rename_all = "camelCase")]
 pub struct DeleteAccountWarpHistoryInput {
     pub account_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateAccountAvatarInput {
+    pub account_id: String,
+    pub avatar_path: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateAccountAvatarResult {
+    pub account_id: String,
+    pub avatar_path: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -559,6 +576,8 @@ struct BackupAccountRow {
     uid: String,
     region: Option<String>,
     nickname: Option<String>,
+    #[serde(default)]
+    avatar_path: Option<String>,
     created_at: String,
     updated_at: String,
 }
@@ -653,6 +672,10 @@ const MIGRATIONS: &[Migration] = &[
         version: AUTO_BACKUP_SYNC_VERSION,
         sql: AUTO_BACKUP_SYNC_SQL,
     },
+    Migration {
+        version: ACCOUNT_AVATAR_VERSION,
+        sql: ACCOUNT_AVATAR_SQL,
+    },
 ];
 
 pub fn get_database_status(app: &AppHandle) -> Result<DatabaseStatus, String> {
@@ -720,6 +743,16 @@ pub fn list_accounts(app: &AppHandle) -> Result<Vec<AccountRow>, String> {
     let connection = open_database(&database_path)?;
 
     list_accounts_from_database(&connection)
+}
+
+pub fn update_account_avatar(
+    app: &AppHandle,
+    input: UpdateAccountAvatarInput,
+) -> Result<UpdateAccountAvatarResult, String> {
+    let database_path = resolve_database_path(app)?;
+    let connection = open_database(&database_path)?;
+
+    update_account_avatar_in_database(&connection, &input)
 }
 
 pub fn list_warp_banner_summaries(
@@ -1480,12 +1513,12 @@ fn list_warp_pulls_from_database(
 fn list_accounts_from_database(connection: &Connection) -> Result<Vec<AccountRow>, String> {
     let mut statement = connection
         .prepare(
-            "SELECT a.id, a.uid, a.region, a.nickname,
+            "SELECT a.id, a.uid, a.region, a.nickname, a.avatar_path,
                     COUNT(wp.id) AS total_pulls,
                     MAX(wp.pulled_at) AS last_pull_at
              FROM accounts a
              LEFT JOIN warp_pulls wp ON wp.account_id = a.id AND wp.deleted_at IS NULL
-             GROUP BY a.id, a.uid, a.region, a.nickname
+             GROUP BY a.id, a.uid, a.region, a.nickname, a.avatar_path
              ORDER BY MAX(wp.pulled_at) DESC, a.uid ASC, COALESCE(a.region, '') ASC, a.id ASC",
         )
         .map_err(|error| format!("Failed to prepare account list query: {error}"))?;
@@ -1497,14 +1530,40 @@ fn list_accounts_from_database(connection: &Connection) -> Result<Vec<AccountRow
                 uid: row.get(1)?,
                 region: row.get(2)?,
                 nickname: row.get(3)?,
-                total_pulls: row.get(4)?,
-                last_pull_at: row.get(5)?,
+                avatar_path: row.get(4)?,
+                total_pulls: row.get(5)?,
+                last_pull_at: row.get(6)?,
             })
         })
         .map_err(|error| format!("Failed to query accounts: {error}"))?;
 
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|error| format!("Failed to decode accounts: {error}"))
+}
+
+fn update_account_avatar_in_database(
+    connection: &Connection,
+    input: &UpdateAccountAvatarInput,
+) -> Result<UpdateAccountAvatarResult, String> {
+    validate_account_id(&input.account_id, "Avatar account id")?;
+    let avatar_path = normalize_account_avatar_path(input.avatar_path.as_deref());
+    validate_account_avatar_path(avatar_path)?;
+
+    let updated_rows = connection
+        .execute(
+            "UPDATE accounts SET avatar_path = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2",
+            params![avatar_path, &input.account_id],
+        )
+        .map_err(|error| format!("Failed to update account avatar: {error}"))?;
+
+    if updated_rows == 0 {
+        return Err(format!("Account {} was not found.", input.account_id));
+    }
+
+    Ok(UpdateAccountAvatarResult {
+        account_id: input.account_id.clone(),
+        avatar_path: avatar_path.map(str::to_owned),
+    })
 }
 
 fn list_warp_banner_summaries_from_database(
@@ -2496,7 +2555,7 @@ fn calculate_backup_content_hash(snapshot: &BackupSnapshot) -> Result<String, St
 fn read_backup_accounts(connection: &Connection) -> Result<Vec<BackupAccountRow>, String> {
     let mut statement = connection
         .prepare(
-            "SELECT id, uid, region, nickname, created_at, updated_at
+            "SELECT id, uid, region, nickname, avatar_path, created_at, updated_at
              FROM accounts
              ORDER BY uid, COALESCE(region, ''), id",
         )
@@ -2509,8 +2568,9 @@ fn read_backup_accounts(connection: &Connection) -> Result<Vec<BackupAccountRow>
                 uid: row.get(1)?,
                 region: row.get(2)?,
                 nickname: row.get(3)?,
-                created_at: row.get(4)?,
-                updated_at: row.get(5)?,
+                avatar_path: row.get(4)?,
+                created_at: row.get(5)?,
+                updated_at: row.get(6)?,
             })
         })
         .map_err(|error| format!("Failed to query account backup rows: {error}"))?;
@@ -2656,24 +2716,29 @@ fn restore_backup_accounts(
 ) -> Result<(), String> {
     let mut statement = transaction
         .prepare(
-            "INSERT INTO accounts (id, uid, region, nickname, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+            "INSERT INTO accounts (id, uid, region, nickname, avatar_path, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
              ON CONFLICT(id) DO UPDATE SET
                uid = excluded.uid,
                region = excluded.region,
                nickname = excluded.nickname,
+               avatar_path = excluded.avatar_path,
                created_at = excluded.created_at,
                updated_at = excluded.updated_at",
         )
         .map_err(|error| format!("Failed to prepare account restore statement: {error}"))?;
 
     for account in accounts {
+        let avatar_path = normalize_account_avatar_path(account.avatar_path.as_deref());
+        validate_account_avatar_path(avatar_path)?;
+
         statement
             .execute(params![
                 &account.id,
                 &account.uid,
                 account.region.as_deref(),
                 account.nickname.as_deref(),
+                avatar_path,
                 &account.created_at,
                 &account.updated_at,
             ])
@@ -3310,6 +3375,27 @@ fn validate_list_warp_banner_summaries_query(
 fn validate_account_id(account_id: &str, label: &str) -> Result<(), String> {
     if account_id.trim().is_empty() {
         return Err(format!("{label} cannot be empty."));
+    }
+
+    Ok(())
+}
+
+fn normalize_account_avatar_path(avatar_path: Option<&str>) -> Option<&str> {
+    avatar_path.map(str::trim).filter(|value| !value.is_empty())
+}
+
+fn validate_account_avatar_path(avatar_path: Option<&str>) -> Result<(), String> {
+    let Some(avatar_path) = normalize_account_avatar_path(avatar_path) else {
+        return Ok(());
+    };
+
+    let is_valid_avatar_path = avatar_path.starts_with("icon/avatar/")
+        && avatar_path.ends_with(".png")
+        && !avatar_path.contains("..")
+        && !avatar_path.contains('\\');
+
+    if !is_valid_avatar_path {
+        return Err("Avatar must be a StarRailRes avatar icon.".to_string());
     }
 
     Ok(())
