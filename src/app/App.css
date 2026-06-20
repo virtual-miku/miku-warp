@@ -1270,6 +1270,11 @@
   color: var(--text-muted);
 }
 
+.app-button-ghost:not(:disabled) {
+  background: var(--button-bg);
+  color: var(--button-text);
+}
+
 .app-button-danger {
   border-color: var(--danger);
   background: var(--danger);

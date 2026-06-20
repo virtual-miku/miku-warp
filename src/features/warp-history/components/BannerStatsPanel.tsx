@@ -148,7 +148,7 @@ function RateUpOutcomeDetail({
         <>
           {' · '}
           <span className="rate-up-uncertain">
-            Celestial Invitation: {uncertain}
+            Celestial Invitation Results: {uncertain}
           </span>
         </>
       ) : null}
