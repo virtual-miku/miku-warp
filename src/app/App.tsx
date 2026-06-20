@@ -18,7 +18,10 @@ import {
   type CloudBackupPolicy,
   type CloudBackupStatus,
 } from '../features/backup/domain/cloud-backup'
-import { ImportPanel } from '../features/import/components/ImportPanel'
+import {
+  ImportDialog,
+  ImportPanel,
+} from '../features/import/components/ImportPanel'
 import {
   ManualImportDialog,
   type ManualImportSaveNotice,
@@ -168,6 +171,7 @@ export function App() {
   const [activeBannerType, setActiveBannerType] =
     useState<BannerFilterType>(defaultBannerType)
   const [manualImportOpen, setManualImportOpen] = useState(false)
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [manualImportSaving, setManualImportSaving] = useState(false)
   const [manualImportSaveNotice, setManualImportSaveNotice] =
     useState<ManualImportSaveNotice>()
@@ -1928,6 +1932,7 @@ export function App() {
                 showBannerLabel={activeBannerType === 'all'}
                 onDeleteAll={handleDeleteAllHistory}
                 onDeleteSelected={handleDeleteSelectedHistory}
+                onOpenImport={() => setImportDialogOpen(true)}
                 onPageChange={(page) => {
                   setHistoryLoading(true)
                   setHistoryPage(page)
@@ -2086,6 +2091,26 @@ export function App() {
         onCancel={() => setBackupConfirmation(undefined)}
         onConfirm={handleConfirmBackupAction}
         title={formatBackupConfirmationTitle(backupConfirmation)}
+      />
+      <ImportDialog
+        gameHistoryImportError={gameHistoryImportError}
+        gameHistoryImportResult={gameHistoryImportResult}
+        gameHistoryPathError={gameHistoryPathError}
+        gameHistoryScan={gameHistoryScan}
+        gameInstallPath={gameInstallPath}
+        isGameHistoryImporting={gameHistoryImporting}
+        isGameHistoryScanning={gameHistoryScanning}
+        isGamePathSelecting={gamePathSelecting}
+        isOpen={importDialogOpen}
+        manualImportPreview={manualImportPreview}
+        onClose={() => setImportDialogOpen(false)}
+        onImportGameHistory={handleImportGameHistory}
+        onSelectGamePath={handleSelectGamePath}
+        onScanGameHistory={handleScanGameHistorySource}
+        onOpenManualImport={() => {
+          setImportDialogOpen(false)
+          setManualImportOpen(true)
+        }}
       />
       <ConfirmDialog
         confirmLabel="Restore item"

@@ -41,7 +41,7 @@ export function BannerSummaryGrid({
       </header>
       <div className="banner-summary-grid">
         <button
-          aria-label={`All banners: ${allSummary.totalPulls} pulls`}
+          aria-label={`All banners: ${formatPullCount(allSummary.totalPulls)}`}
           aria-pressed={activeBannerType === 'all'}
           className={
             activeBannerType === 'all'
@@ -53,7 +53,8 @@ export function BannerSummaryGrid({
         >
           <span>All</span>
           <strong>
-            {allSummary.totalPulls} <small>pulls</small>
+            {allSummary.totalPulls}{' '}
+            <small>{getPullNoun(allSummary.totalPulls)}</small>
           </strong>
         </button>
         {visibleBanners.map((banner) => {
@@ -62,7 +63,7 @@ export function BannerSummaryGrid({
 
           return (
             <button
-              aria-label={`${getBannerLabel(banner.type)}: ${summary?.totalPulls ?? 0} pulls`}
+              aria-label={`${getBannerLabel(banner.type)}: ${formatPullCount(summary?.totalPulls ?? 0)}`}
               aria-pressed={isActive}
               className={
                 isActive
@@ -88,6 +89,14 @@ export function BannerSummaryGrid({
       </div>
     </section>
   )
+}
+
+function getPullNoun(totalPulls: number) {
+  return totalPulls === 1 ? 'pull' : 'pulls'
+}
+
+function formatPullCount(totalPulls: number) {
+  return `${totalPulls} ${getPullNoun(totalPulls)}`
 }
 
 function getBannerPassIconPath(bannerType: BannerType) {

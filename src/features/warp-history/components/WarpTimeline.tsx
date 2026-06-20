@@ -1,5 +1,13 @@
 import { useMemo, useState } from 'react'
-import { CheckSquare, ChevronLeft, ChevronRight, Trash2, X } from 'lucide-react'
+import {
+  CheckSquare,
+  ChevronLeft,
+  ChevronRight,
+  FileInput,
+  Trash2,
+  X,
+} from 'lucide-react'
+import { AppButton } from '../../../shared/ui/AppButton'
 import { getCatalogAssetUrl } from '../data/catalog-assets'
 import { itemCatalog } from '../data/item-catalog'
 import { getBannerLabel, getFiveStarHardPity } from '../domain/banner'
@@ -23,6 +31,7 @@ type WarpTimelineProps = {
   onPageChange: (page: number) => void
   onDeleteAll: () => void
   onDeleteSelected: () => void
+  onOpenImport: () => void
   onRarityFilterChange: (rarityFilter: TimelineRarityFilter) => void
   onSelectionModeChange: (isSelecting: boolean) => void
   onSearchQueryChange: (searchQuery: string) => void
@@ -48,6 +57,7 @@ export function WarpTimeline({
   onPageChange,
   onDeleteAll,
   onDeleteSelected,
+  onOpenImport,
   onRarityFilterChange,
   onSelectionModeChange,
   onSearchQueryChange,
@@ -151,11 +161,13 @@ export function WarpTimeline({
             <strong>
               {totalPulls > 0 ? 'No matching pulls' : 'No game history imported yet'}
             </strong>
-            <span>
-              {totalPulls > 0
-                ? 'Adjust search or rarity filters.'
-                : 'Use Game import to fetch your official Warp Records. Manual text import is available for older records.'}
-            </span>
+            {totalPulls > 0 ? (
+              <span>Adjust search or rarity filters.</span>
+            ) : (
+              <AppButton icon={FileInput} onClick={onOpenImport}>
+                Import
+              </AppButton>
+            )}
           </div>
         )}
       </div>

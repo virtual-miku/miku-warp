@@ -1,4 +1,5 @@
-import { FileInput, FolderSearch, History } from 'lucide-react'
+import { useEffect, useRef } from 'react'
+import { FileInput, FolderSearch, History, X } from 'lucide-react'
 import { AppButton } from '../../../shared/ui/AppButton'
 import type {
   GameHistorySourceScanResult,
@@ -6,7 +7,7 @@ import type {
 } from '../../persistence/data/game-history-source'
 import type { ManualImportPreview } from '../domain/manual-note-parser'
 
-type ImportPanelProps = {
+export type ImportPanelProps = {
   gameHistoryImportError?: string
   gameHistoryImportResult?: ImportGameHistoryResult
   gameHistoryPathError?: string
@@ -22,7 +23,89 @@ type ImportPanelProps = {
   onOpenManualImport: () => void
 }
 
-export function ImportPanel({
+type ImportDialogProps = ImportPanelProps & {
+  isOpen: boolean
+  onClose: () => void
+}
+
+export function ImportPanel(props: ImportPanelProps) {
+  return (
+    <section className="tool-panel" id="import" aria-label="Import sources">
+      <header className="panel-header">
+        <h2>Import</h2>
+      </header>
+      <ImportControls {...props} />
+    </section>
+  )
+}
+
+export function ImportDialog({
+  isOpen,
+  onClose,
+  ...importProps
+}: ImportDialogProps) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!isOpen) {
+      return undefined
+    }
+
+    closeButtonRef.current?.focus()
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [isOpen, onClose])
+
+  if (!isOpen) {
+    return null
+  }
+
+  return (
+    <div
+      className="modal-backdrop"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose()
+        }
+      }}
+    >
+      <section
+        aria-labelledby="import-dialog-title"
+        aria-modal="true"
+        className="modal-panel import-dialog"
+        role="dialog"
+      >
+        <header className="modal-header">
+          <div>
+            <span className="eyebrow">Warp records</span>
+            <h2 id="import-dialog-title">Import</h2>
+          </div>
+          <button
+            aria-label="Close import"
+            className="icon-button"
+            onClick={onClose}
+            ref={closeButtonRef}
+            type="button"
+          >
+            <X aria-hidden="true" size={18} />
+          </button>
+        </header>
+        <div className="import-dialog-content">
+          <ImportControls {...importProps} />
+        </div>
+      </section>
+    </div>
+  )
+}
+
+function ImportControls({
   gameHistoryImportError,
   gameHistoryImportResult,
   gameHistoryPathError,
@@ -44,11 +127,7 @@ export function ImportPanel({
   )
 
   return (
-    <section className="tool-panel" id="import" aria-label="Import sources">
-      <header className="panel-header">
-        <h2>Import</h2>
-      </header>
-      <div className="tool-panel-body">
+    <div className="tool-panel-body">
         <div className="game-path-field">
           <div className="game-path-heading">
             <strong>Game folder</strong>
@@ -150,8 +229,7 @@ export function ImportPanel({
             Open
           </AppButton>
         </div>
-      </div>
-    </section>
+    </div>
   )
 }
 

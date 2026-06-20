@@ -884,6 +884,11 @@
   font-size: 13px;
 }
 
+.warp-empty .app-button {
+  justify-self: center;
+  margin-top: 8px;
+}
+
 .history-pagination {
   min-height: 46px;
   display: flex;
@@ -1339,6 +1344,18 @@
 .manual-import-dialog {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  overflow: auto;
+}
+
+.import-dialog {
+  width: min(560px, 100%);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.import-dialog-content {
+  min-height: 0;
   overflow: auto;
 }
 

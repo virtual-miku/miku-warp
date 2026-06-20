@@ -138,17 +138,17 @@ function RateUpOutcomeDetail({
   return (
     <>
       <span className="rate-up-wins">
-        Wins: {wins}
+        {wins} {wins === 1 ? 'Win' : 'Wins'}
       </span>
       {' · '}
       <span className="rate-up-losses">
-        Losses: {losses}
+        {losses} {losses === 1 ? 'Loss' : 'Losses'}
       </span>
       {uncertain > 0 ? (
         <>
-          {' · '}
+          <br />
           <span className="rate-up-uncertain">
-            Celestial Invitation Results: {uncertain}
+            {uncertain} Celestial {uncertain === 1 ? 'invitation character' : 'invitation characters'}
           </span>
         </>
       ) : null}
