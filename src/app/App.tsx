@@ -202,6 +202,7 @@ export function App() {
   const autoBackupRunningRef = useRef(false)
   const autoBackupRunAgainRef = useRef(false)
   const allowWindowCloseRef = useRef(false)
+  const hasPendingAutoBackupRef = useRef(false)
   const [closeConfirmationOpen, setCloseConfirmationOpen] = useState(false)
   const [backupSnapshots, setBackupSnapshots] = useState<
     BackupSnapshotSummary[]
@@ -322,6 +323,10 @@ export function App() {
     autoBackupQueued ||
     autoBackupRunning ||
     (autoBackupSyncStatus?.hasPendingBackup ?? false)
+
+  useEffect(() => {
+    hasPendingAutoBackupRef.current = hasPendingAutoBackup
+  }, [hasPendingAutoBackup])
 
   const fetchPersistedPulls = useCallback(() => {
     return listWarpPulls({
@@ -729,11 +734,15 @@ export function App() {
   }, [])
 
   useEffect(() => {
+    let isActive = true
     let removeCloseListener: (() => void) | undefined
 
     void getCurrentWindow()
       .onCloseRequested((event) => {
-        if (allowWindowCloseRef.current || !hasPendingAutoBackup) {
+        if (
+          allowWindowCloseRef.current ||
+          !hasPendingAutoBackupRef.current
+        ) {
           return
         }
 
@@ -741,27 +750,20 @@ export function App() {
         setCloseConfirmationOpen(true)
       })
       .then((unlisten) => {
+        if (!isActive) {
+          unlisten()
+          return
+        }
+
         removeCloseListener = unlisten
       })
+      .catch(() => undefined)
 
     return () => {
+      isActive = false
       removeCloseListener?.()
     }
-  }, [hasPendingAutoBackup])
-
-  useEffect(() => {
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (!hasPendingAutoBackup) {
-        return
-      }
-
-      event.preventDefault()
-      event.returnValue = ''
-    }
-
-    window.addEventListener('beforeunload', handleBeforeUnload)
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [hasPendingAutoBackup])
+  }, [])
 
   const handleManualNoteChange = (value: string) => {
     setManualNoteDraft(value)

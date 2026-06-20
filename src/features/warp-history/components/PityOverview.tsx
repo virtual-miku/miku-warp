@@ -19,6 +19,11 @@ export function PityOverview({ bannerType, summary }: PityOverviewProps) {
 
   return (
     <section className="pity-grid" aria-label="Pity overview">
+      <article className="pity-card pity-accent-teal">
+        <span>Stellar Jade spent</span>
+        <StellarJadeValue value={summary.totalPulls * 160} />
+        <span>{`${summary.totalPulls} pulls ${MULTIPLY_SYMBOL} 160`}</span>
+      </article>
       <article className="pity-card pity-accent-gold">
         <span>{`5${STAR_SYMBOL} pity`}</span>
         <strong>
@@ -40,11 +45,6 @@ export function PityOverview({ bannerType, summary }: PityOverviewProps) {
             {summary.lastFourStarName ?? 'None'}
           </b>
         </span>
-      </article>
-      <article className="pity-card pity-accent-teal">
-        <span>Stellar Jade spent</span>
-        <StellarJadeValue value={summary.totalPulls * 160} />
-        <span>{`${summary.totalPulls} pulls ${MULTIPLY_SYMBOL} 160`}</span>
       </article>
     </section>
   )
