@@ -1,19 +1,6 @@
-import {
-  Cloud,
-  KeyRound,
-  LogOut,
-  RefreshCcw,
-  FileJson,
-  Trash2,
-  Upload,
-  X,
-} from 'lucide-react'
+import { Cloud, RefreshCcw, FileJson, Trash2 } from 'lucide-react'
 import { AppButton } from '../../../shared/ui/AppButton'
-import {
-  getCloudBackupPolicyDetail,
-  type CloudBackupPolicy,
-  type CloudBackupStatus,
-} from '../domain/cloud-backup'
+import type { CloudBackupPolicy, CloudBackupStatus } from '../domain/cloud-backup'
 
 export type BackupNotice = {
   tone: 'success' | 'error'
@@ -70,188 +57,32 @@ type BackupPanelProps = {
 }
 
 export function BackupPanel({
-  cloudBackupPolicy,
-  cloudSnapshots,
-  cloudBackupStatus,
-  isCloudCancelling,
-  isCloudConnecting,
-  isCloudDisconnecting,
-  isCloudPolicyUpdating,
-  isCloudRestoring,
-  isCloudUploading,
   isExporting,
   isImporting,
   isDeleting,
   isRestoring,
   notice,
   deletingFileName,
-  restoringCloudFileId,
   restoringFileName,
   snapshots,
   onDeleteSnapshot,
-  onAutoBackupPolicyChange,
-  onCancelGoogleDrive,
-  onConnectGoogleDrive,
-  onDisconnectGoogleDrive,
-  onRestoreGoogleDriveBackup,
-  onUploadGoogleDriveBackup,
   onExportBackup,
   onImportBackupJson,
   onRestoreSnapshot,
 }: BackupPanelProps) {
-  const isGoogleDriveConnecting =
-    cloudBackupStatus.connectionStatus === 'connecting'
-  const isCloudBusy =
-    isCloudConnecting ||
-    isCloudCancelling ||
-    isCloudDisconnecting ||
-    isCloudPolicyUpdating ||
-    isCloudRestoring ||
-    isCloudUploading
-  const isBusy = isExporting || isImporting || isRestoring || isDeleting || isCloudBusy
+  const isBusy = isExporting || isImporting || isRestoring || isDeleting
   const visibleSnapshots = snapshots
     .filter((snapshot) => !snapshot.isAutoSave)
     .slice(0, 3)
-  const visibleCloudSnapshots = cloudSnapshots.slice(0, 1)
-  const isGoogleDriveConnected =
-    cloudBackupStatus.connectionStatus === 'connected'
-  const autoBackupToggleDisabled =
-    isBusy ||
-    isCloudPolicyUpdating ||
-    (!cloudBackupPolicy.autoBackupEnabled && !cloudBackupStatus.canUpload)
+  const visibleNotice = notice && !isGoogleDriveNotice(notice) ? notice : undefined
 
   return (
     <section
       className="tool-panel"
       id="backup"
-      aria-label="Google Drive backup"
+      aria-label="Backup"
     >
       <div className="tool-panel-body">
-        <div className="backup-section">
-          <div className="tool-row">
-            <div>
-              <strong>Google Drive</strong>
-              <span title={cloudBackupStatus.detail}>
-                {cloudBackupStatus.label}
-              </span>
-            </div>
-            <div className="backup-action-group">
-              {isGoogleDriveConnected ? (
-                <AppButton
-                  disabled={isBusy || !cloudBackupStatus.canUpload}
-                  icon={Upload}
-                  onClick={onUploadGoogleDriveBackup}
-                  variant="ghost"
-                >
-                  {isCloudUploading ? 'Uploading' : 'Upload'}
-                </AppButton>
-              ) : null}
-              <AppButton
-                disabled={
-                  isGoogleDriveConnecting
-                    ? isCloudCancelling
-                    : isBusy ||
-                      (isGoogleDriveConnected
-                        ? !cloudBackupStatus.canDisconnect
-                        : !cloudBackupStatus.canConnect)
-                }
-                icon={
-                  isGoogleDriveConnecting
-                    ? X
-                    : isGoogleDriveConnected
-                      ? LogOut
-                      : KeyRound
-                }
-                onClick={
-                  isGoogleDriveConnecting
-                    ? onCancelGoogleDrive
-                    : isGoogleDriveConnected
-                      ? onDisconnectGoogleDrive
-                      : onConnectGoogleDrive
-                }
-              >
-                {getGoogleDriveActionLabel(
-                  cloudBackupStatus,
-                  isGoogleDriveConnecting,
-                  isCloudCancelling,
-                  isCloudDisconnecting,
-                )}
-              </AppButton>
-            </div>
-          </div>
-          {!isGoogleDriveConnected && cloudBackupStatus.detail ? (
-            <p className="backup-status-detail">{cloudBackupStatus.detail}</p>
-          ) : null}
-          <div className="backup-policy-row">
-            <div>
-              <strong>Auto backup</strong>
-              <span>
-                {getCloudBackupPolicyDetail(
-                  cloudBackupPolicy,
-                  cloudBackupStatus.canUpload,
-                )}
-              </span>
-            </div>
-            <button
-              aria-checked={cloudBackupPolicy.autoBackupEnabled}
-              aria-label="Auto backup to Google Drive"
-              className={`switch-control${
-                cloudBackupPolicy.autoBackupEnabled ? ' switch-control-on' : ''
-              }`}
-              disabled={autoBackupToggleDisabled}
-              onClick={() =>
-                onAutoBackupPolicyChange(!cloudBackupPolicy.autoBackupEnabled)
-              }
-              role="switch"
-              type="button"
-            >
-              <span aria-hidden="true" />
-            </button>
-          </div>
-          {isGoogleDriveConnected ? (
-            <div className="backup-snapshot-list" aria-label="Cloud backups">
-              {visibleCloudSnapshots.length > 0 ? (
-                visibleCloudSnapshots.map((snapshot) => (
-                  <div
-                    className="backup-snapshot-row"
-                    key={snapshot.remoteFileId}
-                  >
-                    <div>
-                      <strong>
-                        {snapshot.remoteModifiedTime
-                          ? `Backup ${formatSnapshotTime(snapshot.remoteModifiedTime)}`
-                          : 'Time unavailable'}
-                      </strong>
-                      <span title={snapshot.fileName}>
-                        {formatBackupSizeKilobytes(snapshot.size)}
-                      </span>
-                    </div>
-                    <div className="backup-snapshot-actions">
-                      <AppButton
-                        disabled={isBusy}
-                        icon={RefreshCcw}
-                        onClick={() => onRestoreGoogleDriveBackup(snapshot)}
-                        variant="ghost"
-                      >
-                        {restoringCloudFileId === snapshot.remoteFileId
-                          ? 'Restoring'
-                          : 'Restore'}
-                      </AppButton>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="backup-snapshot-row">
-                  <div>
-                    <strong>No cloud autosave yet</strong>
-                    <span>It will upload after the next saved change</span>
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : null}
-        </div>
-
         <div className="backup-section">
           <div className="tool-row">
             <div>
@@ -317,13 +148,13 @@ export function BackupPanel({
             </div>
           ) : null}
         </div>
-        {notice ? (
+        {visibleNotice ? (
           <div
-            className={`backup-message backup-message-${notice.tone}`}
-            role={notice.tone === 'error' ? 'alert' : 'status'}
+            className={`backup-message backup-message-${visibleNotice.tone}`}
+            role={visibleNotice.tone === 'error' ? 'alert' : 'status'}
           >
-            <strong>{notice.title}</strong>
-            <p>{notice.detail}</p>
+            <strong>{visibleNotice.title}</strong>
+            <p>{visibleNotice.detail}</p>
           </div>
         ) : null}
       </div>
@@ -331,41 +162,15 @@ export function BackupPanel({
   )
 }
 
-function getGoogleDriveActionLabel(
-  status: CloudBackupStatus,
-  isConnecting: boolean,
-  isCancelling: boolean,
-  isDisconnecting: boolean,
-) {
-  if (isCancelling) {
-    return 'Cancelling'
-  }
+function isGoogleDriveNotice(notice: BackupNotice) {
+  const searchableText = `${notice.title} ${notice.detail}`.toLowerCase()
 
-  if (status.connectionStatus === 'connecting') {
-    return 'Cancel'
-  }
-
-  if (isDisconnecting) {
-    return 'Disconnecting'
-  }
-
-  if (status.connectionStatus === 'connected') {
-    return 'Disconnect'
-  }
-
-  if (status.connectionStatus === 'connection_failed') {
-    return 'Retry'
-  }
-
-  if (status.connectionStatus === 'needs_reauth') {
-    return 'Re-login'
-  }
-
-  if (isConnecting) {
-    return 'Connecting'
-  }
-
-  return 'Connect'
+  return (
+    searchableText.includes('google drive') ||
+    searchableText.includes('drive autosave') ||
+    searchableText.includes('cloud backup') ||
+    searchableText.includes('cloud autosave')
+  )
 }
 
 function formatSnapshotTime(value: string) {

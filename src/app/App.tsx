@@ -171,11 +171,23 @@ type TrashPullMutationConfirmation =
       totalPulls: number
       uid: string
     }
+  | {
+      accountId: string
+      kind: 'all'
+      totalPulls: number
+      uid: string
+    }
 
-type BackupTrashConfirmation = {
-  kind: 'restore' | 'delete'
-  snapshot: TrashedBackupSnapshotSummary
-}
+type BackupTrashConfirmation =
+  | {
+      kind: 'restore' | 'delete'
+      snapshot: TrashedBackupSnapshotSummary
+    }
+  | {
+      fileNames: string[]
+      kind: 'restore_selected' | 'delete_selected' | 'delete_all'
+      totalBackups: number
+    }
 
 type BackupConfirmation =
   | {
@@ -299,6 +311,9 @@ export function App() {
   const [selectedTrashPullIds, setSelectedTrashPullIds] = useState<Set<string>>(
     () => new Set(),
   )
+  const [backupTrashSelecting, setBackupTrashSelecting] = useState(false)
+  const [selectedBackupTrashFileNames, setSelectedBackupTrashFileNames] =
+    useState<Set<string>>(() => new Set())
   const [trashError, setTrashError] = useState<string>()
   const [restoringTrashPullId, setRestoringTrashPullId] = useState<string>()
   const [permanentlyDeletingPullId, setPermanentlyDeletingPullId] =
@@ -1144,6 +1159,8 @@ export function App() {
     setTrashPage(1)
     setTrashSelecting(false)
     setSelectedTrashPullIds(new Set())
+    setBackupTrashSelecting(false)
+    setSelectedBackupTrashFileNames(new Set())
     if (activeView === 'trash') {
       setTrashLoading(true)
       setTrashBackupLoading(true)
@@ -1168,6 +1185,11 @@ export function App() {
     setSelectedTrashPullIds(new Set())
   }
 
+  const handleBackupTrashSelectionModeChange = (isSelecting: boolean) => {
+    setBackupTrashSelecting(isSelecting)
+    setSelectedBackupTrashFileNames(new Set())
+  }
+
   const handleToggleTrashPullSelection = (pullId: string) => {
     setSelectedTrashPullIds((current) => {
       const next = new Set(current)
@@ -1176,6 +1198,20 @@ export function App() {
         next.delete(pullId)
       } else {
         next.add(pullId)
+      }
+
+      return next
+    })
+  }
+
+  const handleToggleBackupTrashSelection = (fileName: string) => {
+    setSelectedBackupTrashFileNames((current) => {
+      const next = new Set(current)
+
+      if (next.has(fileName)) {
+        next.delete(fileName)
+      } else {
+        next.add(fileName)
       }
 
       return next
@@ -1304,7 +1340,6 @@ export function App() {
           refreshWarpHistory(),
           refreshAccounts(),
         ])
-        setTrashSelecting(false)
         setSelectedTrashPullIds(new Set())
         scheduleAutoBackup('Trash restore')
       } catch (error) {
@@ -1342,7 +1377,6 @@ export function App() {
           refreshWarpHistory(),
           refreshAccounts(),
         ])
-        setTrashSelecting(false)
         setSelectedTrashPullIds(new Set())
         scheduleAutoBackup('Trash restore')
       } catch (error) {
@@ -1414,7 +1448,9 @@ export function App() {
 
     if (trashRestoreConfirmation.kind === 'single') {
       await performRestoreTrashPull(trashRestoreConfirmation.pull)
-    } else {
+    }
+
+    if (trashRestoreConfirmation.kind === 'selected') {
       await performRestoreTrashPulls(trashRestoreConfirmation.pullIds)
     }
     setTrashRestoreConfirmation(undefined)
@@ -1465,6 +1501,29 @@ export function App() {
     selectedTrashPullIds,
   ])
 
+  const handleRequestDeleteAllTrashPulls = useCallback(() => {
+    if (
+      restoringTrashPullId ||
+      permanentlyDeletingPullId ||
+      trashTotalPulls === 0
+    ) {
+      return
+    }
+
+    setTrashDeleteConfirmation({
+      accountId: activeAccount.id,
+      kind: 'all',
+      totalPulls: trashTotalPulls,
+      uid: activeAccount.uid,
+    })
+  }, [
+    activeAccount.id,
+    activeAccount.uid,
+    permanentlyDeletingPullId,
+    restoringTrashPullId,
+    trashTotalPulls,
+  ])
+
   const handleConfirmPermanentTrashDelete = useCallback(async () => {
     if (!trashDeleteConfirmation || permanentlyDeletingPullId) {
       return
@@ -1473,7 +1532,7 @@ export function App() {
     setPermanentlyDeletingPullId(
       trashDeleteConfirmation.kind === 'single'
         ? trashDeleteConfirmation.pull.id
-        : 'selected',
+        : trashDeleteConfirmation.kind,
     )
     setTrashError(undefined)
 
@@ -1483,17 +1542,44 @@ export function App() {
           trashDeleteConfirmation.accountId,
           trashDeleteConfirmation.pull.id,
         )
-      } else {
+      } else if (trashDeleteConfirmation.kind === 'selected') {
         for (const pullId of trashDeleteConfirmation.pullIds) {
           await permanentlyDeleteTrashedWarpPull(
             trashDeleteConfirmation.accountId,
             pullId,
           )
         }
+      } else {
+        let deletedPulls = 0
+
+        while (true) {
+          const result = await listTrashedWarpPulls(
+            trashDeleteConfirmation.accountId,
+            500,
+            0,
+          )
+
+          if (result.pulls.length === 0) {
+            break
+          }
+
+          for (const pull of result.pulls) {
+            await permanentlyDeleteTrashedWarpPull(
+              trashDeleteConfirmation.accountId,
+              pull.id,
+            )
+          }
+
+          deletedPulls += result.pulls.length
+
+          if (deletedPulls >= result.total) {
+            break
+          }
+        }
+        setTrashPage(1)
       }
       setTrashDeleteConfirmation(undefined)
       await refreshTrashedPulls()
-      setTrashSelecting(false)
       setSelectedTrashPullIds(new Set())
       scheduleAutoBackup('Trash')
     } catch (error) {
@@ -1530,28 +1616,101 @@ export function App() {
     [permanentlyDeletingTrashedBackupFileName, restoringTrashedBackupFileName],
   )
 
+  const handleRequestRestoreSelectedTrashedBackups = useCallback(() => {
+    if (
+      restoringTrashedBackupFileName ||
+      permanentlyDeletingTrashedBackupFileName ||
+      selectedBackupTrashFileNames.size === 0
+    ) {
+      return
+    }
+
+    setBackupTrashConfirmation({
+      fileNames: [...selectedBackupTrashFileNames],
+      kind: 'restore_selected',
+      totalBackups: selectedBackupTrashFileNames.size,
+    })
+  }, [
+    permanentlyDeletingTrashedBackupFileName,
+    restoringTrashedBackupFileName,
+    selectedBackupTrashFileNames,
+  ])
+
+  const handleRequestDeleteSelectedTrashedBackups = useCallback(() => {
+    if (
+      restoringTrashedBackupFileName ||
+      permanentlyDeletingTrashedBackupFileName ||
+      selectedBackupTrashFileNames.size === 0
+    ) {
+      return
+    }
+
+    setBackupTrashConfirmation({
+      fileNames: [...selectedBackupTrashFileNames],
+      kind: 'delete_selected',
+      totalBackups: selectedBackupTrashFileNames.size,
+    })
+  }, [
+    permanentlyDeletingTrashedBackupFileName,
+    restoringTrashedBackupFileName,
+    selectedBackupTrashFileNames,
+  ])
+
+  const handleRequestDeleteAllTrashedBackups = useCallback(() => {
+    if (
+      restoringTrashedBackupFileName ||
+      permanentlyDeletingTrashedBackupFileName ||
+      trashedBackupSnapshots.length === 0
+    ) {
+      return
+    }
+
+    setBackupTrashConfirmation({
+      fileNames: trashedBackupSnapshots.map((snapshot) => snapshot.fileName),
+      kind: 'delete_all',
+      totalBackups: trashedBackupSnapshots.length,
+    })
+  }, [
+    permanentlyDeletingTrashedBackupFileName,
+    restoringTrashedBackupFileName,
+    trashedBackupSnapshots,
+  ])
+
   const handleConfirmBackupTrashAction = useCallback(async () => {
     if (!backupTrashConfirmation) {
       return
     }
 
-    const { snapshot } = backupTrashConfirmation
+    const fileNames = getBackupTrashFileNames(backupTrashConfirmation)
 
-    if (backupTrashConfirmation.kind === 'restore') {
-      setRestoringTrashedBackupFileName(snapshot.fileName)
+    if (isBackupTrashRestoreConfirmation(backupTrashConfirmation)) {
+      setRestoringTrashedBackupFileName(
+        backupTrashConfirmation.kind === 'restore'
+          ? backupTrashConfirmation.snapshot.fileName
+          : 'selected',
+      )
       setTrashError(undefined)
 
       try {
-        const result = await restoreTrashedBackupSnapshot(snapshot.fileName)
+        const restoredResults = []
+
+        for (const fileName of fileNames) {
+          restoredResults.push(await restoreTrashedBackupSnapshot(fileName))
+        }
+
         await Promise.all([
           refreshBackupSnapshots(),
           refreshTrashedBackupSnapshots(),
         ])
         setBackupTrashConfirmation(undefined)
+        setSelectedBackupTrashFileNames(new Set())
         setBackupNotice({
           tone: 'success',
           title: 'Backup restored',
-          detail: `${result.fileName} returned to Local backup.`,
+          detail:
+            restoredResults.length === 1
+              ? `${restoredResults[0].fileName} returned to Local backup.`
+              : `${restoredResults.length} backups returned to Local backup.`,
         })
       } catch (error) {
         setTrashError(getErrorMessage(error))
@@ -1562,13 +1721,20 @@ export function App() {
       return
     }
 
-    setPermanentlyDeletingTrashedBackupFileName(snapshot.fileName)
+    setPermanentlyDeletingTrashedBackupFileName(
+      backupTrashConfirmation.kind === 'delete'
+        ? backupTrashConfirmation.snapshot.fileName
+        : backupTrashConfirmation.kind,
+    )
     setTrashError(undefined)
 
     try {
-      await permanentlyDeleteTrashedBackupSnapshot(snapshot.fileName)
+      for (const fileName of fileNames) {
+        await permanentlyDeleteTrashedBackupSnapshot(fileName)
+      }
       await refreshTrashedBackupSnapshots()
       setBackupTrashConfirmation(undefined)
+      setSelectedBackupTrashFileNames(new Set())
     } catch (error) {
       setTrashError(getErrorMessage(error))
     } finally {
@@ -2582,10 +2748,16 @@ export function App() {
                 deletingPullId={permanentlyDeletingPullId}
                 error={trashError}
                 isBackupLoading={trashBackupLoading}
+                isBackupSelecting={backupTrashSelecting}
                 isHistoryLoading={trashLoading}
                 isSelecting={trashSelecting}
+                onBackupDeleteAll={handleRequestDeleteAllTrashedBackups}
+                onBackupDeleteSelected={handleRequestDeleteSelectedTrashedBackups}
                 onBackupPermanentlyDelete={handleRequestDeleteTrashedBackup}
                 onBackupRestore={handleRequestRestoreTrashedBackup}
+                onBackupRestoreSelected={handleRequestRestoreSelectedTrashedBackups}
+                onBackupSelectionModeChange={handleBackupTrashSelectionModeChange}
+                onDeleteAll={handleRequestDeleteAllTrashPulls}
                 onDeleteSelected={handleRequestDeleteSelectedTrashPulls}
                 onPageChange={(page) => {
                   setTrashLoading(true)
@@ -2600,13 +2772,17 @@ export function App() {
                   setTrashTab(tab)
                   setTrashSelecting(false)
                   setSelectedTrashPullIds(new Set())
+                  setBackupTrashSelecting(false)
+                  setSelectedBackupTrashFileNames(new Set())
                 }}
+                onToggleBackupSelection={handleToggleBackupTrashSelection}
                 onTogglePullSelection={handleToggleTrashPullSelection}
                 page={trashPage}
                 pageSize={trashPageSize}
                 pulls={trashedPulls}
                 restoringBackupFileName={restoringTrashedBackupFileName}
                 restoringPullId={restoringTrashPullId}
+                selectedBackupFileNames={selectedBackupTrashFileNames}
                 selectedPullIds={selectedTrashPullIds}
                 totalPulls={trashTotalPulls}
               />
@@ -2725,14 +2901,22 @@ export function App() {
       />
       <ConfirmDialog
         confirmLabel={
-          backupTrashConfirmation?.kind === 'restore'
+          backupTrashConfirmation &&
+          isBackupTrashRestoreConfirmation(backupTrashConfirmation)
             ? 'Restore'
             : 'Delete permanently'
         }
         confirmIcon={
-          backupTrashConfirmation?.kind === 'restore' ? RefreshCcw : Trash2
+          backupTrashConfirmation &&
+          isBackupTrashRestoreConfirmation(backupTrashConfirmation)
+            ? RefreshCcw
+            : Trash2
         }
-        danger={backupTrashConfirmation?.kind !== 'restore'}
+        danger={
+          backupTrashConfirmation
+            ? !isBackupTrashRestoreConfirmation(backupTrashConfirmation)
+            : false
+        }
         description={formatBackupTrashDescription(backupTrashConfirmation)}
         isOpen={backupTrashConfirmation !== undefined}
         isPending={
@@ -2905,15 +3089,25 @@ function formatTrashRestoreDescription(
     return `${confirmation.totalPulls} selected history items will return to UID ${confirmation.uid}, and their banner pity will be recalculated.`
   }
 
-  return `${confirmation.pull.itemName} will return to UID ${confirmation.uid} history, and its banner pity will be recalculated.`
+  if (confirmation.kind === 'single') {
+    return `${confirmation.pull.itemName} will return to UID ${confirmation.uid} history, and its banner pity will be recalculated.`
+  }
+
+  return ''
 }
 
 function formatTrashRestoreTitle(
   confirmation: TrashPullMutationConfirmation | undefined,
 ) {
-  return confirmation?.kind === 'selected'
-    ? 'Restore selected history?'
-    : 'Restore this history item?'
+  if (confirmation?.kind === 'selected') {
+    return 'Restore selected history?'
+  }
+
+  if (confirmation?.kind === 'single') {
+    return 'Restore this history item?'
+  }
+
+  return ''
 }
 
 function formatTrashDeleteDescription(
@@ -2927,15 +3121,25 @@ function formatTrashDeleteDescription(
     return `${confirmation.totalPulls} selected history items will be permanently deleted from UID ${confirmation.uid}. This action cannot be undone.`
   }
 
+  if (confirmation.kind === 'all') {
+    return `All ${confirmation.totalPulls} history items in Trash for UID ${confirmation.uid} will be permanently deleted. This action cannot be undone.`
+  }
+
   return `${confirmation.pull.itemName} will be permanently deleted from UID ${confirmation.uid}. This action cannot be undone.`
 }
 
 function formatTrashDeleteTitle(
   confirmation: TrashPullMutationConfirmation | undefined,
 ) {
-  return confirmation?.kind === 'selected'
-    ? 'Delete selected permanently?'
-    : 'Delete permanently?'
+  if (confirmation?.kind === 'selected') {
+    return 'Delete selected permanently?'
+  }
+
+  if (confirmation?.kind === 'all') {
+    return 'Delete all permanently?'
+  }
+
+  return 'Delete permanently?'
 }
 
 function formatBackupTrashDescription(
@@ -2945,21 +3149,65 @@ function formatBackupTrashDescription(
     return ''
   }
 
-  if (confirmation.kind === 'restore') {
-    return `${confirmation.snapshot.fileName} will return to Local backup. It can be restored from the Backup page afterward.`
+  if ('snapshot' in confirmation) {
+    return confirmation.kind === 'restore'
+      ? `${confirmation.snapshot.fileName} will return to Local backup. It can be restored from the Backup page afterward.`
+      : `${confirmation.snapshot.fileName} will be permanently deleted from Trash. This action cannot be undone.`
   }
 
-  return `${confirmation.snapshot.fileName} will be permanently deleted from Trash. This action cannot be undone.`
+  if (confirmation.kind === 'restore_selected') {
+    return `${confirmation.totalBackups} selected backups will return to Local backup. They can be restored from the Backup page afterward.`
+  }
+
+  if (confirmation.kind === 'delete_selected') {
+    return `${confirmation.totalBackups} selected backups will be permanently deleted from Trash. This action cannot be undone.`
+  }
+
+  if (confirmation.kind === 'delete_all') {
+    return `All ${confirmation.totalBackups} backups in Trash will be permanently deleted. This action cannot be undone.`
+  }
+  return ''
 }
 
 function formatBackupTrashTitle(
   confirmation: BackupTrashConfirmation | undefined,
 ) {
-  if (confirmation?.kind === 'restore') {
-    return 'Restore this backup?'
+  if (!confirmation) {
+    return ''
+  }
+
+  if (isBackupTrashRestoreConfirmation(confirmation)) {
+    return confirmation.kind === 'restore_selected'
+      ? 'Restore selected backups?'
+      : 'Restore this backup?'
+  }
+
+  if (confirmation.kind === 'delete_selected') {
+    return 'Delete selected backups permanently?'
+  }
+
+  if (confirmation.kind === 'delete_all') {
+    return 'Delete all backups permanently?'
   }
 
   return 'Delete backup permanently?'
+}
+
+function isBackupTrashRestoreConfirmation(
+  confirmation: BackupTrashConfirmation,
+) {
+  return (
+    confirmation.kind === 'restore' ||
+    confirmation.kind === 'restore_selected'
+  )
+}
+
+function getBackupTrashFileNames(confirmation: BackupTrashConfirmation) {
+  if ('snapshot' in confirmation) {
+    return [confirmation.snapshot.fileName]
+  }
+
+  return confirmation.fileNames
 }
 
 function formatCloudBackupUploadDetail(
