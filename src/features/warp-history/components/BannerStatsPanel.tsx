@@ -40,7 +40,7 @@ export function BannerStatsPanel({
       </header>
       <div className="banner-detail-grid">
         <StatItem
-          label="Average 5★"
+          label="Average pity"
           value={formatAveragePity(averagePity)}
           valueClassName={
             averagePity === undefined
@@ -181,5 +181,5 @@ function calculateAveragePity(
 }
 
 function formatAveragePity(averagePity: number | undefined) {
-  return averagePity === undefined ? '-' : `Pity ${averagePity}`
+  return averagePity === undefined ? '-' : averagePity
 }
