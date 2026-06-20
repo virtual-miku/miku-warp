@@ -15,7 +15,6 @@ import {
   getManualImportPreviewRows,
   getManualImportRarityCounts,
   getManualImportStatus,
-  getManualImportStatusLabel,
   type ManualImportPreviewCategoryKey,
   type ManualImportPreviewRow,
 } from '../domain/manual-import-preview'
@@ -98,7 +97,6 @@ export function ManualImportDialog({
       ? { fallbackBannerType }
       : { categoryKey: selectedCategoryKey, fallbackBannerType }
   const status = getManualImportStatus(preview)
-  const statusLabel = getManualImportStatusLabel(status)
   const rarityCounts = getManualImportRarityCounts(preview, categoryFilter)
   const categoryRows = getManualImportPreviewRows(
     preview,
@@ -195,7 +193,6 @@ export function ManualImportDialog({
               </select>
               <span>
                 {preview.totalPulls} detected pulls will be added to this UID.
-                Status: {statusLabel}.
               </span>
             </div>
 

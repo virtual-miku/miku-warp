@@ -442,6 +442,13 @@ fn permanently_delete_trashed_warp_pull(
 }
 
 #[tauri::command]
+fn list_trashed_backup_snapshots(
+    app: tauri::AppHandle,
+) -> Result<Vec<database::TrashedBackupSnapshotSummary>, String> {
+    database::list_trashed_backup_snapshots(&app)
+}
+
+#[tauri::command]
 fn list_backup_snapshots(
     app: tauri::AppHandle,
 ) -> Result<Vec<database::BackupSnapshotSummary>, String> {
@@ -454,6 +461,22 @@ fn delete_backup_snapshot(
     input: database::DeleteBackupSnapshotInput,
 ) -> Result<database::DeleteBackupSnapshotResult, String> {
     database::delete_backup_snapshot(&app, input)
+}
+
+#[tauri::command]
+fn restore_trashed_backup_snapshot(
+    app: tauri::AppHandle,
+    input: database::DeleteBackupSnapshotInput,
+) -> Result<database::DeleteBackupSnapshotResult, String> {
+    database::restore_trashed_backup_snapshot(&app, input)
+}
+
+#[tauri::command]
+fn permanently_delete_trashed_backup_snapshot(
+    app: tauri::AppHandle,
+    input: database::DeleteBackupSnapshotInput,
+) -> Result<database::DeleteBackupSnapshotResult, String> {
+    database::permanently_delete_trashed_backup_snapshot(&app, input)
 }
 
 #[tauri::command]
@@ -517,6 +540,7 @@ pub fn run() {
             list_accounts,
             list_trashed_warp_pulls,
             list_warp_banner_summaries,
+            list_trashed_backup_snapshots,
             list_google_drive_backup_snapshots,
             list_backup_snapshots,
             list_warp_pulls,
@@ -524,7 +548,9 @@ pub fn run() {
             replace_database_from_backup_file,
             restore_google_drive_backup_snapshot,
             restore_backup_snapshot,
+            restore_trashed_backup_snapshot,
             restore_latest_backup_snapshot,
+            permanently_delete_trashed_backup_snapshot,
             restore_trashed_warp_pull,
             run_auto_backup,
             save_manual_import_draft,

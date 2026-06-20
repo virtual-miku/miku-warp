@@ -779,6 +779,14 @@
   align-self: start;
 }
 
+.trash-tabs {
+  position: static;
+  min-height: 48px;
+  padding: 7px 12px;
+  border-width: 0 0 1px;
+  border-radius: 0;
+}
+
 .trash-list {
   display: grid;
 }
@@ -791,6 +799,20 @@
   align-items: center;
   padding: 10px 16px;
   border-bottom: 1px solid var(--border);
+}
+
+.trash-row-selecting {
+  grid-template-columns: 20px 44px minmax(0, 1fr) minmax(210px, auto) auto;
+}
+
+.trash-backup-icon {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text-muted);
 }
 
 .trash-row:last-child {
@@ -2054,6 +2076,10 @@
 
   .trash-row {
     grid-template-columns: 40px minmax(0, 1fr);
+  }
+
+  .trash-row-selecting {
+    grid-template-columns: 20px 40px minmax(0, 1fr);
   }
 
   .account-management-card {

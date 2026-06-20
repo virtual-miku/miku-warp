@@ -18,6 +18,10 @@ export type BackupSnapshotSummary = ExportBackupSnapshotResult & {
   uids: string[]
 }
 
+export type TrashedBackupSnapshotSummary = BackupSnapshotSummary & {
+  deletedAtUnixMs: number
+}
+
 export type DeleteBackupSnapshotResult = {
   backupPath: string
   fileName: string
@@ -38,6 +42,12 @@ export function listBackupSnapshots() {
   return invokeTauri<BackupSnapshotSummary[]>('list_backup_snapshots')
 }
 
+export function listTrashedBackupSnapshots() {
+  return invokeTauri<TrashedBackupSnapshotSummary[]>(
+    'list_trashed_backup_snapshots',
+  )
+}
+
 export function deleteBackupSnapshot(fileName: string) {
   return invokeTauri<DeleteBackupSnapshotResult>('delete_backup_snapshot', {
     input: { fileName },
@@ -47,6 +57,22 @@ export function deleteBackupSnapshot(fileName: string) {
 export function restoreLatestBackupSnapshot() {
   return invokeTauri<RestoreBackupSnapshotResult>(
     'restore_latest_backup_snapshot',
+  )
+}
+
+export function restoreTrashedBackupSnapshot(fileName: string) {
+  return invokeTauri<DeleteBackupSnapshotResult>(
+    'restore_trashed_backup_snapshot',
+    {
+      input: { fileName },
+    },
+  )
+}
+
+export function permanentlyDeleteTrashedBackupSnapshot(fileName: string) {
+  return invokeTauri<DeleteBackupSnapshotResult>(
+    'permanently_delete_trashed_backup_snapshot',
+    { input: { fileName } },
   )
 }
 

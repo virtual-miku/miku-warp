@@ -1,48 +1,124 @@
 import { useState } from 'react'
-import { ChevronLeft, ChevronRight, RotateCcw, Trash2 } from 'lucide-react'
+import {
+  CheckSquare,
+  ChevronLeft,
+  ChevronRight,
+  FileJson,
+  RotateCcw,
+  Trash2,
+  X,
+} from 'lucide-react'
+import type { TrashedBackupSnapshotSummary } from '../../persistence/data/backup-export'
 import { getCatalogAssetUrl } from '../../warp-history/data/catalog-assets'
 import { getBannerLabel } from '../../warp-history/domain/banner'
 import { AppButton } from '../../../shared/ui/AppButton'
 import type { TrashedWarpPull } from '../data/trash-history'
 
+export type TrashTab = 'history' | 'backups'
+
 type TrashPanelProps = {
+  activeTab: TrashTab
+  backupSnapshots: TrashedBackupSnapshotSummary[]
+  deletingBackupFileName?: string
   deletingPullId?: string
   error?: string
-  isLoading: boolean
+  isBackupLoading: boolean
+  isHistoryLoading: boolean
+  isSelecting: boolean
   page: number
   pageSize: number
   pulls: TrashedWarpPull[]
+  restoringBackupFileName?: string
   restoringPullId?: string
+  selectedPullIds: Set<string>
   totalPulls: number
+  onBackupPermanentlyDelete: (snapshot: TrashedBackupSnapshotSummary) => void
+  onBackupRestore: (snapshot: TrashedBackupSnapshotSummary) => void
+  onDeleteSelected: () => void
   onPageChange: (page: number) => void
   onPermanentlyDelete: (pull: TrashedWarpPull) => void
   onRestore: (pull: TrashedWarpPull) => void
+  onRestoreSelected: () => void
+  onSelectionModeChange: (isSelecting: boolean) => void
+  onTabChange: (tab: TrashTab) => void
+  onTogglePullSelection: (pullId: string) => void
 }
 
 export function TrashPanel({
+  activeTab,
+  backupSnapshots,
+  deletingBackupFileName,
   deletingPullId,
   error,
-  isLoading,
+  isBackupLoading,
+  isHistoryLoading,
+  isSelecting,
   page,
   pageSize,
   pulls,
+  restoringBackupFileName,
   restoringPullId,
+  selectedPullIds,
   totalPulls,
+  onBackupPermanentlyDelete,
+  onBackupRestore,
+  onDeleteSelected,
   onPageChange,
   onPermanentlyDelete,
   onRestore,
+  onRestoreSelected,
+  onSelectionModeChange,
+  onTabChange,
+  onTogglePullSelection,
 }: TrashPanelProps) {
   const pageCount = Math.max(1, Math.ceil(totalPulls / pageSize))
-  const isMutating = deletingPullId !== undefined || restoringPullId !== undefined
+  const isHistoryMutating =
+    deletingPullId !== undefined || restoringPullId !== undefined
+  const isBackupMutating =
+    deletingBackupFileName !== undefined || restoringBackupFileName !== undefined
+  const isMutating = isHistoryMutating || isBackupMutating
 
   return (
     <section className="history-panel trash-panel" aria-label="Trash history">
       <header className="panel-header">
         <div>
-          <h2>Deleted history</h2>
+          <h2>{activeTab === 'history' ? 'Deleted history' : 'Deleted backups'}</h2>
           <span>Items are removed permanently after 6 months.</span>
         </div>
+        {activeTab === 'history' ? (
+          <TrashHistoryActions
+            isDeleting={deletingPullId !== undefined}
+            isLoading={isHistoryLoading}
+            isRestoring={restoringPullId !== undefined}
+            isSelecting={isSelecting}
+            selectedCount={selectedPullIds.size}
+            totalPulls={totalPulls}
+            onDeleteSelected={onDeleteSelected}
+            onRestoreSelected={onRestoreSelected}
+            onSelectionModeChange={onSelectionModeChange}
+          />
+        ) : null}
       </header>
+      <div className="banner-tabs trash-tabs" role="tablist" aria-label="Trash categories">
+        <button
+          aria-selected={activeTab === 'history'}
+          className={activeTab === 'history' ? 'banner-tab banner-tab-active' : 'banner-tab'}
+          onClick={() => onTabChange('history')}
+          role="tab"
+          type="button"
+        >
+          History {totalPulls}
+        </button>
+        <button
+          aria-selected={activeTab === 'backups'}
+          className={activeTab === 'backups' ? 'banner-tab banner-tab-active' : 'banner-tab'}
+          onClick={() => onTabChange('backups')}
+          role="tab"
+          type="button"
+        >
+          Backups {backupSnapshots.length}
+        </button>
+      </div>
 
       {error ? (
         <div className="trash-error" role="alert">
@@ -51,33 +127,58 @@ export function TrashPanel({
       ) : null}
 
       <div className="trash-list">
-        {pulls.length > 0 ? (
-          pulls.map((pull) => (
-            <TrashRow
-              isDeleting={deletingPullId === pull.id}
+        {activeTab === 'history' ? (
+          pulls.length > 0 ? (
+            pulls.map((pull) => (
+              <TrashRow
+                isDeleting={deletingPullId === pull.id}
+                isDisabled={isMutating}
+                isRestoring={restoringPullId === pull.id}
+                isSelecting={isSelecting}
+                key={pull.id}
+                onPermanentlyDelete={onPermanentlyDelete}
+                onRestore={onRestore}
+                onToggleSelection={onTogglePullSelection}
+                pull={pull}
+                selected={selectedPullIds.has(pull.id)}
+              />
+            ))
+          ) : (
+            <div className="warp-empty">
+              <strong>{isHistoryLoading ? 'Loading Trash' : 'Trash is empty'}</strong>
+              <span>Deleted warp records will stay here for 6 months.</span>
+            </div>
+          )
+        ) : backupSnapshots.length > 0 ? (
+          backupSnapshots.map((snapshot) => (
+            <TrashBackupRow
+              isDeleting={deletingBackupFileName === snapshot.fileName}
               isDisabled={isMutating}
-              isRestoring={restoringPullId === pull.id}
-              key={pull.id}
-              onPermanentlyDelete={onPermanentlyDelete}
-              onRestore={onRestore}
-              pull={pull}
+              isRestoring={restoringBackupFileName === snapshot.fileName}
+              key={snapshot.fileName}
+              onPermanentlyDelete={onBackupPermanentlyDelete}
+              onRestore={onBackupRestore}
+              snapshot={snapshot}
             />
           ))
         ) : (
           <div className="warp-empty">
-            <strong>{isLoading ? 'Loading Trash' : 'Trash is empty'}</strong>
-            <span>Deleted warp records will stay here for 6 months.</span>
+            <strong>
+              {isBackupLoading ? 'Loading backup Trash' : 'No deleted backups'}
+            </strong>
+            <span>Deleted local backups will stay here for 6 months.</span>
           </div>
         )}
       </div>
 
-      <footer className="history-pagination" aria-label="Trash pagination">
+      {activeTab === 'history' ? (
+        <footer className="history-pagination" aria-label="Trash pagination">
         <span>Page {page}/{pageCount}</span>
         <div className="manual-pagination-controls">
           <button
             aria-label="Previous Trash page"
             className="icon-button"
-            disabled={page <= 1 || isLoading || isMutating}
+            disabled={page <= 1 || isHistoryLoading || isMutating}
             onClick={() => onPageChange(page - 1)}
             type="button"
           >
@@ -86,35 +187,122 @@ export function TrashPanel({
           <button
             aria-label="Next Trash page"
             className="icon-button"
-            disabled={page >= pageCount || isLoading || isMutating}
+            disabled={page >= pageCount || isHistoryLoading || isMutating}
             onClick={() => onPageChange(page + 1)}
             type="button"
           >
             <ChevronRight size={16} aria-hidden="true" />
           </button>
         </div>
-      </footer>
+        </footer>
+      ) : null}
     </section>
+  )
+}
+
+function TrashHistoryActions({
+  isDeleting,
+  isLoading,
+  isRestoring,
+  isSelecting,
+  selectedCount,
+  totalPulls,
+  onDeleteSelected,
+  onRestoreSelected,
+  onSelectionModeChange,
+}: {
+  isDeleting: boolean
+  isLoading: boolean
+  isRestoring: boolean
+  isSelecting: boolean
+  selectedCount: number
+  totalPulls: number
+  onDeleteSelected: () => void
+  onRestoreSelected: () => void
+  onSelectionModeChange: (isSelecting: boolean) => void
+}) {
+  const isMutating = isDeleting || isRestoring
+
+  if (isSelecting) {
+    return (
+      <div className="history-header-actions">
+        <button
+          className="history-select-button"
+          disabled={selectedCount === 0 || isLoading || isMutating}
+          onClick={onRestoreSelected}
+          type="button"
+        >
+          <RotateCcw size={14} aria-hidden="true" />
+          Restore selected ({selectedCount})
+        </button>
+        <button
+          className="history-delete-all-button"
+          disabled={selectedCount === 0 || isLoading || isMutating}
+          onClick={onDeleteSelected}
+          type="button"
+        >
+          <Trash2 size={14} aria-hidden="true" />
+          Delete selected ({selectedCount})
+        </button>
+        <button
+          className="history-select-button"
+          disabled={isMutating}
+          onClick={() => onSelectionModeChange(false)}
+          type="button"
+        >
+          <X size={14} aria-hidden="true" />
+          Cancel
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <button
+      className="history-select-button"
+      disabled={totalPulls === 0 || isLoading || isMutating}
+      onClick={() => onSelectionModeChange(true)}
+      type="button"
+    >
+      <CheckSquare size={14} aria-hidden="true" />
+      Select
+    </button>
   )
 }
 
 function TrashRow({
   isDeleting,
   isDisabled,
+  isSelecting,
   isRestoring,
   onPermanentlyDelete,
   onRestore,
+  onToggleSelection,
   pull,
+  selected,
 }: {
   isDeleting: boolean
   isDisabled: boolean
+  isSelecting: boolean
   isRestoring: boolean
   onPermanentlyDelete: (pull: TrashedWarpPull) => void
   onRestore: (pull: TrashedWarpPull) => void
+  onToggleSelection: (pullId: string) => void
   pull: TrashedWarpPull
+  selected: boolean
 }) {
   return (
-    <article className="trash-row">
+    <article className={isSelecting ? 'trash-row trash-row-selecting' : 'trash-row'}>
+      {isSelecting ? (
+        <input
+          aria-label={`Select ${pull.itemName}`}
+          checked={selected}
+          className="history-select-checkbox"
+          disabled={isDisabled}
+          onChange={() => onToggleSelection(pull.id)}
+          type="checkbox"
+        />
+      ) : null}
       <TrashItemIcon iconPath={pull.iconPath} rarity={pull.rarity} />
       <div className="trash-item-copy">
         <strong className={`warp-item-name warp-item-name-${pull.rarity}`}>
@@ -154,6 +342,62 @@ function TrashRow({
   )
 }
 
+function TrashBackupRow({
+  isDeleting,
+  isDisabled,
+  isRestoring,
+  onPermanentlyDelete,
+  onRestore,
+  snapshot,
+}: {
+  isDeleting: boolean
+  isDisabled: boolean
+  isRestoring: boolean
+  onPermanentlyDelete: (snapshot: TrashedBackupSnapshotSummary) => void
+  onRestore: (snapshot: TrashedBackupSnapshotSummary) => void
+  snapshot: TrashedBackupSnapshotSummary
+}) {
+  return (
+    <article className="trash-row trash-backup-row">
+      <div className="trash-backup-icon" aria-hidden="true">
+        <FileJson size={19} />
+      </div>
+      <div className="trash-item-copy">
+        <strong>Backup {formatDateTime(snapshot.exportedAt)}</strong>
+        <span title={snapshot.fileName}>{snapshot.fileName}</span>
+      </div>
+      <div className="trash-date">
+        <span>{formatBackupSizeKilobytes(snapshot.sizeBytes)}</span>
+        <span>Deleted {formatDateTime(snapshot.deletedAtUnixMs)}</span>
+      </div>
+      <div className="trash-actions">
+        <AppButton
+          disabled={isDisabled}
+          icon={RotateCcw}
+          onClick={() => onRestore(snapshot)}
+          variant="ghost"
+        >
+          {isRestoring ? 'Restoring' : 'Restore'}
+        </AppButton>
+        <button
+          aria-label={
+            isDeleting
+              ? `Deleting ${snapshot.fileName}`
+              : `Permanently delete ${snapshot.fileName}`
+          }
+          className="icon-button trash-permanent-button"
+          disabled={isDisabled}
+          onClick={() => onPermanentlyDelete(snapshot)}
+          title="Delete permanently"
+          type="button"
+        >
+          <Trash2 size={16} aria-hidden="true" />
+        </button>
+      </div>
+    </article>
+  )
+}
+
 function TrashItemIcon({
   iconPath,
   rarity,
@@ -180,8 +424,8 @@ function TrashItemIcon({
   )
 }
 
-function formatDateTime(value: string, isUtc = false) {
-  const normalizedValue = isUtc && !value.endsWith('Z') ? `${value}Z` : value
+function formatDateTime(value: string | number, isUtc = false) {
+  const normalizedValue = typeof value === 'string' && isUtc && !value.endsWith('Z') ? `${value}Z` : value
   const date = new Date(normalizedValue)
   const dateLabel = new Intl.DateTimeFormat('id-ID', {
     day: '2-digit',
@@ -193,4 +437,14 @@ function formatDateTime(value: string, isUtc = false) {
     .join(':')
 
   return `${dateLabel}, ${timeLabel}`
+}
+
+function formatBackupSizeKilobytes(size: number) {
+  if (!Number.isFinite(size) || size < 0) {
+    return 'Size unavailable'
+  }
+
+  const kilobytes = Math.max(1, Math.round(size / 1024))
+
+  return `${new Intl.NumberFormat('id-ID').format(kilobytes)} KB`
 }

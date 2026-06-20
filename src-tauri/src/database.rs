@@ -11,7 +11,9 @@ use tauri::{AppHandle, Manager};
 
 const DATABASE_FILE_NAME: &str = "warp-tracker.sqlite";
 const BACKUP_DIRECTORY_NAME: &str = "backups";
+const BACKUP_TRASH_DIRECTORY_NAME: &str = "backup-trash";
 const AUTO_BACKUP_FILE_NAME: &str = "miku-warp-autosave.json";
+const BACKUP_TRASH_RETENTION_SECONDS: u64 = 183 * 24 * 60 * 60;
 const BACKUP_SCHEMA_VERSION: i64 = 1;
 const INIT_MIGRATION_VERSION: &str = "0001_init";
 const INIT_MIGRATION_SQL: &str = include_str!("../migrations/0001_init.sql");
@@ -241,6 +243,22 @@ pub struct BackupSnapshotSummary {
     pub file_name: String,
     pub exported_at: String,
     pub is_auto_save: bool,
+    pub size_bytes: u64,
+    pub accounts: usize,
+    pub banners: usize,
+    pub warp_items: usize,
+    pub import_batches: usize,
+    pub warp_pulls: usize,
+    pub uids: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashedBackupSnapshotSummary {
+    pub backup_path: String,
+    pub file_name: String,
+    pub exported_at: String,
+    pub deleted_at_unix_ms: u64,
     pub size_bytes: u64,
     pub accounts: usize,
     pub banners: usize,
@@ -838,9 +856,39 @@ pub fn delete_backup_snapshot(
     input: DeleteBackupSnapshotInput,
 ) -> Result<DeleteBackupSnapshotResult, String> {
     let backup_directory = resolve_backup_directory(app)?;
+    let backup_trash_directory = resolve_backup_trash_directory(app)?;
     let backup_path = resolve_backup_snapshot_path(&backup_directory, &input.file_name)?;
 
-    delete_backup_snapshot_file(&backup_directory, &backup_path)
+    move_backup_snapshot_file_to_trash(&backup_directory, &backup_trash_directory, &backup_path)
+}
+
+pub fn list_trashed_backup_snapshots(
+    app: &AppHandle,
+) -> Result<Vec<TrashedBackupSnapshotSummary>, String> {
+    let backup_trash_directory = resolve_backup_trash_directory(app)?;
+
+    list_trashed_backup_snapshots_in_directory(&backup_trash_directory)
+}
+
+pub fn restore_trashed_backup_snapshot(
+    app: &AppHandle,
+    input: DeleteBackupSnapshotInput,
+) -> Result<DeleteBackupSnapshotResult, String> {
+    let backup_directory = resolve_backup_directory(app)?;
+    let backup_trash_directory = resolve_backup_trash_directory(app)?;
+    let backup_path = resolve_backup_snapshot_path(&backup_trash_directory, &input.file_name)?;
+
+    restore_trashed_backup_snapshot_file(&backup_directory, &backup_trash_directory, &backup_path)
+}
+
+pub fn permanently_delete_trashed_backup_snapshot(
+    app: &AppHandle,
+    input: DeleteBackupSnapshotInput,
+) -> Result<DeleteBackupSnapshotResult, String> {
+    let backup_trash_directory = resolve_backup_trash_directory(app)?;
+    let backup_path = resolve_backup_snapshot_path(&backup_trash_directory, &input.file_name)?;
+
+    delete_backup_snapshot_file(&backup_trash_directory, &backup_path)
 }
 
 pub fn restore_latest_backup_snapshot(
@@ -927,6 +975,13 @@ fn resolve_backup_directory(app: &AppHandle) -> Result<PathBuf, String> {
         .app_data_dir()
         .map(|path| path.join(BACKUP_DIRECTORY_NAME))
         .map_err(|error| format!("Failed to resolve backup directory: {error}"))
+}
+
+fn resolve_backup_trash_directory(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_data_dir()
+        .map(|path| path.join(BACKUP_TRASH_DIRECTORY_NAME))
+        .map_err(|error| format!("Failed to resolve backup Trash directory: {error}"))
 }
 
 fn open_database(database_path: &PathBuf) -> Result<Connection, String> {
@@ -2911,6 +2966,69 @@ fn list_backup_snapshots_in_directory(
     Ok(snapshots)
 }
 
+fn list_trashed_backup_snapshots_in_directory(
+    backup_trash_directory: &Path,
+) -> Result<Vec<TrashedBackupSnapshotSummary>, String> {
+    if !backup_trash_directory.exists() {
+        return Ok(Vec::new());
+    }
+
+    purge_expired_trashed_backup_snapshots(backup_trash_directory)?;
+    let mut snapshots = Vec::new();
+
+    for entry in fs::read_dir(backup_trash_directory)
+        .map_err(|error| format!("Failed to read backup Trash directory: {error}"))?
+    {
+        let path = entry
+            .map_err(|error| format!("Failed to read backup Trash directory entry: {error}"))?
+            .path();
+
+        if !is_backup_snapshot_file(&path) {
+            continue;
+        }
+
+        if let Ok(summary) = read_trashed_backup_snapshot_summary(&path) {
+            snapshots.push(summary);
+        }
+    }
+
+    snapshots.sort_by(|left, right| {
+        right
+            .deleted_at_unix_ms
+            .cmp(&left.deleted_at_unix_ms)
+            .then_with(|| right.file_name.cmp(&left.file_name))
+    });
+
+    Ok(snapshots)
+}
+
+fn read_trashed_backup_snapshot_summary(
+    path: &Path,
+) -> Result<TrashedBackupSnapshotSummary, String> {
+    let summary = read_backup_snapshot_summary(path)?;
+    let metadata = fs::metadata(path)
+        .map_err(|error| format!("Failed to read backup Trash metadata: {error}"))?;
+    let deleted_at_unix_ms = metadata
+        .modified()
+        .ok()
+        .and_then(system_time_unix_ms)
+        .unwrap_or(0);
+
+    Ok(TrashedBackupSnapshotSummary {
+        backup_path: summary.backup_path,
+        file_name: summary.file_name,
+        exported_at: summary.exported_at,
+        deleted_at_unix_ms,
+        size_bytes: summary.size_bytes,
+        accounts: summary.accounts,
+        banners: summary.banners,
+        warp_items: summary.warp_items,
+        import_batches: summary.import_batches,
+        warp_pulls: summary.warp_pulls,
+        uids: summary.uids,
+    })
+}
+
 fn read_backup_snapshot_summary(path: &Path) -> Result<BackupSnapshotSummary, String> {
     let payload = fs::read_to_string(path)
         .map_err(|error| format!("Failed to read backup snapshot: {error}"))?;
@@ -2956,6 +3074,77 @@ fn find_latest_backup_snapshot_path(backup_directory: &Path) -> Result<PathBuf, 
         .ok_or_else(|| "No local backup snapshots found yet.".to_string())
 }
 
+fn move_backup_snapshot_file_to_trash(
+    backup_directory: &Path,
+    backup_trash_directory: &Path,
+    backup_path: &Path,
+) -> Result<DeleteBackupSnapshotResult, String> {
+    let file_name = backup_path
+        .file_name()
+        .and_then(|file_name| file_name.to_str())
+        .ok_or_else(|| "Backup snapshot file name is invalid.".to_string())?
+        .to_string();
+    if file_name == AUTO_BACKUP_FILE_NAME {
+        return Err(
+            "Autosave backup is kept for safety and cannot be deleted manually.".to_string(),
+        );
+    }
+
+    fs::create_dir_all(backup_trash_directory)
+        .map_err(|error| format!("Failed to create backup Trash directory: {error}"))?;
+    let trash_path = backup_trash_directory.join(&file_name);
+
+    if trash_path.exists() {
+        return Err("This backup is already in Trash.".to_string());
+    }
+
+    fs::copy(backup_path, &trash_path)
+        .map_err(|error| format!("Failed to move backup snapshot to Trash: {error}"))?;
+    fs::remove_file(backup_path)
+        .map_err(|error| format!("Failed to remove original backup snapshot: {error}"))?;
+
+    let remaining_snapshots = list_backup_snapshots_in_directory(backup_directory)?.len();
+
+    Ok(DeleteBackupSnapshotResult {
+        backup_path: trash_path.to_string_lossy().to_string(),
+        file_name,
+        remaining_snapshots,
+    })
+}
+
+fn restore_trashed_backup_snapshot_file(
+    backup_directory: &Path,
+    backup_trash_directory: &Path,
+    backup_path: &Path,
+) -> Result<DeleteBackupSnapshotResult, String> {
+    let file_name = backup_path
+        .file_name()
+        .and_then(|file_name| file_name.to_str())
+        .ok_or_else(|| "Backup snapshot file name is invalid.".to_string())?
+        .to_string();
+    let restored_path = backup_directory.join(&file_name);
+
+    if restored_path.exists() {
+        return Err("A local backup with this file name already exists.".to_string());
+    }
+
+    fs::create_dir_all(backup_directory)
+        .map_err(|error| format!("Failed to create backup directory: {error}"))?;
+    fs::copy(backup_path, &restored_path)
+        .map_err(|error| format!("Failed to restore backup snapshot from Trash: {error}"))?;
+    fs::remove_file(backup_path)
+        .map_err(|error| format!("Failed to remove restored backup from Trash: {error}"))?;
+
+    let remaining_snapshots =
+        list_trashed_backup_snapshots_in_directory(backup_trash_directory)?.len();
+
+    Ok(DeleteBackupSnapshotResult {
+        backup_path: restored_path.to_string_lossy().to_string(),
+        file_name,
+        remaining_snapshots,
+    })
+}
+
 fn delete_backup_snapshot_file(
     backup_directory: &Path,
     backup_path: &Path,
@@ -2983,6 +3172,46 @@ fn delete_backup_snapshot_file(
         file_name,
         remaining_snapshots,
     })
+}
+
+fn purge_expired_trashed_backup_snapshots(backup_trash_directory: &Path) -> Result<usize, String> {
+    if !backup_trash_directory.exists() {
+        return Ok(0);
+    }
+
+    let now = SystemTime::now();
+    let mut purged = 0;
+
+    for entry in fs::read_dir(backup_trash_directory)
+        .map_err(|error| format!("Failed to read backup Trash directory: {error}"))?
+    {
+        let path = entry
+            .map_err(|error| format!("Failed to read backup Trash directory entry: {error}"))?
+            .path();
+
+        if !is_backup_snapshot_file(&path) {
+            continue;
+        }
+
+        let is_expired = fs::metadata(&path)
+            .ok()
+            .and_then(|metadata| metadata.modified().ok())
+            .and_then(|modified| now.duration_since(modified).ok())
+            .map(|age| age.as_secs() >= BACKUP_TRASH_RETENTION_SECONDS)
+            .unwrap_or(false);
+
+        if is_expired && fs::remove_file(&path).is_ok() {
+            purged += 1;
+        }
+    }
+
+    Ok(purged)
+}
+
+fn system_time_unix_ms(time: SystemTime) -> Option<u64> {
+    time.duration_since(UNIX_EPOCH)
+        .ok()
+        .map(|duration| u64::try_from(duration.as_millis()).unwrap_or(u64::MAX))
 }
 
 fn resolve_backup_snapshot_path(
@@ -4296,7 +4525,7 @@ mod tests {
     }
 
     #[test]
-    fn deletes_backup_snapshot_file_after_validation() {
+    fn moves_backup_snapshot_file_to_trash_after_validation() {
         let mut connection = Connection::open_in_memory().expect("in-memory database");
         apply_migrations(&connection).expect("migration applies");
         upsert_warp_item_catalog(
@@ -4314,8 +4543,14 @@ mod tests {
         let export_result = export_backup_snapshot_to_directory(&connection, &backup_directory)
             .expect("backup export");
         let backup_path = PathBuf::from(&export_result.backup_path);
-        let delete_result =
-            delete_backup_snapshot_file(&backup_directory, &backup_path).expect("backup delete");
+        let delete_result = move_backup_snapshot_file_to_trash(
+            &backup_directory,
+            &backup_directory.join("trash"),
+            &backup_path,
+        )
+        .expect("backup delete");
+        let trashed = list_trashed_backup_snapshots_in_directory(&backup_directory.join("trash"))
+            .expect("backup trash list");
 
         assert_eq!(delete_result.remaining_snapshots, 0);
         assert_eq!(
@@ -4326,6 +4561,9 @@ mod tests {
                 .expect("backup file name")
         );
         assert!(!backup_path.exists());
+        assert_eq!(trashed.len(), 1);
+        assert_eq!(trashed[0].file_name, delete_result.file_name);
+        assert!(PathBuf::from(&delete_result.backup_path).exists());
 
         std::fs::remove_dir_all(backup_directory).ok();
     }
