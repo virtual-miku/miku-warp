@@ -30,6 +30,7 @@ const AUTO_BACKUP_SYNC_VERSION: &str = "0006_auto_backup_sync";
 const AUTO_BACKUP_SYNC_SQL: &str = include_str!("../migrations/0006_auto_backup_sync.sql");
 const ACCOUNT_AVATAR_VERSION: &str = "0007_account_avatar";
 const ACCOUNT_AVATAR_SQL: &str = include_str!("../migrations/0007_account_avatar.sql");
+const ACCOUNT_AVATAR_COLUMN: &str = "avatar_path";
 const GOOGLE_DRIVE_PROVIDER: &str = "google_drive";
 const DATA_CHANGED_TRIGGER: &str = "data_changed";
 
@@ -1045,6 +1046,7 @@ fn apply_migrations(connection: &Connection) -> Result<(), String> {
         .map_err(|error| format!("Failed to prepare migration metadata: {error}"))?;
 
     let mut applied_migrations = list_applied_migrations(connection)?;
+    reconcile_account_avatar_migration(connection, &mut applied_migrations)?;
 
     for migration in MIGRATIONS {
         if applied_migrations
@@ -1054,11 +1056,66 @@ fn apply_migrations(connection: &Connection) -> Result<(), String> {
             continue;
         }
 
-        connection
+        let transaction = connection.unchecked_transaction().map_err(|error| {
+            format!(
+                "Failed to start migration {} transaction: {error}",
+                migration.version
+            )
+        })?;
+
+        transaction
             .execute_batch(migration.sql)
             .map_err(|error| format!("Failed to apply migration {}: {error}", migration.version))?;
+        record_applied_migration(&transaction, migration.version)?;
+        transaction.commit().map_err(|error| {
+            format!(
+                "Failed to commit migration {} transaction: {error}",
+                migration.version
+            )
+        })?;
         applied_migrations.push(migration.version.to_string());
     }
+
+    Ok(())
+}
+
+fn reconcile_account_avatar_migration(
+    connection: &Connection,
+    applied_migrations: &mut Vec<String>,
+) -> Result<(), String> {
+    let metadata_is_missing = !applied_migrations
+        .iter()
+        .any(|version| version == ACCOUNT_AVATAR_VERSION);
+
+    if metadata_is_missing && accounts_has_avatar_column(connection)? {
+        record_applied_migration(connection, ACCOUNT_AVATAR_VERSION)?;
+        applied_migrations.push(ACCOUNT_AVATAR_VERSION.to_string());
+    }
+
+    Ok(())
+}
+
+fn accounts_has_avatar_column(connection: &Connection) -> Result<bool, String> {
+    connection
+        .query_row(
+            "SELECT EXISTS (
+               SELECT 1
+               FROM pragma_table_info('accounts')
+               WHERE name = ?1
+             )",
+            [ACCOUNT_AVATAR_COLUMN],
+            |row| row.get(0),
+        )
+        .map_err(|error| format!("Failed to inspect accounts schema: {error}"))
+}
+
+fn record_applied_migration(connection: &Connection, version: &str) -> Result<(), String> {
+    connection
+        .execute(
+            "INSERT OR IGNORE INTO schema_migrations (version) VALUES (?1)",
+            [version],
+        )
+        .map_err(|error| format!("Failed to record migration {version}: {error}"))?;
 
     Ok(())
 }
@@ -4291,6 +4348,49 @@ mod tests {
         assert_eq!(cloud_event_table_count, 1);
         assert_eq!(cloud_policy_table_count, 1);
         assert_eq!(backup_sync_state_table_count, 1);
+    }
+
+    #[test]
+    fn reconciles_account_avatar_column_when_migration_metadata_is_missing() {
+        let connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("initial migrations apply");
+        connection
+            .execute(
+                "INSERT INTO accounts (id, uid, avatar_path) VALUES (?1, ?2, ?3)",
+                params!["account-1", "800000000", "icon/avatar/1001.png"],
+            )
+            .expect("account with avatar");
+        connection
+            .execute(
+                "DELETE FROM schema_migrations WHERE version = ?1",
+                [ACCOUNT_AVATAR_VERSION],
+            )
+            .expect("remove account avatar migration metadata");
+
+        apply_migrations(&connection).expect("migration metadata is reconciled");
+
+        let applied_migrations =
+            list_applied_migrations(&connection).expect("migration table can be read");
+        let avatar_column_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*)
+                 FROM pragma_table_info('accounts')
+                 WHERE name = ?1",
+                [ACCOUNT_AVATAR_COLUMN],
+                |row| row.get(0),
+            )
+            .expect("avatar column count");
+        let avatar_path: Option<String> = connection
+            .query_row(
+                "SELECT avatar_path FROM accounts WHERE id = ?1",
+                ["account-1"],
+                |row| row.get(0),
+            )
+            .expect("stored avatar path");
+
+        assert_eq!(applied_migrations, planned_migrations());
+        assert_eq!(avatar_column_count, 1);
+        assert_eq!(avatar_path.as_deref(), Some("icon/avatar/1001.png"));
     }
 
     #[test]
