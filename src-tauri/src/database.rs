@@ -13,8 +13,9 @@ const DATABASE_FILE_NAME: &str = "warp-tracker.sqlite";
 const BACKUP_DIRECTORY_NAME: &str = "backups";
 const BACKUP_TRASH_DIRECTORY_NAME: &str = "backup-trash";
 const AUTO_BACKUP_FILE_NAME: &str = "miku-warp-autosave.json";
-const BACKUP_TRASH_RETENTION_SECONDS: u64 = 183 * 24 * 60 * 60;
 const BACKUP_SCHEMA_VERSION: i64 = 1;
+const DEFAULT_TRASH_RETENTION_DAYS: i64 = 183;
+const ALLOWED_TRASH_RETENTION_DAYS: [i64; 5] = [0, 30, 90, 183, 365];
 const INIT_MIGRATION_VERSION: &str = "0001_init";
 const INIT_MIGRATION_SQL: &str = include_str!("../migrations/0001_init.sql");
 const ALLOW_DUPLICATE_WARP_ITEM_NAMES_VERSION: &str = "0002_allow_duplicate_warp_item_names";
@@ -35,6 +36,9 @@ const ACCOUNT_TRASH_VERSION: &str = "0008_account_trash";
 const ACCOUNT_TRASH_SQL: &str = include_str!("../migrations/0008_account_trash.sql");
 const MANUAL_PITY_OVERRIDE_VERSION: &str = "0009_manual_pity_override";
 const MANUAL_PITY_OVERRIDE_SQL: &str = include_str!("../migrations/0009_manual_pity_override.sql");
+const TRASH_RETENTION_POLICY_VERSION: &str = "0010_trash_retention_policy";
+const TRASH_RETENTION_POLICY_SQL: &str =
+    include_str!("../migrations/0010_trash_retention_policy.sql");
 const GOOGLE_DRIVE_PROVIDER: &str = "google_drive";
 const DATA_CHANGED_TRIGGER: &str = "data_changed";
 
@@ -364,6 +368,19 @@ pub struct CloudBackupPolicy {
 pub struct UpdateCloudBackupPolicyInput {
     pub provider: String,
     pub auto_backup_enabled: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashRetentionPolicy {
+    pub retention_days: i64,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateTrashRetentionPolicyInput {
+    pub retention_days: i64,
 }
 
 #[derive(Debug, Serialize)]
@@ -741,6 +758,10 @@ const MIGRATIONS: &[Migration] = &[
         version: MANUAL_PITY_OVERRIDE_VERSION,
         sql: MANUAL_PITY_OVERRIDE_SQL,
     },
+    Migration {
+        version: TRASH_RETENTION_POLICY_VERSION,
+        sql: TRASH_RETENTION_POLICY_SQL,
+    },
 ];
 
 pub fn get_database_status(app: &AppHandle) -> Result<DatabaseStatus, String> {
@@ -1000,20 +1021,31 @@ pub fn delete_backup_snapshot(
 pub fn list_trashed_backup_snapshots(
     app: &AppHandle,
 ) -> Result<Vec<TrashedBackupSnapshotSummary>, String> {
+    let database_path = resolve_database_path(app)?;
+    let connection = open_database(&database_path)?;
+    let retention_days = read_trash_retention_policy(&connection)?.retention_days;
     let backup_trash_directory = resolve_backup_trash_directory(app)?;
 
-    list_trashed_backup_snapshots_in_directory(&backup_trash_directory)
+    list_trashed_backup_snapshots_in_directory(&backup_trash_directory, retention_days)
 }
 
 pub fn restore_trashed_backup_snapshot(
     app: &AppHandle,
     input: DeleteBackupSnapshotInput,
 ) -> Result<DeleteBackupSnapshotResult, String> {
+    let database_path = resolve_database_path(app)?;
+    let connection = open_database(&database_path)?;
+    let retention_days = read_trash_retention_policy(&connection)?.retention_days;
     let backup_directory = resolve_backup_directory(app)?;
     let backup_trash_directory = resolve_backup_trash_directory(app)?;
     let backup_path = resolve_backup_snapshot_path(&backup_trash_directory, &input.file_name)?;
 
-    restore_trashed_backup_snapshot_file(&backup_directory, &backup_trash_directory, &backup_path)
+    restore_trashed_backup_snapshot_file(
+        &backup_directory,
+        &backup_trash_directory,
+        &backup_path,
+        retention_days,
+    )
 }
 
 pub fn permanently_delete_trashed_backup_snapshot(
@@ -1098,6 +1130,23 @@ pub fn update_cloud_backup_policy(
     update_cloud_backup_policy_in_database(&mut connection, &input)
 }
 
+pub fn get_trash_retention_policy(app: &AppHandle) -> Result<TrashRetentionPolicy, String> {
+    let database_path = resolve_database_path(app)?;
+    let connection = open_database(&database_path)?;
+
+    read_trash_retention_policy(&connection)
+}
+
+pub fn update_trash_retention_policy(
+    app: &AppHandle,
+    input: UpdateTrashRetentionPolicyInput,
+) -> Result<TrashRetentionPolicy, String> {
+    let database_path = resolve_database_path(app)?;
+    let connection = open_database(&database_path)?;
+
+    update_trash_retention_policy_in_database(&connection, input.retention_days)
+}
+
 fn resolve_database_path(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
@@ -1129,8 +1178,9 @@ fn open_database(database_path: &PathBuf) -> Result<Connection, String> {
         .map_err(|error| format!("Failed to open database: {error}"))?;
 
     apply_migrations(&connection)?;
-    purge_expired_trashed_warp_pulls(&connection)?;
-    purge_expired_trashed_accounts(&connection)?;
+    let retention_days = read_trash_retention_policy(&connection)?.retention_days;
+    purge_expired_trashed_warp_pulls(&connection, retention_days)?;
+    purge_expired_trashed_accounts(&connection, retention_days)?;
 
     Ok(connection)
 }
@@ -2221,24 +2271,40 @@ fn permanently_delete_trashed_account_from_database(
     })
 }
 
-fn purge_expired_trashed_warp_pulls(connection: &Connection) -> Result<usize, String> {
+fn purge_expired_trashed_warp_pulls(
+    connection: &Connection,
+    retention_days: i64,
+) -> Result<usize, String> {
+    validate_trash_retention_days(retention_days)?;
+    if retention_days == 0 {
+        return Ok(0);
+    }
+
     connection
         .execute(
             "DELETE FROM warp_pulls
              WHERE deleted_at IS NOT NULL
-               AND deleted_at <= datetime('now', '-6 months')",
-            [],
+               AND deleted_at <= datetime('now', ?1)",
+            params![format!("-{retention_days} days")],
         )
         .map_err(|error| format!("Failed to purge expired Trash records: {error}"))
 }
 
-fn purge_expired_trashed_accounts(connection: &Connection) -> Result<usize, String> {
+fn purge_expired_trashed_accounts(
+    connection: &Connection,
+    retention_days: i64,
+) -> Result<usize, String> {
+    validate_trash_retention_days(retention_days)?;
+    if retention_days == 0 {
+        return Ok(0);
+    }
+
     connection
         .execute(
             "DELETE FROM accounts
              WHERE deleted_at IS NOT NULL
-               AND deleted_at <= datetime('now', '-6 months')",
-            [],
+               AND deleted_at <= datetime('now', ?1)",
+            params![format!("-{retention_days} days")],
         )
         .map_err(|error| format!("Failed to purge expired Trash accounts: {error}"))
 }
@@ -2756,6 +2822,68 @@ fn update_cloud_backup_policy_in_database(
         })?;
 
     read_cloud_backup_policy(connection, &input.provider)
+}
+
+fn read_trash_retention_policy(connection: &Connection) -> Result<TrashRetentionPolicy, String> {
+    connection
+        .execute(
+            "INSERT OR IGNORE INTO trash_retention_policy (id, retention_days)
+             VALUES (1, ?1)",
+            [DEFAULT_TRASH_RETENTION_DAYS],
+        )
+        .map_err(|error| format!("Failed to ensure Trash retention policy: {error}"))?;
+
+    connection
+        .query_row(
+            "SELECT retention_days, updated_at
+             FROM trash_retention_policy
+             WHERE id = 1",
+            [],
+            |row| {
+                Ok(TrashRetentionPolicy {
+                    retention_days: row.get(0)?,
+                    updated_at: row.get(1)?,
+                })
+            },
+        )
+        .map_err(|error| format!("Failed to read Trash retention policy: {error}"))
+}
+
+fn update_trash_retention_policy_in_database(
+    connection: &Connection,
+    retention_days: i64,
+) -> Result<TrashRetentionPolicy, String> {
+    validate_trash_retention_days(retention_days)?;
+    let transaction = connection
+        .unchecked_transaction()
+        .map_err(|error| format!("Failed to start Trash retention update: {error}"))?;
+    transaction
+        .execute(
+            "INSERT INTO trash_retention_policy (id, retention_days, updated_at)
+             VALUES (1, ?1, CURRENT_TIMESTAMP)
+             ON CONFLICT(id) DO UPDATE SET
+               retention_days = excluded.retention_days,
+               updated_at = CURRENT_TIMESTAMP",
+            [retention_days],
+        )
+        .map_err(|error| format!("Failed to update Trash retention policy: {error}"))?;
+
+    purge_expired_trashed_warp_pulls(&transaction, retention_days)?;
+    purge_expired_trashed_accounts(&transaction, retention_days)?;
+    transaction
+        .commit()
+        .map_err(|error| format!("Failed to commit Trash retention update: {error}"))?;
+    read_trash_retention_policy(connection)
+}
+
+fn validate_trash_retention_days(retention_days: i64) -> Result<(), String> {
+    if ALLOWED_TRASH_RETENTION_DAYS.contains(&retention_days) {
+        Ok(())
+    } else {
+        Err(format!(
+            "Unsupported Trash retention period: {retention_days} days."
+        ))
+    }
 }
 
 fn ensure_cloud_backup_policy(connection: &Connection, provider: &str) -> Result<(), String> {
@@ -3388,12 +3516,13 @@ fn list_backup_snapshots_in_directory(
 
 fn list_trashed_backup_snapshots_in_directory(
     backup_trash_directory: &Path,
+    retention_days: i64,
 ) -> Result<Vec<TrashedBackupSnapshotSummary>, String> {
     if !backup_trash_directory.exists() {
         return Ok(Vec::new());
     }
 
-    purge_expired_trashed_backup_snapshots(backup_trash_directory)?;
+    purge_expired_trashed_backup_snapshots(backup_trash_directory, retention_days)?;
     let mut snapshots = Vec::new();
 
     for entry in fs::read_dir(backup_trash_directory)
@@ -3536,6 +3665,7 @@ fn restore_trashed_backup_snapshot_file(
     backup_directory: &Path,
     backup_trash_directory: &Path,
     backup_path: &Path,
+    retention_days: i64,
 ) -> Result<DeleteBackupSnapshotResult, String> {
     let file_name = backup_path
         .file_name()
@@ -3556,7 +3686,7 @@ fn restore_trashed_backup_snapshot_file(
         .map_err(|error| format!("Failed to remove restored backup from Trash: {error}"))?;
 
     let remaining_snapshots =
-        list_trashed_backup_snapshots_in_directory(backup_trash_directory)?.len();
+        list_trashed_backup_snapshots_in_directory(backup_trash_directory, retention_days)?.len();
 
     Ok(DeleteBackupSnapshotResult {
         backup_path: restored_path.to_string_lossy().to_string(),
@@ -3594,11 +3724,18 @@ fn delete_backup_snapshot_file(
     })
 }
 
-fn purge_expired_trashed_backup_snapshots(backup_trash_directory: &Path) -> Result<usize, String> {
-    if !backup_trash_directory.exists() {
+fn purge_expired_trashed_backup_snapshots(
+    backup_trash_directory: &Path,
+    retention_days: i64,
+) -> Result<usize, String> {
+    validate_trash_retention_days(retention_days)?;
+    if retention_days == 0 || !backup_trash_directory.exists() {
         return Ok(0);
     }
 
+    let retention_seconds = u64::try_from(retention_days)
+        .map_err(|_| "Trash retention days cannot be negative.".to_string())?
+        .saturating_mul(24 * 60 * 60);
     let now = SystemTime::now();
     let mut purged = 0;
 
@@ -3617,7 +3754,7 @@ fn purge_expired_trashed_backup_snapshots(backup_trash_directory: &Path) -> Resu
             .ok()
             .and_then(|metadata| metadata.modified().ok())
             .and_then(|modified| now.duration_since(modified).ok())
-            .map(|age| age.as_secs() >= BACKUP_TRASH_RETENTION_SECONDS)
+            .map(|age| age.as_secs() >= retention_seconds)
             .unwrap_or(false);
 
         if is_expired && fs::remove_file(&path).is_ok() {
@@ -4831,6 +4968,14 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("backup sync state table count");
+        let trash_retention_policy_table_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master
+                 WHERE type = 'table' AND name = 'trash_retention_policy'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("Trash retention policy table count");
         let account_deleted_at_column_count: i64 = connection
             .query_row(
                 "SELECT COUNT(*)
@@ -4858,8 +5003,49 @@ mod tests {
         assert_eq!(cloud_event_table_count, 1);
         assert_eq!(cloud_policy_table_count, 1);
         assert_eq!(backup_sync_state_table_count, 1);
+        assert_eq!(trash_retention_policy_table_count, 1);
         assert_eq!(account_deleted_at_column_count, 1);
         assert_eq!(manual_pity_override_column_count, 1);
+    }
+
+    #[test]
+    fn manages_trash_retention_policy_with_an_allowlist() {
+        let connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+
+        let initial = read_trash_retention_policy(&connection).expect("default policy");
+        let updated = update_trash_retention_policy_in_database(&connection, 90)
+            .expect("supported retention updates");
+        let invalid = update_trash_retention_policy_in_database(&connection, 17);
+
+        assert_eq!(initial.retention_days, DEFAULT_TRASH_RETENTION_DAYS);
+        assert_eq!(updated.retention_days, 90);
+        assert!(invalid.is_err());
+        assert_eq!(
+            read_trash_retention_policy(&connection)
+                .expect("stored policy")
+                .retention_days,
+            90
+        );
+    }
+
+    #[test]
+    fn never_retention_does_not_purge_old_trash() {
+        let connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+        connection
+            .execute(
+                "INSERT INTO accounts (id, uid, deleted_at)
+                 VALUES ('account-old-trash', '800000001', datetime('now', '-2 years'))",
+                [],
+            )
+            .expect("old trashed account inserts");
+
+        let purged =
+            purge_expired_trashed_accounts(&connection, 0).expect("Never retention skips purge");
+
+        assert_eq!(purged, 0);
+        assert_eq!(count_table(&connection, "accounts"), 1);
     }
 
     #[test]
@@ -5399,8 +5585,11 @@ mod tests {
             &backup_path,
         )
         .expect("backup delete");
-        let trashed = list_trashed_backup_snapshots_in_directory(&backup_directory.join("trash"))
-            .expect("backup trash list");
+        let trashed = list_trashed_backup_snapshots_in_directory(
+            &backup_directory.join("trash"),
+            DEFAULT_TRASH_RETENTION_DAYS,
+        )
+        .expect("backup trash list");
 
         assert_eq!(delete_result.remaining_snapshots, 0);
         assert_eq!(
@@ -5903,7 +6092,8 @@ mod tests {
                 params![&pulls[1].id],
             )
             .expect("trash timestamp ages");
-        let purged = purge_expired_trashed_warp_pulls(&connection).expect("expired trash purges");
+        let purged = purge_expired_trashed_warp_pulls(&connection, DEFAULT_TRASH_RETENTION_DAYS)
+            .expect("expired trash purges");
 
         assert_eq!(permanent_result.affected_pulls, 1);
         assert_eq!(purged, 1);

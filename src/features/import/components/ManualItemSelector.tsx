@@ -16,10 +16,9 @@ import {
 } from '../../warp-history/domain/banner'
 import type { WarpItem } from '../../warp-history/domain/warp-item'
 import { getPityLevelClass } from '../../warp-history/domain/pity-level'
-import {
-  formatLocalDateTimeInput,
-  type ManualItemSelection,
-} from '../domain/manual-item-selector'
+import { type ManualItemSelection } from '../domain/manual-item-selector'
+import type { TimeZonePreference } from '../../settings/domain/localization'
+import { formatDateTimeLocalInput } from '../../../shared/lib/date-time'
 
 type CatalogItemTypeFilter = WarpItem['itemType'] | 'all'
 type CatalogMode = 'add' | 'edit'
@@ -28,6 +27,7 @@ type ManualItemSelectorProps = {
   fallbackBannerType: BannerType
   onChange: (selections: ManualItemSelection[]) => void
   selections: ManualItemSelection[]
+  timeZone: TimeZonePreference
 }
 
 const sortedCatalogItems = [...itemCatalog].sort(
@@ -41,6 +41,7 @@ export function ManualItemSelector({
   fallbackBannerType,
   onChange,
   selections,
+  timeZone,
 }: ManualItemSelectorProps) {
   const [catalogMode, setCatalogMode] = useState<CatalogMode>()
   const [editingSelection, setEditingSelection] =
@@ -60,7 +61,7 @@ export function ManualItemSelector({
       return
     }
 
-    const now = formatLocalDateTimeInput(new Date())
+    const now = formatDateTimeLocalInput(new Date(), timeZone)
     const selection: ManualItemSelection = {
       bannerType: getCompatibleBannerType(item, fallbackBannerType),
       id: createSelectionId(selections.length),

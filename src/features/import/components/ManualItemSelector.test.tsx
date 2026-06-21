@@ -23,6 +23,7 @@ describe('ManualItemSelector', () => {
         fallbackBannerType="character_event"
         onChange={vi.fn()}
         selections={[selection]}
+        timeZone="system"
       />,
     )
 

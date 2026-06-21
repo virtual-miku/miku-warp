@@ -13,6 +13,11 @@ import { itemCatalog } from '../data/item-catalog'
 import { getBannerLabel, getFiveStarHardPity } from '../domain/banner'
 import { getPityLevelClass } from '../domain/pity-level'
 import type { WarpPull } from '../domain/warp-pull'
+import type {
+  AppLanguage,
+  TimeZonePreference,
+} from '../../settings/domain/localization'
+import { formatDateTime } from '../../../shared/lib/date-time'
 
 type WarpTimelineProps = {
   pulls: WarpPull[]
@@ -26,8 +31,10 @@ type WarpTimelineProps = {
   isDeletingAll: boolean
   isDeletingSelected: boolean
   isSelecting: boolean
+  language: AppLanguage
   selectedPullIds: Set<string>
   showBannerLabel: boolean
+  timeZone: TimeZonePreference
   onPageChange: (page: number) => void
   onDeleteAll: () => void
   onDeleteSelected: () => void
@@ -52,8 +59,10 @@ export function WarpTimeline({
   isDeletingAll,
   isDeletingSelected,
   isSelecting,
+  language,
   selectedPullIds,
   showBannerLabel,
+  timeZone,
   onPageChange,
   onDeleteAll,
   onDeleteSelected,
@@ -150,10 +159,12 @@ export function WarpTimeline({
             <WarpHistoryRow
               isSelecting={isSelecting}
               key={pull.id}
+              language={language}
               onToggleSelection={onTogglePullSelection}
               pull={pull}
               selected={selectedPullIds.has(pull.id)}
               showBannerLabel={showBannerLabel}
+              timeZone={timeZone}
             />
           ))
         ) : (
@@ -202,16 +213,20 @@ export function WarpTimeline({
 
 function WarpHistoryRow({
   isSelecting,
+  language,
   onToggleSelection,
   pull,
   selected,
   showBannerLabel,
+  timeZone,
 }: {
   isSelecting: boolean
+  language: AppLanguage
   onToggleSelection: (pullId: string) => void
   pull: WarpPull
   selected: boolean
   showBannerLabel: boolean
+  timeZone: TimeZonePreference
 }) {
   const catalogItem = useMemo(
     () =>
@@ -251,7 +266,7 @@ function WarpHistoryRow({
         </span>
       </div>
       <time className="warp-time" dateTime={pull.pulledAt}>
-        {formatPullTime(pull.pulledAt)}
+        {formatPullTime(pull.pulledAt, language, timeZone)}
       </time>
       <div className="warp-pity">
         <strong
@@ -299,18 +314,12 @@ function WarpHistoryItemIcon({
   )
 }
 
-function formatPullTime(value: string) {
-  const date = new Date(value)
-  const dateLabel = new Intl.DateTimeFormat('id-ID', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }).format(date)
-  const timeLabel = [date.getHours(), date.getMinutes(), date.getSeconds()]
-    .map((part) => part.toString().padStart(2, '0'))
-    .join(':')
-
-  return `${dateLabel}, ${timeLabel}`
+function formatPullTime(
+  value: string,
+  language: AppLanguage,
+  timeZone: TimeZonePreference,
+) {
+  return formatDateTime(value, { language, timeZone }) ?? value
 }
 
 function formatItemType(value: WarpPull['itemType']) {

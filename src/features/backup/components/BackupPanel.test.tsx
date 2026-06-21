@@ -56,6 +56,7 @@ function renderBackupPanel(
       isExporting={false}
       isImporting={false}
       isRestoring={false}
+      language="en"
       onAutoBackupPolicyChange={noop}
       onCancelGoogleDrive={noop}
       onConnectGoogleDrive={noop}
@@ -67,6 +68,7 @@ function renderBackupPanel(
       onRestoreSnapshot={noop}
       onUploadGoogleDriveBackup={noop}
       snapshots={[]}
+      timeZone="system"
     />,
   )
 }

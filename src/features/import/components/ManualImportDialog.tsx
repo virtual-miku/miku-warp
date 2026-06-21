@@ -30,6 +30,7 @@ import {
   type BannerType,
 } from '../../warp-history/domain/banner'
 import type { Rarity } from '../../warp-history/domain/warp-pull'
+import type { TimeZonePreference } from '../../settings/domain/localization'
 
 const previewPageSize = 25
 type RarityFilter = Rarity | 'all'
@@ -63,6 +64,7 @@ type ManualImportDialogProps = {
   preview: ManualImportPreview
   saveNotice?: ManualImportSaveNotice
   targetAccountId: string
+  timeZone: TimeZonePreference
 }
 
 export function ManualImportDialog({
@@ -79,6 +81,7 @@ export function ManualImportDialog({
   preview,
   saveNotice,
   targetAccountId,
+  timeZone,
 }: ManualImportDialogProps) {
   const [importMode, setImportMode] = useState<ManualImportMode>('text')
   const [selectorSelections, setSelectorSelections] = useState<
@@ -241,6 +244,7 @@ export function ManualImportDialog({
               fallbackBannerType={fallbackBannerType}
               onChange={setSelectorSelections}
               selections={selectorSelections}
+              timeZone={timeZone}
             />
           )}
 

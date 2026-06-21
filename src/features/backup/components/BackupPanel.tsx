@@ -9,6 +9,11 @@ import {
 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { AppButton } from '../../../shared/ui/AppButton'
+import type {
+  AppLanguage,
+  TimeZonePreference,
+} from '../../settings/domain/localization'
+import { formatDateTime, formatNumber } from '../../../shared/lib/date-time'
 import {
   getCloudBackupPolicyDetail,
   type CloudBackupPolicy,
@@ -53,11 +58,13 @@ type BackupPanelProps = {
   isImporting: boolean
   isRestoring: boolean
   isDeleting: boolean
+  language: AppLanguage
   notice?: BackupNotice
   deletingFileName?: string
   restoringCloudFileId?: string
   restoringFileName?: string
   snapshots: BackupSnapshotInfo[]
+  timeZone: TimeZonePreference
   onDeleteSnapshot: (fileName: string) => void
   onCancelGoogleDrive: () => void
   onConnectGoogleDrive: (input?: GoogleOAuthClientInput) => void
@@ -83,12 +90,14 @@ export function BackupPanel({
   isExporting,
   isImporting,
   isDeleting,
+  language,
   isRestoring,
   notice,
   deletingFileName,
   restoringCloudFileId,
   restoringFileName,
   snapshots,
+  timeZone,
   onDeleteSnapshot,
   onAutoBackupPolicyChange,
   onCancelGoogleDrive,
@@ -251,11 +260,11 @@ export function BackupPanel({
                         <div>
                           <strong>
                             {snapshot.remoteModifiedTime
-                              ? `Backup ${formatSnapshotTime(snapshot.remoteModifiedTime)}`
+                              ? `Backup ${formatSnapshotTime(snapshot.remoteModifiedTime, language, timeZone)}`
                               : 'Time unavailable'}
                           </strong>
                           <span title={snapshot.fileName}>
-                            {formatBackupSizeKilobytes(snapshot.size)}
+                            {formatBackupSizeKilobytes(snapshot.size, language)}
                           </span>
                         </div>
                         <div className="backup-snapshot-actions">
@@ -316,10 +325,10 @@ export function BackupPanel({
                 <div className="backup-snapshot-row" key={snapshot.fileName}>
                   <div>
                     <strong>
-                      Backup {formatSnapshotTime(snapshot.exportedAt)}
+                      Backup {formatSnapshotTime(snapshot.exportedAt, language, timeZone)}
                     </strong>
                     <span title={snapshot.fileName}>
-                      {formatBackupSizeKilobytes(snapshot.sizeBytes)}
+                      {formatBackupSizeKilobytes(snapshot.sizeBytes, language)}
                     </span>
                   </div>
                   <div className="backup-snapshot-actions">
@@ -481,21 +490,18 @@ function getGoogleDriveActionLabel(
   return 'Connect'
 }
 
-function formatSnapshotTime(value: string) {
-  const date = new Date(value)
-  const dateLabel = new Intl.DateTimeFormat('id-ID', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }).format(date)
-  const timeLabel = [date.getHours(), date.getMinutes(), date.getSeconds()]
-    .map((part) => part.toString().padStart(2, '0'))
-    .join(':')
-
-  return `${dateLabel}, ${timeLabel}`
+function formatSnapshotTime(
+  value: string,
+  language: AppLanguage,
+  timeZone: TimeZonePreference,
+) {
+  return formatDateTime(value, { language, timeZone }) ?? value
 }
 
-function formatBackupSizeKilobytes(size: number | string | undefined) {
+function formatBackupSizeKilobytes(
+  size: number | string | undefined,
+  language: AppLanguage,
+) {
   const parsedSize =
     typeof size === 'number' ? size : Number.parseInt(size ?? '', 10)
 
@@ -505,5 +511,5 @@ function formatBackupSizeKilobytes(size: number | string | undefined) {
 
   const kilobytes = Math.max(1, Math.round(parsedSize / 1024))
 
-  return `${new Intl.NumberFormat('id-ID').format(kilobytes)} KB`
+  return `${formatNumber(kilobytes, language)} KB`
 }

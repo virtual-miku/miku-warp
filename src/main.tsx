@@ -5,9 +5,14 @@ import {
   applyThemePreference,
   loadThemePreference,
 } from './features/settings/domain/theme.ts'
+import {
+  applyLanguagePreference,
+  loadLanguagePreference,
+} from './features/settings/domain/localization.ts'
 import './index.css'
 
 applyThemePreference(loadThemePreference())
+applyLanguagePreference(loadLanguagePreference())
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

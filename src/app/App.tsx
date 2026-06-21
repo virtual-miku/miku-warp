@@ -143,6 +143,23 @@ import {
 } from '../features/trash/data/trash-history'
 import { SettingsPanel } from '../features/settings/components/SettingsPanel'
 import {
+  getTrashRetentionPolicy,
+  updateTrashRetentionPolicy,
+  type TrashRetentionDays,
+} from '../features/settings/data/trash-retention'
+import {
+  applyLanguagePreference,
+  formatRetentionLabel,
+  loadLanguagePreference,
+  loadTimeZonePreference,
+  resolveTimeZone,
+  saveLanguagePreference,
+  saveTimeZonePreference,
+  translate,
+  type AppLanguage,
+  type TimeZonePreference,
+} from '../features/settings/domain/localization'
+import {
   applyThemePreference,
   loadThemePreference,
   saveThemePreference,
@@ -251,6 +268,13 @@ export function App() {
   const [activeView, setActiveView] = useState<AppView>('dashboard')
   const [themePreference, setThemePreference] =
     useState<ThemePreference>(loadThemePreference)
+  const [languagePreference, setLanguagePreference] =
+    useState<AppLanguage>(loadLanguagePreference)
+  const [timeZonePreference, setTimeZonePreference] =
+    useState<TimeZonePreference>(loadTimeZonePreference)
+  const [trashRetentionDays, setTrashRetentionDays] =
+    useState<TrashRetentionDays>(183)
+  const [trashRetentionUpdating, setTrashRetentionUpdating] = useState(false)
   const [activeBannerType, setActiveBannerType] =
     useState<BannerFilterType>(defaultBannerType)
   const [manualImportOpen, setManualImportOpen] = useState(false)
@@ -395,6 +419,10 @@ export function App() {
   useEffect(() => {
     applyThemePreference(themePreference)
   }, [themePreference])
+
+  useEffect(() => {
+    applyLanguagePreference(languagePreference)
+  }, [languagePreference])
 
   const timelinePulls = useMemo(
     () => annotatePityAtPull(persistedPulls),
@@ -779,6 +807,22 @@ export function App() {
           setBackupSnapshots([])
         }
       })
+
+    return () => {
+      isActive = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let isActive = true
+
+    getTrashRetentionPolicy()
+      .then((policy) => {
+        if (isActive) {
+          setTrashRetentionDays(policy.retentionDays)
+        }
+      })
+      .catch(() => undefined)
 
     return () => {
       isActive = false
@@ -1237,6 +1281,39 @@ export function App() {
   const handleThemeChange = (theme: ThemePreference) => {
     setThemePreference(theme)
     saveThemePreference(theme)
+  }
+
+  const handleLanguageChange = (language: AppLanguage) => {
+    setLanguagePreference(language)
+    saveLanguagePreference(language)
+  }
+
+  const handleTimeZoneChange = (timeZone: TimeZonePreference) => {
+    setTimeZonePreference(timeZone)
+    saveTimeZonePreference(timeZone)
+  }
+
+  const handleTrashRetentionChange = async (
+    retentionDays: TrashRetentionDays,
+  ) => {
+    if (trashRetentionUpdating || retentionDays === trashRetentionDays) {
+      return
+    }
+
+    setTrashRetentionUpdating(true)
+    try {
+      const policy = await updateTrashRetentionPolicy(retentionDays)
+      setTrashRetentionDays(policy.retentionDays)
+      await Promise.all([
+        refreshTrashedPulls(),
+        refreshTrashedAccounts(),
+        refreshTrashedBackupSnapshots(),
+      ])
+    } catch (error) {
+      setTrashError(getErrorMessage(error))
+    } finally {
+      setTrashRetentionUpdating(false)
+    }
   }
 
   const handleAccountChange = (accountId: string) => {
@@ -2047,7 +2124,7 @@ export function App() {
     const draft = buildManualImportDraft(preview, {
       accountId: saveAccount.id,
       fallbackBannerType: manualFallbackBannerType,
-      timezone: 'Asia/Jakarta',
+      timezone: resolveTimeZone(timeZonePreference),
     })
 
     if (draft.status !== 'ready') {
@@ -2746,7 +2823,7 @@ export function App() {
               type="button"
             >
               <LayoutDashboard size={18} aria-hidden="true" />
-              Dashboard
+              {translate(languagePreference, 'nav.dashboard')}
             </button>
             <button
               aria-current={activeView === 'accounts' ? 'page' : undefined}
@@ -2759,7 +2836,7 @@ export function App() {
               type="button"
             >
               <UsersRound size={18} aria-hidden="true" />
-              Accounts
+              {translate(languagePreference, 'nav.accounts')}
             </button>
             <button
               aria-current={activeView === 'import' ? 'page' : undefined}
@@ -2772,7 +2849,7 @@ export function App() {
               type="button"
             >
               <FileInput size={18} aria-hidden="true" />
-              Import
+              {translate(languagePreference, 'nav.import')}
             </button>
             <button
               aria-current={activeView === 'backup' ? 'page' : undefined}
@@ -2785,7 +2862,7 @@ export function App() {
               type="button"
             >
               <Cloud size={18} aria-hidden="true" />
-              Backup
+              {translate(languagePreference, 'nav.backup')}
             </button>
             <button
               aria-current={activeView === 'settings' ? 'page' : undefined}
@@ -2798,7 +2875,7 @@ export function App() {
               type="button"
             >
               <Settings2 size={18} aria-hidden="true" />
-              Settings
+              {translate(languagePreference, 'nav.settings')}
             </button>
             <button
               aria-current={activeView === 'trash' ? 'page' : undefined}
@@ -2811,7 +2888,7 @@ export function App() {
               type="button"
             >
               <Trash2 size={18} aria-hidden="true" />
-              Trash
+              {translate(languagePreference, 'nav.trash')}
             </button>
           </nav>
 
@@ -2854,7 +2931,7 @@ export function App() {
                   <h1>
                     {hasDashboardHistory
                       ? getBannerFilterLabel(activeBannerType)
-                      : 'Dashboard'}
+                      : translate(languagePreference, 'nav.dashboard')}
                   </h1>
                 </div>
               </header>
@@ -2909,8 +2986,10 @@ export function App() {
                         isDeletingAll={deletingAllHistory}
                         isDeletingSelected={deletingSelectedHistory}
                         isSelecting={historySelecting}
+                        language={languagePreference}
                         selectedPullIds={selectedHistoryPullIds}
                         showBannerLabel={activeBannerType === 'all'}
+                        timeZone={timeZonePreference}
                         onDeleteAll={handleDeleteAllHistory}
                         onDeleteSelected={handleDeleteSelectedHistory}
                         onOpenImport={() => setImportDialogOpen(true)}
@@ -2950,16 +3029,18 @@ export function App() {
             <>
               <header className="workspace-header">
                 <div>
-                  <h1>Accounts</h1>
+                  <h1>{translate(languagePreference, 'nav.accounts')}</h1>
                 </div>
               </header>
               <AccountManagementPanel
                 accounts={accounts}
                 activeAccountId={activeAccount.id}
                 isDeletingAccount={movingAccountToTrashId !== undefined}
+                language={languagePreference}
                 onDeleteAccount={handleRequestDeleteAccount}
                 onOpenAccount={handleOpenAccount}
                 onOpenAvatarPicker={handleOpenAvatarPicker}
+                timeZone={timeZonePreference}
               />
             </>
           ) : null}
@@ -2968,7 +3049,7 @@ export function App() {
             <>
               <header className="workspace-header">
                 <div>
-                  <h1>Import</h1>
+                  <h1>{translate(languagePreference, 'nav.import')}</h1>
                 </div>
               </header>
               <section className="workspace-panel-page">
@@ -2999,7 +3080,7 @@ export function App() {
             <>
               <header className="workspace-header">
                 <div>
-                  <h1>Backup</h1>
+                  <h1>{translate(languagePreference, 'nav.backup')}</h1>
                 </div>
               </header>
               <section className="workspace-panel-page">
@@ -3018,10 +3099,12 @@ export function App() {
                   isImporting={backupImporting}
                   isDeleting={backupDeleting}
                   isRestoring={backupRestoring}
+                  language={languagePreference}
                   notice={backupNotice}
                   restoringCloudFileId={restoringCloudBackupFileId}
                   restoringFileName={restoringBackupFileName}
                   snapshots={backupSnapshots}
+                  timeZone={timeZonePreference}
                   onAutoBackupPolicyChange={handleAutoBackupPolicyChange}
                   onCancelGoogleDrive={handleCancelGoogleDriveConnection}
                   onConnectGoogleDrive={handleConnectGoogleDrive}
@@ -3041,12 +3124,19 @@ export function App() {
             <>
               <header className="workspace-header">
                 <div>
-                  <h1>Settings</h1>
+                  <h1>{translate(languagePreference, 'settings.title')}</h1>
                 </div>
               </header>
               <SettingsPanel
+                language={languagePreference}
+                onLanguageChange={handleLanguageChange}
                 onThemeChange={handleThemeChange}
+                onTimeZoneChange={handleTimeZoneChange}
+                onTrashRetentionChange={handleTrashRetentionChange}
                 theme={themePreference}
+                timeZone={timeZonePreference}
+                trashRetentionDays={trashRetentionDays}
+                trashRetentionUpdating={trashRetentionUpdating}
               />
             </>
           ) : null}
@@ -3055,7 +3145,7 @@ export function App() {
             <>
               <header className="workspace-header">
                 <div>
-                  <h1>Trash</h1>
+                  <h1>{translate(languagePreference, 'nav.trash')}</h1>
                 </div>
               </header>
               <TrashPanel
@@ -3071,6 +3161,7 @@ export function App() {
                 isBackupSelecting={backupTrashSelecting}
                 isHistoryLoading={trashLoading}
                 isSelecting={trashSelecting}
+                language={languagePreference}
                 onAccountPermanentlyDelete={handleRequestDeleteTrashedAccount}
                 onAccountRestore={handleRequestRestoreTrashedAccount}
                 onBackupDeleteAll={handleRequestDeleteAllTrashedBackups}
@@ -3108,6 +3199,8 @@ export function App() {
                 selectedBackupFileNames={selectedBackupTrashFileNames}
                 selectedPullIds={selectedTrashPullIds}
                 totalPulls={trashTotalPulls}
+                trashRetentionDays={trashRetentionDays}
+                timeZone={timeZonePreference}
               />
             </>
           ) : null}
@@ -3137,6 +3230,7 @@ export function App() {
         preview={manualImportPreview}
         saveNotice={manualImportSaveNotice}
         targetAccountId={manualImportTargetAccountId}
+        timeZone={timeZonePreference}
       />
       <ConfirmDialog
         confirmLabel="Import"
@@ -3155,7 +3249,10 @@ export function App() {
       <ConfirmDialog
         confirmLabel="Move to Trash"
         confirmIcon={Trash2}
-        description={formatAccountDeleteDescription(accountDeleteConfirmation)}
+        description={formatAccountDeleteDescription(
+          accountDeleteConfirmation,
+          formatRetentionLabel(languagePreference, trashRetentionDays),
+        )}
         isOpen={accountDeleteConfirmation !== undefined}
         isPending={movingAccountToTrashId !== undefined}
         onCancel={() => setAccountDeleteConfirmation(undefined)}
@@ -3169,7 +3266,10 @@ export function App() {
             ? 'Move all to Trash'
             : 'Move to Trash'
         }
-        description={formatHistoryDeleteDescription(historyDeleteConfirmation)}
+        description={formatHistoryDeleteDescription(
+          historyDeleteConfirmation,
+          formatRetentionLabel(languagePreference, trashRetentionDays),
+        )}
         isOpen={historyDeleteConfirmation !== undefined}
         isPending={deletingSelectedHistory || deletingAllHistory}
         onCancel={() => setHistoryDeleteConfirmation(undefined)}
@@ -3364,20 +3464,22 @@ function formatAccountMeta(account: WarpAccount | undefined) {
 
 function formatHistoryDeleteDescription(
   confirmation: HistoryDeleteConfirmation | undefined,
+  retentionLabel: string,
 ) {
   if (!confirmation) {
     return ''
   }
 
   if (confirmation.kind === 'selected') {
-    return `${confirmation.totalPulls} selected history items will be moved to Trash for UID ${confirmation.uid}. Their banner pity will be recalculated, and they can be restored for 6 months.`
+    return `${confirmation.totalPulls} selected history items will be moved to Trash for UID ${confirmation.uid}. Their banner pity will be recalculated, and they can be restored for ${retentionLabel}.`
   }
 
-  return `All ${confirmation.totalPulls} history records for UID ${confirmation.uid} will be moved to Trash. Other UIDs will not be affected, and these items can be restored for 6 months.`
+  return `All ${confirmation.totalPulls} history records for UID ${confirmation.uid} will be moved to Trash. Other UIDs will not be affected, and these items can be restored for ${retentionLabel}.`
 }
 
 function formatAccountDeleteDescription(
   confirmation: AccountDeleteConfirmation | undefined,
+  retentionLabel: string,
 ) {
   if (!confirmation) {
     return ''
@@ -3386,7 +3488,7 @@ function formatAccountDeleteDescription(
   const { account } = confirmation
   const pulls = account.totalPulls === 1 ? '1 pull' : `${account.totalPulls} pulls`
 
-  return `UID ${account.uid} and its ${pulls} will be moved to Trash. The current active UID will not change, and this account can be restored for 6 months.`
+  return `UID ${account.uid} and its ${pulls} will be moved to Trash. The current active UID will not change, and this account can be restored for ${retentionLabel}.`
 }
 
 function formatManualImportConfirmationDescription(

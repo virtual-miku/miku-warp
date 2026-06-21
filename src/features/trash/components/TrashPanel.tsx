@@ -14,6 +14,17 @@ import { getCatalogAssetUrl } from '../../warp-history/data/catalog-assets'
 import { getBannerLabel } from '../../warp-history/domain/banner'
 import { AppButton } from '../../../shared/ui/AppButton'
 import type { TrashedAccount, TrashedWarpPull } from '../data/trash-history'
+import {
+  formatRetentionLabel,
+  translate,
+  type AppLanguage,
+  type TimeZonePreference,
+} from '../../settings/domain/localization'
+import {
+  formatDateTime as formatDateTimeValue,
+  formatNumber,
+  type DateTimePreferences,
+} from '../../../shared/lib/date-time'
 
 export type TrashTab = 'history' | 'accounts' | 'backups'
 
@@ -30,6 +41,7 @@ type TrashPanelProps = {
   isBackupSelecting: boolean
   isHistoryLoading: boolean
   isSelecting: boolean
+  language: AppLanguage
   page: number
   pageSize: number
   pulls: TrashedWarpPull[]
@@ -39,6 +51,8 @@ type TrashPanelProps = {
   selectedBackupFileNames: Set<string>
   selectedPullIds: Set<string>
   totalPulls: number
+  trashRetentionDays: number
+  timeZone: TimeZonePreference
   onAccountPermanentlyDelete: (account: TrashedAccount) => void
   onAccountRestore: (account: TrashedAccount) => void
   onBackupDeleteAll: () => void
@@ -72,6 +86,7 @@ export function TrashPanel({
   isBackupSelecting,
   isHistoryLoading,
   isSelecting,
+  language,
   page,
   pageSize,
   pulls,
@@ -81,6 +96,8 @@ export function TrashPanel({
   selectedBackupFileNames,
   selectedPullIds,
   totalPulls,
+  trashRetentionDays,
+  timeZone,
   onAccountPermanentlyDelete,
   onAccountRestore,
   onBackupDeleteAll,
@@ -100,6 +117,8 @@ export function TrashPanel({
   onToggleBackupSelection,
   onTogglePullSelection,
 }: TrashPanelProps) {
+  const dateTimePreferences = { language, timeZone }
+  const retentionLabel = formatRetentionLabel(language, trashRetentionDays)
   const pageCount = Math.max(1, Math.ceil(totalPulls / pageSize))
   const isHistoryMutating =
     deletingPullId !== undefined || restoringPullId !== undefined
@@ -119,7 +138,13 @@ export function TrashPanel({
       <header className="panel-header">
         <div>
           <h2>{titleByTab[activeTab]}</h2>
-          <span>Items are removed permanently after 6 months.</span>
+          <span>
+            {trashRetentionDays === 0
+              ? translate(language, 'trash.summary.never')
+              : translate(language, 'trash.summary', {
+                  retention: retentionLabel,
+                })}
+          </span>
         </div>
         {activeTab === 'history' ? (
           <TrashHistoryActions
@@ -199,13 +224,20 @@ export function TrashPanel({
                 onRestore={onRestore}
                 onToggleSelection={onTogglePullSelection}
                 pull={pull}
+                dateTimePreferences={dateTimePreferences}
                 selected={selectedPullIds.has(pull.id)}
               />
             ))
           ) : (
             <div className="warp-empty">
               <strong>{isHistoryLoading ? 'Loading Trash' : 'Trash is empty'}</strong>
-              <span>Deleted warp records will stay here for 6 months.</span>
+              <span>
+                {trashRetentionDays === 0
+                  ? translate(language, 'trash.summary.never')
+                  : translate(language, 'trash.history.empty', {
+                      retention: retentionLabel,
+                    })}
+              </span>
             </div>
           )
         ) : activeTab === 'accounts' ? (
@@ -213,6 +245,7 @@ export function TrashPanel({
             accounts.map((account) => (
               <TrashAccountRow
                 account={account}
+                dateTimePreferences={dateTimePreferences}
                 isDeleting={deletingAccountId === account.id}
                 isDisabled={isMutating}
                 isRestoring={restoringAccountId === account.id}
@@ -226,7 +259,13 @@ export function TrashPanel({
               <strong>
                 {isAccountLoading ? 'Loading account Trash' : 'No deleted accounts'}
               </strong>
-              <span>Deleted accounts will stay here for 6 months.</span>
+              <span>
+                {trashRetentionDays === 0
+                  ? translate(language, 'trash.summary.never')
+                  : translate(language, 'trash.accounts.empty', {
+                      retention: retentionLabel,
+                    })}
+              </span>
             </div>
           )
         ) : backupSnapshots.length > 0 ? (
@@ -242,6 +281,7 @@ export function TrashPanel({
               onToggleSelection={onToggleBackupSelection}
               selected={selectedBackupFileNames.has(snapshot.fileName)}
               snapshot={snapshot}
+              dateTimePreferences={dateTimePreferences}
             />
           ))
         ) : (
@@ -249,7 +289,13 @@ export function TrashPanel({
             <strong>
               {isBackupLoading ? 'Loading backup Trash' : 'No deleted backups'}
             </strong>
-            <span>Deleted local backups will stay here for 6 months.</span>
+            <span>
+              {trashRetentionDays === 0
+                ? translate(language, 'trash.summary.never')
+                : translate(language, 'trash.backups.empty', {
+                    retention: retentionLabel,
+                  })}
+            </span>
           </div>
         )}
       </div>
@@ -446,6 +492,7 @@ function TrashBackupActions({
 }
 
 function TrashRow({
+  dateTimePreferences,
   isDeleting,
   isDisabled,
   isSelecting,
@@ -456,6 +503,7 @@ function TrashRow({
   pull,
   selected,
 }: {
+  dateTimePreferences: DateTimePreferences
   isDeleting: boolean
   isDisabled: boolean
   isSelecting: boolean
@@ -486,8 +534,10 @@ function TrashRow({
         <span>{getBannerLabel(pull.bannerType)}</span>
       </div>
       <div className="trash-date">
-        <span>Warped {formatDateTime(pull.pulledAt)}</span>
-        <span>Deleted {formatDateTime(pull.deletedAt, true)}</span>
+        <span>Warped {formatDateTimeValue(pull.pulledAt, dateTimePreferences)}</span>
+        <span>
+          Deleted {formatDateTimeValue(pull.deletedAt, dateTimePreferences, { assumeUtc: true })}
+        </span>
       </div>
       <div className="trash-actions">
         <AppButton
@@ -518,6 +568,7 @@ function TrashRow({
 }
 
 function TrashBackupRow({
+  dateTimePreferences,
   isDeleting,
   isDisabled,
   isSelecting,
@@ -528,6 +579,7 @@ function TrashBackupRow({
   selected,
   snapshot,
 }: {
+  dateTimePreferences: DateTimePreferences
   isDeleting: boolean
   isDisabled: boolean
   isSelecting: boolean
@@ -560,12 +612,12 @@ function TrashBackupRow({
         <FileJson size={19} />
       </div>
       <div className="trash-item-copy">
-        <strong>Backup {formatDateTime(snapshot.exportedAt)}</strong>
+        <strong>Backup {formatDateTimeValue(snapshot.exportedAt, dateTimePreferences)}</strong>
         <span title={snapshot.fileName}>{snapshot.fileName}</span>
       </div>
       <div className="trash-date">
-        <span>{formatBackupSizeKilobytes(snapshot.sizeBytes)}</span>
-        <span>Deleted {formatDateTime(snapshot.deletedAtUnixMs)}</span>
+        <span>{formatBackupSizeKilobytes(snapshot.sizeBytes, dateTimePreferences)}</span>
+        <span>Deleted {formatDateTimeValue(snapshot.deletedAtUnixMs, dateTimePreferences)}</span>
       </div>
       <div className="trash-actions">
         <AppButton
@@ -597,6 +649,7 @@ function TrashBackupRow({
 
 function TrashAccountRow({
   account,
+  dateTimePreferences,
   isDeleting,
   isDisabled,
   isRestoring,
@@ -604,6 +657,7 @@ function TrashAccountRow({
   onRestore,
 }: {
   account: TrashedAccount
+  dateTimePreferences: DateTimePreferences
   isDeleting: boolean
   isDisabled: boolean
   isRestoring: boolean
@@ -620,8 +674,10 @@ function TrashAccountRow({
         <span>{formatAccountMeta(account)}</span>
       </div>
       <div className="trash-date">
-        <span>{formatLastPull(account.lastPullAt)}</span>
-        <span>Deleted {formatDateTime(account.deletedAt, true)}</span>
+        <span>{formatLastPull(account.lastPullAt, dateTimePreferences)}</span>
+        <span>
+          Deleted {formatDateTimeValue(account.deletedAt, dateTimePreferences, { assumeUtc: true })}
+        </span>
       </div>
       <div className="trash-actions">
         <AppButton
@@ -685,34 +741,24 @@ function formatAccountMeta(account: TrashedAccount) {
   return `${pulls} - ${region.toUpperCase()}`
 }
 
-function formatLastPull(value: string | undefined) {
-  return value ? `Last pull ${formatDateTime(value)}` : 'No saved pulls'
+function formatLastPull(
+  value: string | undefined,
+  preferences: DateTimePreferences,
+) {
+  return value
+    ? `Last pull ${formatDateTimeValue(value, preferences)}`
+    : 'No saved pulls'
 }
 
-function formatDateTime(value: string | number, isUtc = false) {
-  const normalizedValue =
-    typeof value === 'string' && isUtc && !value.endsWith('Z')
-      ? `${value}Z`
-      : value
-  const date = new Date(normalizedValue)
-  const dateLabel = new Intl.DateTimeFormat('id-ID', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }).format(date)
-  const timeLabel = [date.getHours(), date.getMinutes(), date.getSeconds()]
-    .map((part) => part.toString().padStart(2, '0'))
-    .join(':')
-
-  return `${dateLabel}, ${timeLabel}`
-}
-
-function formatBackupSizeKilobytes(size: number) {
+function formatBackupSizeKilobytes(
+  size: number,
+  preferences: DateTimePreferences,
+) {
   if (!Number.isFinite(size) || size < 0) {
     return 'Size unavailable'
   }
 
   const kilobytes = Math.max(1, Math.round(size / 1024))
 
-  return `${new Intl.NumberFormat('id-ID').format(kilobytes)} KB`
+  return `${formatNumber(kilobytes, preferences.language)} KB`
 }

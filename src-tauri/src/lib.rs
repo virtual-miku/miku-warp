@@ -216,6 +216,21 @@ fn get_cloud_backup_policy(app: tauri::AppHandle) -> Result<database::CloudBacku
 }
 
 #[tauri::command]
+fn get_trash_retention_policy(
+    app: tauri::AppHandle,
+) -> Result<database::TrashRetentionPolicy, String> {
+    database::get_trash_retention_policy(&app)
+}
+
+#[tauri::command]
+fn update_trash_retention_policy(
+    app: tauri::AppHandle,
+    input: database::UpdateTrashRetentionPolicyInput,
+) -> Result<database::TrashRetentionPolicy, String> {
+    database::update_trash_retention_policy(&app, input)
+}
+
+#[tauri::command]
 fn scan_game_history_source(
     input: game_history::ScanGameHistorySourceInput,
 ) -> game_history::GameHistorySourceScanResult {
@@ -578,6 +593,7 @@ pub fn run() {
             get_auto_backup_sync_status,
             get_cloud_backup_status,
             get_cloud_backup_policy,
+            get_trash_retention_policy,
             get_database_status,
             import_game_history,
             list_accounts,
@@ -604,6 +620,7 @@ pub fn run() {
             find_game_install_paths,
             sync_warp_item_catalog,
             update_cloud_backup_policy,
+            update_trash_retention_policy,
             update_account_avatar,
             validate_game_install_path,
             upload_latest_google_drive_backup

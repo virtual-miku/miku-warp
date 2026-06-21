@@ -266,6 +266,8 @@
 
 .settings-panel {
   align-self: start;
+  display: grid;
+  gap: 14px;
 }
 
 .settings-card {
@@ -273,6 +275,50 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
+}
+
+.settings-preference-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.settings-preference-card .settings-card-header {
+  margin-bottom: 12px;
+}
+
+.settings-field {
+  display: grid;
+  gap: 8px;
+}
+
+.settings-select {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 34px 8px 11px;
+  border: 1px solid var(--button-border);
+  border-radius: 7px;
+  background: var(--panel-bg);
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 13px;
+}
+
+.settings-select:hover,
+.settings-select:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.settings-select:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.settings-field-note {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .settings-card-header {

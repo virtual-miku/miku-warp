@@ -19,9 +19,11 @@ describe('AccountManagementPanel', () => {
           },
         ]}
         activeAccountId="account-active"
+        language="en"
         onDeleteAccount={() => undefined}
         onOpenAccount={() => undefined}
         onOpenAvatarPicker={() => undefined}
+        timeZone="system"
       />,
     )
 
@@ -42,9 +44,11 @@ describe('AccountManagementPanel', () => {
           },
         ]}
         activeAccountId="account-1"
+        language="en"
         onDeleteAccount={noop}
         onOpenAccount={noop}
         onOpenAvatarPicker={noop}
+        timeZone="system"
       />,
     )
 

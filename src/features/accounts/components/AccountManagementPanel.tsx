@@ -2,23 +2,32 @@ import { CheckCircle2, Trash2 } from 'lucide-react'
 import { AppButton } from '../../../shared/ui/AppButton'
 import type { WarpAccount } from '../../persistence/data/warp-pull-history'
 import { AccountAvatar } from './AccountAvatar'
+import type {
+  AppLanguage,
+  TimeZonePreference,
+} from '../../settings/domain/localization'
+import { formatDateTime } from '../../../shared/lib/date-time'
 
 type AccountManagementPanelProps = {
   accounts: WarpAccount[]
   activeAccountId: string
   isDeletingAccount?: boolean
+  language: AppLanguage
   onOpenAccount: (accountId: string) => void
   onOpenAvatarPicker: (accountId: string) => void
   onDeleteAccount: (account: WarpAccount) => void
+  timeZone: TimeZonePreference
 }
 
 export function AccountManagementPanel({
   accounts,
   activeAccountId,
   isDeletingAccount = false,
+  language,
   onDeleteAccount,
   onOpenAccount,
   onOpenAvatarPicker,
+  timeZone,
 }: AccountManagementPanelProps) {
   return (
     <section className="account-management-panel" aria-label="Accounts">
@@ -49,7 +58,7 @@ export function AccountManagementPanel({
                 <div className="account-management-copy">
                   <strong>UID {account.uid}</strong>
                   <span>{formatAccountMeta(account)}</span>
-                  <span>{formatLastPull(account.lastPullAt)}</span>
+                  <span>{formatLastPull(account.lastPullAt, language, timeZone)}</span>
                 </div>
                 {isActive ? (
                   <span className="status-pill status-pill-success">
@@ -98,25 +107,18 @@ function formatAccountMeta(account: WarpAccount) {
   return `${pulls} - ${region.toUpperCase()}`
 }
 
-function formatLastPull(value: string | undefined) {
+function formatLastPull(
+  value: string | undefined,
+  language: AppLanguage,
+  timeZone: TimeZonePreference,
+) {
   if (!value) {
     return 'No saved pulls'
   }
 
-  const date = new Date(value)
-
-  if (Number.isNaN(date.getTime())) {
+  const formatted = formatDateTime(value, { language, timeZone })
+  if (!formatted) {
     return 'Last pull time unavailable'
   }
-
-  const dateLabel = new Intl.DateTimeFormat('id-ID', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }).format(date)
-  const timeLabel = [date.getHours(), date.getMinutes(), date.getSeconds()]
-    .map((part) => part.toString().padStart(2, '0'))
-    .join(':')
-
-  return `Last pull ${dateLabel}, ${timeLabel}`
+  return `Last pull ${formatted}`
 }

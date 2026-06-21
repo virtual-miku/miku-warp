@@ -36,6 +36,7 @@ describe('ManualImportDialog', () => {
         onTargetAccountChange={noop}
         preview={emptyPreview}
         targetAccountId="account-1"
+        timeZone="system"
       />,
     )
 
