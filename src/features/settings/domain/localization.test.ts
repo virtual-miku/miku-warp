@@ -44,6 +44,7 @@ describe('localization preferences', () => {
   it('translates messages and retention labels', () => {
     expect(translate('id', 'nav.settings')).toBe('Pengaturan')
     expect(formatRetentionLabel('id', 183)).toBe('6 bulan')
+    expect(formatRetentionLabel('id', 0)).toBe('Never')
     expect(
       translate('id', 'trash.summary', { retention: '6 bulan' }),
     ).toBe('Item dihapus permanen setelah 6 bulan.')

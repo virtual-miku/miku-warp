@@ -87,7 +87,7 @@ export const messages = {
     'settings.trash.warning':
       'Item yang lebih lama dari periode pilihan dapat dihapus permanen.',
     'settings.trash.updating': 'Memperbarui masa simpan',
-    'retention.never': 'Jangan pernah',
+    'retention.never': 'Never',
     'retention.30': '30 hari',
     'retention.90': '90 hari',
     'retention.183': '6 bulan',
@@ -177,9 +177,16 @@ export function formatRetentionLabel(
   language: AppLanguage,
   retentionDays: number,
 ) {
-  const key = `retention.${retentionDays}` as MessageKey
+  const keyByDays: Record<number, MessageKey> = {
+    0: 'retention.never',
+    30: 'retention.30',
+    90: 'retention.90',
+    183: 'retention.183',
+    365: 'retention.365',
+  }
+  const key = keyByDays[retentionDays]
 
-  return translate(language, key)
+  return key ? translate(language, key) : `${retentionDays} days`
 }
 
 function getSupportedTimeZones() {
