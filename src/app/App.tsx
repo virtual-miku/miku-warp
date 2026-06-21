@@ -104,6 +104,7 @@ import {
 import { BannerStatsPanel } from '../features/warp-history/components/BannerStatsPanel'
 import { BannerSummaryGrid } from '../features/warp-history/components/BannerSummaryGrid'
 import { BannerTabs } from '../features/warp-history/components/BannerTabs'
+import { DashboardEmptyState } from '../features/warp-history/components/DashboardEmptyState'
 import {
   PityOverview,
   StellarJadeOverview,
@@ -291,6 +292,7 @@ export function App() {
   const [persistedPulls, setPersistedPulls] = useState<WarpPull[]>([])
   const [historyTotalPulls, setHistoryTotalPulls] = useState(0)
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyReady, setHistoryReady] = useState(false)
   const [deletingSelectedHistory, setDeletingSelectedHistory] = useState(false)
   const [deletingAllHistory, setDeletingAllHistory] = useState(false)
   const [historyDeleteConfirmation, setHistoryDeleteConfirmation] =
@@ -364,6 +366,9 @@ export function App() {
     [accounts, avatarDialogAccountId],
   )
   const activeAccountPullCount = activeAccountSummary?.totalPulls ?? historyTotalPulls
+  const hasDashboardHistory = activeAccountPullCount > 0
+  const isDashboardHistoryLoading =
+    !hasDashboardHistory && (!historyReady || historyLoading)
   const manualImportAccountOptions = useMemo<ManualImportTargetAccount[]>(() => {
     const options = accounts.map<ManualImportTargetAccount>((account) => ({
       id: account.id,
@@ -668,6 +673,7 @@ export function App() {
       .finally(() => {
         if (isActive) {
           setHistoryLoading(false)
+          setHistoryReady(true)
         }
       })
 
@@ -2639,79 +2645,96 @@ export function App() {
             <>
               <header className="workspace-header">
                 <div>
-                  <h1>{getBannerFilterLabel(activeBannerType)}</h1>
+                  <h1>
+                    {hasDashboardHistory
+                      ? getBannerFilterLabel(activeBannerType)
+                      : 'Dashboard'}
+                  </h1>
                 </div>
               </header>
 
-              <BannerTabs
-                activeBannerType={activeBannerType}
-                summaries={bannerSummaries}
-                onBannerTypeChange={handleBannerTypeChange}
-              />
+              {hasDashboardHistory ? (
+                <BannerTabs
+                  activeBannerType={activeBannerType}
+                  summaries={bannerSummaries}
+                  onBannerTypeChange={handleBannerTypeChange}
+                />
+              ) : null}
 
               <section className="content-grid">
                 <div className="primary-column" id="dashboard">
-                  <BannerSummaryGrid
-                    activeBannerType={activeBannerType}
-                    summaries={bannerSummaries}
-                    onBannerTypeChange={handleBannerTypeChange}
-                  />
-                  {activeBannerType === 'all' ? (
-                    <StellarJadeOverview totalPulls={activeAccountPullCount} />
+                  {!hasDashboardHistory ? (
+                    <DashboardEmptyState
+                      isLoading={isDashboardHistoryLoading}
+                      onOpenImport={() => setImportDialogOpen(true)}
+                    />
                   ) : (
                     <>
-                      <PityOverview
-                        bannerType={activeBannerType}
-                        summary={pitySummary}
+                      <BannerSummaryGrid
+                        activeBannerType={activeBannerType}
+                        summaries={bannerSummaries}
+                        onBannerTypeChange={handleBannerTypeChange}
                       />
-                      <BannerStatsPanel
+                      {activeBannerType === 'all' ? (
+                        <StellarJadeOverview
+                          totalPulls={activeAccountPullCount}
+                        />
+                      ) : (
+                        <>
+                          <PityOverview
+                            bannerType={activeBannerType}
+                            summary={pitySummary}
+                          />
+                          <BannerStatsPanel
+                            bannerType={activeBannerType}
+                            summary={activeBannerSummary}
+                          />
+                        </>
+                      )}
+                      <WarpTimeline
+                        pulls={timelinePulls}
+                        page={historyPage}
+                        pageSize={historyPageSize}
+                        rarityFilter={historyRarityFilter}
+                        searchQuery={historySearchQuery}
+                        totalPulls={historyTotalPulls}
+                        isLoading={historyLoading}
+                        canDeleteAll={activeAccountPullCount > 0}
+                        isDeletingAll={deletingAllHistory}
+                        isDeletingSelected={deletingSelectedHistory}
+                        isSelecting={historySelecting}
+                        selectedPullIds={selectedHistoryPullIds}
+                        showBannerLabel={activeBannerType === 'all'}
+                        onDeleteAll={handleDeleteAllHistory}
+                        onDeleteSelected={handleDeleteSelectedHistory}
+                        onOpenImport={() => setImportDialogOpen(true)}
+                        onPageChange={(page) => {
+                          setHistoryLoading(true)
+                          setHistoryPage(page)
+                          setSelectedHistoryPullIds(new Set())
+                        }}
+                        onRarityFilterChange={(rarityFilter) => {
+                          setHistoryLoading(true)
+                          setHistoryRarityFilter(rarityFilter)
+                          setHistoryPage(1)
+                          setSelectedHistoryPullIds(new Set())
+                        }}
+                        onSelectionModeChange={handleHistorySelectionModeChange}
+                        onSearchQueryChange={(searchQuery) => {
+                          setHistoryLoading(true)
+                          setHistorySearchQuery(searchQuery)
+                          setHistoryPage(1)
+                          setSelectedHistoryPullIds(new Set())
+                        }}
+                        onTogglePullSelection={handleToggleHistoryPullSelection}
+                      />
+                      <WarpResultGallery
+                        accountId={activeAccount.id}
                         bannerType={activeBannerType}
-                        summary={activeBannerSummary}
+                        refreshKey={warpResultRefreshKey}
                       />
                     </>
                   )}
-                  <WarpTimeline
-                    pulls={timelinePulls}
-                    page={historyPage}
-                    pageSize={historyPageSize}
-                    rarityFilter={historyRarityFilter}
-                    searchQuery={historySearchQuery}
-                    totalPulls={historyTotalPulls}
-                    isLoading={historyLoading}
-                    canDeleteAll={activeAccountPullCount > 0}
-                    isDeletingAll={deletingAllHistory}
-                    isDeletingSelected={deletingSelectedHistory}
-                    isSelecting={historySelecting}
-                    selectedPullIds={selectedHistoryPullIds}
-                    showBannerLabel={activeBannerType === 'all'}
-                    onDeleteAll={handleDeleteAllHistory}
-                    onDeleteSelected={handleDeleteSelectedHistory}
-                    onOpenImport={() => setImportDialogOpen(true)}
-                    onPageChange={(page) => {
-                      setHistoryLoading(true)
-                      setHistoryPage(page)
-                      setSelectedHistoryPullIds(new Set())
-                    }}
-                    onRarityFilterChange={(rarityFilter) => {
-                      setHistoryLoading(true)
-                      setHistoryRarityFilter(rarityFilter)
-                      setHistoryPage(1)
-                      setSelectedHistoryPullIds(new Set())
-                    }}
-                    onSelectionModeChange={handleHistorySelectionModeChange}
-                    onSearchQueryChange={(searchQuery) => {
-                      setHistoryLoading(true)
-                      setHistorySearchQuery(searchQuery)
-                      setHistoryPage(1)
-                      setSelectedHistoryPullIds(new Set())
-                    }}
-                    onTogglePullSelection={handleToggleHistoryPullSelection}
-                  />
-                  <WarpResultGallery
-                    accountId={activeAccount.id}
-                    bannerType={activeBannerType}
-                    refreshKey={warpResultRefreshKey}
-                  />
                 </div>
               </section>
             </>
