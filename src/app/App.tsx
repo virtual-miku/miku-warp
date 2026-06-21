@@ -5,6 +5,7 @@ import {
   FileInput,
   LayoutDashboard,
   RefreshCcw,
+  Settings2,
   Trash2,
   UsersRound,
   X,
@@ -140,6 +141,13 @@ import {
   type TrashedAccount,
   type TrashedWarpPull,
 } from '../features/trash/data/trash-history'
+import { SettingsPanel } from '../features/settings/components/SettingsPanel'
+import {
+  applyThemePreference,
+  loadThemePreference,
+  saveThemePreference,
+  type ThemePreference,
+} from '../features/settings/domain/theme'
 import { ConfirmDialog } from '../shared/ui/ConfirmDialog'
 import './App.css'
 
@@ -169,7 +177,13 @@ type HistoryDeleteConfirmation =
       uid: string
     }
 
-type AppView = 'dashboard' | 'accounts' | 'import' | 'backup' | 'trash'
+type AppView =
+  | 'dashboard'
+  | 'accounts'
+  | 'import'
+  | 'backup'
+  | 'settings'
+  | 'trash'
 
 type TrashPullMutationConfirmation =
   | {
@@ -235,6 +249,8 @@ type ManualImportConfirmation = {
 
 export function App() {
   const [activeView, setActiveView] = useState<AppView>('dashboard')
+  const [themePreference, setThemePreference] =
+    useState<ThemePreference>(loadThemePreference)
   const [activeBannerType, setActiveBannerType] =
     useState<BannerFilterType>(defaultBannerType)
   const [manualImportOpen, setManualImportOpen] = useState(false)
@@ -375,6 +391,11 @@ export function App() {
     () => parseManualWarpNote(manualNoteDraft, itemCatalog),
     [manualNoteDraft],
   )
+
+  useEffect(() => {
+    applyThemePreference(themePreference)
+  }, [themePreference])
+
   const timelinePulls = useMemo(
     () => annotatePityAtPull(persistedPulls),
     [persistedPulls],
@@ -1211,6 +1232,11 @@ export function App() {
       setTrashSelecting(false)
       setSelectedTrashPullIds(new Set())
     }
+  }
+
+  const handleThemeChange = (theme: ThemePreference) => {
+    setThemePreference(theme)
+    saveThemePreference(theme)
   }
 
   const handleAccountChange = (accountId: string) => {
@@ -2762,6 +2788,19 @@ export function App() {
               Backup
             </button>
             <button
+              aria-current={activeView === 'settings' ? 'page' : undefined}
+              className={
+                activeView === 'settings'
+                  ? 'sidebar-link sidebar-link-active'
+                  : 'sidebar-link'
+              }
+              onClick={() => handleViewChange('settings')}
+              type="button"
+            >
+              <Settings2 size={18} aria-hidden="true" />
+              Settings
+            </button>
+            <button
               aria-current={activeView === 'trash' ? 'page' : undefined}
               className={
                 activeView === 'trash'
@@ -2995,6 +3034,20 @@ export function App() {
                   onUploadGoogleDriveBackup={handleUploadGoogleDriveBackup}
                 />
               </section>
+            </>
+          ) : null}
+
+          {activeView === 'settings' ? (
+            <>
+              <header className="workspace-header">
+                <div>
+                  <h1>Settings</h1>
+                </div>
+              </header>
+              <SettingsPanel
+                onThemeChange={handleThemeChange}
+                theme={themePreference}
+              />
             </>
           ) : null}
 
