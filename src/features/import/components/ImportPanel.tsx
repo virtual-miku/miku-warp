@@ -208,7 +208,7 @@ function ImportControls({
         {gameInstallPathReady ? (
           <div className="tool-row">
             <div>
-              <strong>Game history</strong>
+              <strong>Scan warp records</strong>
               <span title={gameHistoryTitle}>
                 {formatGameHistoryScanDetail(
                   gameHistoryScan,
@@ -308,7 +308,7 @@ function formatGameHistoryScanDetail(
   }
 
   if (!scan) {
-    return 'Open Warp Records in-game first, then scan local cache.'
+    return 'Open Warp > View Details > Records in Honkai: Star Rail game, then press scan button.'
   }
 
   if (scan.status === 'found') {
@@ -374,7 +374,7 @@ function formatGameHistoryImportMeta(
     return 'Not imported'
   }
 
-  return `${result.recordsInserted} new, ${result.duplicateRecords} duplicates`
+  return `${result.recordsInserted} new, ${result.recordsRestored} restored, ${result.duplicateRecords} duplicates`
 }
 
 function formatGameHistoryImportDetail(
@@ -385,7 +385,7 @@ function formatGameHistoryImportDetail(
   }
 
   return [
-    `${result.recordsInserted} inserted, ${result.recordsSkipped} skipped, ${result.duplicateRecords} duplicates.`,
+    `${result.recordsInserted} inserted, ${result.recordsRestored} restored, ${result.recordsSkipped} skipped, ${result.duplicateRecords} duplicates.`,
     result.manualRecordsMerged > 0
       ? `${result.manualRecordsMerged} manual records moved to UID ${result.uid}.`
       : undefined,

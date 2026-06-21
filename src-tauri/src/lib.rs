@@ -311,6 +311,7 @@ fn import_game_history_blocking(
         import_batch_id: save_result.import_batch_id,
         records_found: save_result.records_found,
         records_inserted: save_result.records_inserted,
+        records_restored: save_result.records_restored,
         records_skipped: save_result.records_skipped,
         duplicate_records: save_result.duplicate_records,
         banner_count: save_result.banner_count,

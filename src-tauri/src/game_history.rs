@@ -95,6 +95,7 @@ pub struct ImportGameHistoryResult {
     pub import_batch_id: String,
     pub records_found: usize,
     pub records_inserted: usize,
+    pub records_restored: usize,
     pub records_skipped: usize,
     pub duplicate_records: usize,
     pub banner_count: usize,
@@ -459,7 +460,7 @@ fn fetch_gacha_log_page(url: &str) -> Result<Vec<GachaLogRecord>, String> {
 
 fn format_gacha_log_error(retcode: i64, message: &str) -> String {
     if retcode == -101 || message.to_ascii_lowercase().contains("authkey timeout") {
-        return "Game history authorization expired (-101). Open Warp > View Details > Records in Honkai: Star Rail, wait until the records finish loading, then return here and press Scan before Import."
+        return "Game history authorization expired. Open Warp > View Details > Records in Honkai: Star Rail, wait until the records finish loading, then return here and press Scan before Import."
             .to_string();
     }
 

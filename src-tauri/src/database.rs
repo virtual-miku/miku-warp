@@ -110,6 +110,7 @@ pub struct SaveManualImportDraftResult {
     pub import_batch_id: String,
     pub records_found: usize,
     pub records_inserted: usize,
+    pub records_restored: usize,
     pub records_skipped: usize,
     pub duplicate_records: usize,
     pub banner_count: usize,
@@ -142,6 +143,7 @@ pub struct SaveGameHistoryImportResult {
     pub import_batch_id: String,
     pub records_found: usize,
     pub records_inserted: usize,
+    pub records_restored: usize,
     pub records_skipped: usize,
     pub duplicate_records: usize,
     pub banner_count: usize,
@@ -1344,6 +1346,7 @@ fn save_manual_import_draft_to_database(
     )?;
 
     let mut records_inserted = 0;
+    let mut records_restored = 0;
     let mut duplicate_records = 0;
 
     {
@@ -1389,6 +1392,22 @@ fn save_manual_import_draft_to_database(
 
             if affected_rows == 1 {
                 records_inserted += 1;
+            } else if restore_trashed_manual_import_pull(
+                &transaction,
+                ManualImportRestoreInput {
+                    pull_id: &pull_id,
+                    account_id: &draft.account.id,
+                    banner_id: &banner_id,
+                    warp_item_id: &pull.warp_item_id,
+                    pulled_at: &pull.pulled_at,
+                    pulled_at_timezone: pull.pulled_at_timezone.as_deref(),
+                    import_batch_id: &import_batch_id,
+                    source_line_number: pull.source_line_number,
+                    sequence_in_timestamp_group: pull.sequence_in_timestamp_group,
+                    raw_item_name: &pull.raw_item_name,
+                },
+            )? {
+                records_restored += 1;
             } else {
                 duplicate_records += 1;
             }
@@ -1404,7 +1423,7 @@ fn save_manual_import_draft_to_database(
     update_import_batch_result(
         &transaction,
         &import_batch_id,
-        records_inserted,
+        records_inserted + records_restored,
         records_skipped,
     )?;
 
@@ -1416,6 +1435,7 @@ fn save_manual_import_draft_to_database(
         import_batch_id,
         records_found: draft.records_found,
         records_inserted,
+        records_restored,
         records_skipped,
         duplicate_records,
         banner_count: banner_types.len(),
@@ -1465,6 +1485,7 @@ fn save_game_history_import_to_database(
     )?;
 
     let mut records_inserted = 0;
+    let mut records_restored = 0;
     let mut duplicate_records = 0;
     let mut manual_records_matched = account_merge_result.matched_game_history_count;
 
@@ -1495,8 +1516,24 @@ fn save_game_history_import_to_database(
                 sequence_in_timestamp_group: pull.sequence_in_timestamp_group,
                 raw_item_name: Some(pull.raw_item_name.clone()),
             };
+            let source_line_number = i64::try_from(index + 1)
+                .map_err(|error| format!("Game history import is too large: {error}"))?;
 
-            if game_history_gacha_exists(
+            if restore_trashed_game_history_pull_by_gacha(
+                &transaction,
+                &input.account.id,
+                &banner_id,
+                &pull.gacha_id,
+                &game_pull,
+                &import_batch_id,
+                source_line_number,
+            )? {
+                records_restored += 1;
+                affected_banner_ids.insert(banner_id.to_string());
+                continue;
+            }
+
+            if active_game_history_gacha_exists(
                 &transaction,
                 &input.account.id,
                 &banner_id,
@@ -1520,9 +1557,27 @@ fn save_game_history_import_to_database(
                 continue;
             }
 
+            if let Some(manual_pull_id) = find_nearest_trashed_manual_pull_for_game_history(
+                &transaction,
+                &input.account.id,
+                &banner_id,
+                &pull.pulled_at,
+                pull.sequence_in_timestamp_group,
+            )? {
+                restore_trashed_manual_pull_with_game_history(
+                    &transaction,
+                    &manual_pull_id,
+                    &game_pull,
+                    &import_batch_id,
+                    source_line_number,
+                )?;
+                records_restored += 1;
+                manual_records_matched += 1;
+                affected_banner_ids.insert(banner_id.to_string());
+                continue;
+            }
+
             let pull_id = game_history_pull_id(&input.account.id, &banner_id, &pull.gacha_id);
-            let source_line_number = i64::try_from(index + 1)
-                .map_err(|error| format!("Game history import is too large: {error}"))?;
             let affected_rows = insert_pull_statement
                 .execute(params![
                     pull_id,
@@ -1561,7 +1616,7 @@ fn save_game_history_import_to_database(
     update_import_batch_result(
         &transaction,
         &import_batch_id,
-        records_inserted,
+        records_inserted + records_restored,
         records_skipped,
     )?;
 
@@ -1575,6 +1630,7 @@ fn save_game_history_import_to_database(
         import_batch_id,
         records_found: input.records_found,
         records_inserted,
+        records_restored,
         records_skipped,
         duplicate_records,
         banner_count: banner_types.len(),
@@ -3999,6 +4055,60 @@ fn upsert_account(
     Ok(())
 }
 
+struct ManualImportRestoreInput<'a> {
+    pull_id: &'a str,
+    account_id: &'a str,
+    banner_id: &'a str,
+    warp_item_id: &'a str,
+    pulled_at: &'a str,
+    pulled_at_timezone: Option<&'a str>,
+    import_batch_id: &'a str,
+    source_line_number: i64,
+    sequence_in_timestamp_group: i64,
+    raw_item_name: &'a str,
+}
+
+fn restore_trashed_manual_import_pull(
+    transaction: &Transaction<'_>,
+    input: ManualImportRestoreInput<'_>,
+) -> Result<bool, String> {
+    let affected_rows = transaction
+        .execute(
+            "UPDATE warp_pulls
+             SET account_id = ?2,
+                 banner_id = ?3,
+                 warp_item_id = ?4,
+                 pulled_at = ?5,
+                 pulled_at_timezone = ?6,
+                 source_import_id = ?7,
+                 source_line_number = ?8,
+                 sequence_in_timestamp_group = ?9,
+                 raw_item_name = ?10,
+                 deleted_at = NULL
+             WHERE id = ?1 AND deleted_at IS NOT NULL",
+            params![
+                input.pull_id,
+                input.account_id,
+                input.banner_id,
+                input.warp_item_id,
+                input.pulled_at,
+                input.pulled_at_timezone,
+                input.import_batch_id,
+                input.source_line_number,
+                input.sequence_in_timestamp_group,
+                input.raw_item_name,
+            ],
+        )
+        .map_err(|error| {
+            format!(
+                "Failed to restore manual import pull {} from Trash: {error}",
+                input.pull_id
+            )
+        })?;
+
+    Ok(affected_rows > 0)
+}
+
 fn merge_source_account_history(
     transaction: &Transaction<'_>,
     source_account_id: Option<&str>,
@@ -4140,6 +4250,7 @@ fn find_nearest_manual_pull_for_game_history(
                AND banner_id = ?2
                AND source = 'manual'
                AND gacha_id IS NULL
+               AND deleted_at IS NULL
                AND sequence_in_timestamp_group = ?3
                AND ABS(strftime('%s', pulled_at) - strftime('%s', ?4)) <= 7200
              ORDER BY ABS(strftime('%s', pulled_at) - strftime('%s', ?4)) ASC,
@@ -4156,6 +4267,40 @@ fn find_nearest_manual_pull_for_game_history(
         )
         .optional()
         .map_err(|error| format!("Failed to match manual pull for game history: {error}"))
+}
+
+fn find_nearest_trashed_manual_pull_for_game_history(
+    transaction: &Transaction<'_>,
+    account_id: &str,
+    banner_id: &str,
+    pulled_at: &str,
+    sequence_in_timestamp_group: i64,
+) -> Result<Option<String>, String> {
+    transaction
+        .query_row(
+            "SELECT id
+             FROM warp_pulls
+             WHERE account_id = ?1
+               AND banner_id = ?2
+               AND source = 'manual'
+               AND gacha_id IS NULL
+               AND deleted_at IS NOT NULL
+               AND sequence_in_timestamp_group = ?3
+               AND ABS(strftime('%s', pulled_at) - strftime('%s', ?4)) <= 7200
+             ORDER BY ABS(strftime('%s', pulled_at) - strftime('%s', ?4)) ASC,
+                      pulled_at ASC,
+                      id ASC
+             LIMIT 1",
+            params![
+                account_id,
+                banner_id,
+                sequence_in_timestamp_group,
+                pulled_at,
+            ],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()
+        .map_err(|error| format!("Failed to match trashed manual pull for game history: {error}"))
 }
 
 fn enrich_manual_pull_with_game_history(
@@ -4188,7 +4333,90 @@ fn enrich_manual_pull_with_game_history(
     Ok(())
 }
 
-fn game_history_gacha_exists(
+fn restore_trashed_manual_pull_with_game_history(
+    transaction: &Transaction<'_>,
+    manual_pull_id: &str,
+    game_pull: &GameHistoryDuplicateCandidate,
+    import_batch_id: &str,
+    source_line_number: i64,
+) -> Result<(), String> {
+    transaction
+        .execute(
+            "UPDATE warp_pulls
+             SET warp_item_id = ?2,
+                 pulled_at = ?3,
+                 pulled_at_timezone = COALESCE(?4, pulled_at_timezone),
+                 gacha_id = ?5,
+                 source_import_id = ?6,
+                 source_line_number = ?7,
+                 sequence_in_timestamp_group = ?8,
+                 raw_item_name = COALESCE(?9, raw_item_name),
+                 deleted_at = NULL
+             WHERE id = ?1 AND deleted_at IS NOT NULL",
+            params![
+                manual_pull_id,
+                &game_pull.warp_item_id,
+                &game_pull.pulled_at,
+                game_pull.pulled_at_timezone.as_deref(),
+                &game_pull.gacha_id,
+                import_batch_id,
+                source_line_number,
+                game_pull.sequence_in_timestamp_group,
+                game_pull.raw_item_name.as_deref(),
+            ],
+        )
+        .map_err(|error| {
+            format!("Failed to restore manual pull {manual_pull_id} from Trash: {error}")
+        })?;
+
+    Ok(())
+}
+
+fn restore_trashed_game_history_pull_by_gacha(
+    transaction: &Transaction<'_>,
+    account_id: &str,
+    banner_id: &str,
+    gacha_id: &str,
+    game_pull: &GameHistoryDuplicateCandidate,
+    import_batch_id: &str,
+    source_line_number: i64,
+) -> Result<bool, String> {
+    let affected_rows = transaction
+        .execute(
+            "UPDATE warp_pulls
+             SET warp_item_id = ?4,
+                 pulled_at = ?5,
+                 pulled_at_timezone = COALESCE(?6, pulled_at_timezone),
+                 source_import_id = ?7,
+                 source_line_number = ?8,
+                 sequence_in_timestamp_group = ?9,
+                 raw_item_name = COALESCE(?10, raw_item_name),
+                 deleted_at = NULL
+             WHERE account_id = ?1
+               AND banner_id = ?2
+               AND gacha_id = ?3
+               AND deleted_at IS NOT NULL",
+            params![
+                account_id,
+                banner_id,
+                gacha_id,
+                &game_pull.warp_item_id,
+                &game_pull.pulled_at,
+                game_pull.pulled_at_timezone.as_deref(),
+                import_batch_id,
+                source_line_number,
+                game_pull.sequence_in_timestamp_group,
+                game_pull.raw_item_name.as_deref(),
+            ],
+        )
+        .map_err(|error| {
+            format!("Failed to restore game history pull {gacha_id} from Trash: {error}")
+        })?;
+
+    Ok(affected_rows > 0)
+}
+
+fn active_game_history_gacha_exists(
     transaction: &Transaction<'_>,
     account_id: &str,
     banner_id: &str,
@@ -4197,7 +4425,10 @@ fn game_history_gacha_exists(
     transaction
         .query_row(
             "SELECT 1 FROM warp_pulls
-             WHERE account_id = ?1 AND banner_id = ?2 AND gacha_id = ?3",
+             WHERE account_id = ?1
+               AND banner_id = ?2
+               AND gacha_id = ?3
+               AND deleted_at IS NULL",
             params![account_id, banner_id, gacha_id],
             |row| row.get::<_, i64>(0),
         )
@@ -4762,6 +4993,82 @@ mod tests {
     }
 
     #[test]
+    fn reimporting_manual_pulls_restores_matching_trash_records() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+        upsert_warp_item_catalog(
+            &mut connection,
+            &[
+                catalog_item("character-1001", "1001", "Pela", "character", 4),
+                catalog_item("light-cone-2001", "2001", "Data Bank", "light_cone", 3),
+            ],
+        )
+        .expect("catalog sync");
+        let draft = manual_import_draft();
+
+        save_manual_import_draft_to_database(&mut connection, &draft).expect("first import");
+        let active_pulls = list_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: "account-1".to_string(),
+                banner_type: None,
+                limit: Some(10),
+                offset: None,
+                search: None,
+                rarity: None,
+            },
+        )
+        .expect("active pulls can be listed");
+        delete_warp_pulls_from_database(
+            &mut connection,
+            &DeleteWarpPullsInput {
+                account_id: "account-1".to_string(),
+                pull_ids: active_pulls
+                    .pulls
+                    .iter()
+                    .map(|pull| pull.id.clone())
+                    .collect(),
+            },
+        )
+        .expect("pulls move to Trash");
+
+        let second = save_manual_import_draft_to_database(&mut connection, &draft)
+            .expect("second import restores Trash");
+        let restored_pulls = list_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: "account-1".to_string(),
+                banner_type: None,
+                limit: Some(10),
+                offset: None,
+                search: None,
+                rarity: None,
+            },
+        )
+        .expect("restored pulls can be listed");
+        let trash = list_trashed_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: "account-1".to_string(),
+                banner_type: None,
+                limit: Some(10),
+                offset: None,
+                search: None,
+                rarity: None,
+            },
+        )
+        .expect("Trash can be listed");
+
+        assert_eq!(second.records_inserted, 0);
+        assert_eq!(second.records_restored, 2);
+        assert_eq!(second.duplicate_records, 0);
+        assert_eq!(second.records_skipped, 0);
+        assert_eq!(restored_pulls.total, 2);
+        assert_eq!(trash.total, 0);
+        assert_eq!(count_table(&connection, "warp_pulls"), 2);
+    }
+
+    #[test]
     fn saves_game_history_import_and_deduplicates_by_gacha_id() {
         let mut connection = Connection::open_in_memory().expect("in-memory database");
         apply_migrations(&connection).expect("migration applies");
@@ -4804,6 +5111,82 @@ mod tests {
         assert_eq!(pulls[1].item_name, "Pela");
         assert_eq!(pulls[1].source, "game_history");
         assert_eq!(pulls[1].pity_four_at_pull, Some(1));
+    }
+
+    #[test]
+    fn reimporting_game_history_restores_matching_trash_records() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+        upsert_warp_item_catalog(
+            &mut connection,
+            &[
+                catalog_item("character-1001", "1001", "Pela", "character", 4),
+                catalog_item("light-cone-2001", "2001", "Data Bank", "light_cone", 3),
+            ],
+        )
+        .expect("catalog sync");
+        let import = game_history_import();
+
+        save_game_history_import_to_database(&mut connection, &import).expect("first import");
+        let active_pulls = list_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: "account-800000001".to_string(),
+                banner_type: None,
+                limit: Some(10),
+                offset: None,
+                search: None,
+                rarity: None,
+            },
+        )
+        .expect("active pulls can be listed");
+        delete_warp_pulls_from_database(
+            &mut connection,
+            &DeleteWarpPullsInput {
+                account_id: "account-800000001".to_string(),
+                pull_ids: active_pulls
+                    .pulls
+                    .iter()
+                    .map(|pull| pull.id.clone())
+                    .collect(),
+            },
+        )
+        .expect("pulls move to Trash");
+
+        let second = save_game_history_import_to_database(&mut connection, &import)
+            .expect("second import restores Trash");
+        let restored_pulls = list_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: "account-800000001".to_string(),
+                banner_type: None,
+                limit: Some(10),
+                offset: None,
+                search: None,
+                rarity: None,
+            },
+        )
+        .expect("restored pulls can be listed");
+        let trash = list_trashed_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: "account-800000001".to_string(),
+                banner_type: None,
+                limit: Some(10),
+                offset: None,
+                search: None,
+                rarity: None,
+            },
+        )
+        .expect("Trash can be listed");
+
+        assert_eq!(second.records_inserted, 0);
+        assert_eq!(second.records_restored, 2);
+        assert_eq!(second.duplicate_records, 0);
+        assert_eq!(second.records_skipped, 0);
+        assert_eq!(restored_pulls.total, 2);
+        assert_eq!(trash.total, 0);
+        assert_eq!(count_table(&connection, "warp_pulls"), 2);
     }
 
     #[test]

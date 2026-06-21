@@ -38,6 +38,7 @@ export type ImportGameHistoryResult = {
   importBatchId: string
   recordsFound: number
   recordsInserted: number
+  recordsRestored: number
   recordsSkipped: number
   duplicateRecords: number
   bannerCount: number

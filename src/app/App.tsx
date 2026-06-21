@@ -2044,8 +2044,9 @@ export function App() {
       setPersistedPulls(pulls.pulls)
       setHistoryTotalPulls(pulls.total)
       setBannerSummaries(summaries)
+      const changedRecords = result.recordsInserted + result.recordsRestored
       const autoBackupDetail =
-        result.recordsInserted > 0
+        changedRecords > 0
           ? scheduleAutoBackup('Manual import')
           : undefined
 
@@ -2053,7 +2054,7 @@ export function App() {
         tone: 'success',
         title: 'Saved',
         detail: [
-          `${result.recordsInserted} inserted, ${result.recordsSkipped} skipped, ${result.duplicateRecords} duplicates. Catalog ${catalogResult.totalInDatabase} items.`,
+          `${result.recordsInserted} inserted, ${result.recordsRestored} restored, ${result.recordsSkipped} skipped, ${result.duplicateRecords} duplicates. Catalog ${catalogResult.totalInDatabase} items.`,
           autoBackupDetail,
         ]
           .filter(Boolean)
