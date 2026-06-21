@@ -52,6 +52,12 @@ export type DeleteAccountWarpHistoryResult = {
   deletedImportBatches: number
 }
 
+export type DeleteAccountResult = {
+  accountId: string
+  affectedAccounts: number
+  totalPulls: number
+}
+
 export type UpdateAccountAvatarResult = {
   accountId: string
   avatarPath?: string
@@ -105,6 +111,12 @@ export function deleteAccountWarpHistory(accountId: string) {
     'delete_account_warp_history',
     { input: { accountId } },
   )
+}
+
+export function deleteAccount(accountId: string) {
+  return invokeTauri<DeleteAccountResult>('delete_account', {
+    input: { accountId },
+  })
 }
 
 export function listWarpBannerSummaries(

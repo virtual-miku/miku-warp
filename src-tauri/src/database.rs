@@ -31,6 +31,8 @@ const AUTO_BACKUP_SYNC_SQL: &str = include_str!("../migrations/0006_auto_backup_
 const ACCOUNT_AVATAR_VERSION: &str = "0007_account_avatar";
 const ACCOUNT_AVATAR_SQL: &str = include_str!("../migrations/0007_account_avatar.sql");
 const ACCOUNT_AVATAR_COLUMN: &str = "avatar_path";
+const ACCOUNT_TRASH_VERSION: &str = "0008_account_trash";
+const ACCOUNT_TRASH_SQL: &str = include_str!("../migrations/0008_account_trash.sql");
 const GOOGLE_DRIVE_PROVIDER: &str = "google_drive";
 const DATA_CHANGED_TRIGGER: &str = "data_changed";
 
@@ -205,6 +207,12 @@ pub struct DeleteAccountWarpHistoryInput {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DeleteAccountInput {
+    pub account_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UpdateAccountAvatarInput {
     pub account_id: String,
     pub avatar_path: Option<String>,
@@ -222,6 +230,12 @@ pub struct UpdateAccountAvatarResult {
 pub struct TrashWarpPullInput {
     pub account_id: String,
     pub pull_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashAccountInput {
+    pub account_id: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -382,6 +396,14 @@ pub struct DeleteAccountWarpHistoryResult {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DeleteAccountResult {
+    pub account_id: String,
+    pub affected_accounts: usize,
+    pub total_pulls: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TrashWarpPullMutationResult {
     pub account_id: String,
     pub pull_id: String,
@@ -434,9 +456,29 @@ pub struct TrashedWarpPullRow {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TrashedAccountRow {
+    pub id: String,
+    pub uid: String,
+    pub region: Option<String>,
+    pub nickname: Option<String>,
+    pub avatar_path: Option<String>,
+    pub total_pulls: i64,
+    pub last_pull_at: Option<String>,
+    pub deleted_at: String,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ListTrashedWarpPullsResult {
     pub pulls: Vec<TrashedWarpPullRow>,
     pub total: usize,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrashAccountMutationResult {
+    pub account_id: String,
+    pub affected_accounts: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -583,6 +625,8 @@ struct BackupAccountRow {
     avatar_path: Option<String>,
     created_at: String,
     updated_at: String,
+    #[serde(default)]
+    deleted_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -678,6 +722,10 @@ const MIGRATIONS: &[Migration] = &[
     Migration {
         version: ACCOUNT_AVATAR_VERSION,
         sql: ACCOUNT_AVATAR_SQL,
+    },
+    Migration {
+        version: ACCOUNT_TRASH_VERSION,
+        sql: ACCOUNT_TRASH_SQL,
     },
 ];
 
@@ -798,6 +846,16 @@ pub fn delete_account_warp_history(
     delete_account_warp_history_from_database(&mut connection, &input)
 }
 
+pub fn delete_account(
+    app: &AppHandle,
+    input: DeleteAccountInput,
+) -> Result<DeleteAccountResult, String> {
+    let database_path = resolve_database_path(app)?;
+    let mut connection = open_database(&database_path)?;
+
+    delete_account_from_database(&mut connection, &input)
+}
+
 pub fn list_trashed_warp_pulls(
     app: &AppHandle,
     query: ListWarpPullsInput,
@@ -806,6 +864,13 @@ pub fn list_trashed_warp_pulls(
     let connection = open_database(&database_path)?;
 
     list_trashed_warp_pulls_from_database(&connection, &query)
+}
+
+pub fn list_trashed_accounts(app: &AppHandle) -> Result<Vec<TrashedAccountRow>, String> {
+    let database_path = resolve_database_path(app)?;
+    let connection = open_database(&database_path)?;
+
+    list_trashed_accounts_from_database(&connection)
 }
 
 pub fn restore_trashed_warp_pull(
@@ -818,6 +883,16 @@ pub fn restore_trashed_warp_pull(
     restore_trashed_warp_pull_in_database(&mut connection, &input)
 }
 
+pub fn restore_trashed_account(
+    app: &AppHandle,
+    input: TrashAccountInput,
+) -> Result<TrashAccountMutationResult, String> {
+    let database_path = resolve_database_path(app)?;
+    let mut connection = open_database(&database_path)?;
+
+    restore_trashed_account_in_database(&mut connection, &input)
+}
+
 pub fn permanently_delete_trashed_warp_pull(
     app: &AppHandle,
     input: TrashWarpPullInput,
@@ -826,6 +901,16 @@ pub fn permanently_delete_trashed_warp_pull(
     let mut connection = open_database(&database_path)?;
 
     permanently_delete_trashed_warp_pull_from_database(&mut connection, &input)
+}
+
+pub fn permanently_delete_trashed_account(
+    app: &AppHandle,
+    input: TrashAccountInput,
+) -> Result<TrashAccountMutationResult, String> {
+    let database_path = resolve_database_path(app)?;
+    let mut connection = open_database(&database_path)?;
+
+    permanently_delete_trashed_account_from_database(&mut connection, &input)
 }
 
 pub fn export_backup_snapshot(app: &AppHandle) -> Result<ExportBackupSnapshotResult, String> {
@@ -1031,6 +1116,7 @@ fn open_database(database_path: &PathBuf) -> Result<Connection, String> {
 
     apply_migrations(&connection)?;
     purge_expired_trashed_warp_pulls(&connection)?;
+    purge_expired_trashed_accounts(&connection)?;
 
     Ok(connection)
 }
@@ -1510,9 +1596,11 @@ fn list_warp_pulls_from_database(
         .query_row(
             "SELECT COUNT(*)
              FROM warp_pulls wp
+             INNER JOIN accounts a ON a.id = wp.account_id
              INNER JOIN banners b ON b.id = wp.banner_id
              INNER JOIN warp_items wi ON wi.id = wp.warp_item_id
              WHERE wp.account_id = ?1
+               AND a.deleted_at IS NULL
                AND wp.deleted_at IS NULL
                AND (?2 IS NULL OR b.banner_type = ?2)
                AND (?3 IS NULL OR lower(wi.name) LIKE '%' || lower(?3) || '%')
@@ -1533,9 +1621,11 @@ fn list_warp_pulls_from_database(
                     wi.icon_path, wp.pulled_at, wp.source, wp.pity_4, wp.pity_5,
                     wp.sequence_in_timestamp_group
              FROM warp_pulls wp
+             INNER JOIN accounts a ON a.id = wp.account_id
              INNER JOIN banners b ON b.id = wp.banner_id
              INNER JOIN warp_items wi ON wi.id = wp.warp_item_id
              WHERE wp.account_id = ?1
+               AND a.deleted_at IS NULL
                AND wp.deleted_at IS NULL
                AND (?2 IS NULL OR b.banner_type = ?2)
                AND (?3 IS NULL OR lower(wi.name) LIKE '%' || lower(?3) || '%')
@@ -1577,6 +1667,7 @@ fn list_accounts_from_database(connection: &Connection) -> Result<Vec<AccountRow
                     MAX(wp.pulled_at) AS last_pull_at
              FROM accounts a
              LEFT JOIN warp_pulls wp ON wp.account_id = a.id AND wp.deleted_at IS NULL
+             WHERE a.deleted_at IS NULL
              GROUP BY a.id, a.uid, a.region, a.nickname, a.avatar_path
              ORDER BY MAX(wp.pulled_at) DESC, a.uid ASC, COALESCE(a.region, '') ASC, a.id ASC",
         )
@@ -1610,7 +1701,9 @@ fn update_account_avatar_in_database(
 
     let updated_rows = connection
         .execute(
-            "UPDATE accounts SET avatar_path = ?1, updated_at = CURRENT_TIMESTAMP WHERE id = ?2",
+            "UPDATE accounts
+             SET avatar_path = ?1, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?2 AND deleted_at IS NULL",
             params![avatar_path, &input.account_id],
         )
         .map_err(|error| format!("Failed to update account avatar: {error}"))?;
@@ -1635,9 +1728,11 @@ fn list_warp_banner_summaries_from_database(
         .prepare(
             "SELECT b.banner_type, wi.name, wi.rarity, wp.pulled_at
              FROM warp_pulls wp
+             INNER JOIN accounts a ON a.id = wp.account_id
              INNER JOIN banners b ON b.id = wp.banner_id
              INNER JOIN warp_items wi ON wi.id = wp.warp_item_id
              WHERE wp.account_id = ?1
+               AND a.deleted_at IS NULL
                AND wp.deleted_at IS NULL
              ORDER BY b.banner_type ASC, wp.pulled_at ASC,
                       wp.sequence_in_timestamp_group ASC, wp.id ASC",
@@ -1800,6 +1895,45 @@ fn delete_account_warp_history_from_database(
     })
 }
 
+fn delete_account_from_database(
+    connection: &mut Connection,
+    input: &DeleteAccountInput,
+) -> Result<DeleteAccountResult, String> {
+    validate_account_id(&input.account_id, "Delete account id")?;
+
+    let transaction = connection
+        .transaction()
+        .map_err(|error| format!("Failed to start account delete transaction: {error}"))?;
+    let total_pulls = transaction
+        .query_row(
+            "SELECT COUNT(wp.id)
+             FROM accounts a
+             LEFT JOIN warp_pulls wp ON wp.account_id = a.id AND wp.deleted_at IS NULL
+             WHERE a.id = ?1 AND a.deleted_at IS NULL",
+            params![&input.account_id],
+            |row| row.get::<_, i64>(0),
+        )
+        .map_err(|error| format!("Failed to count account pulls: {error}"))?;
+    let affected_accounts = transaction
+        .execute(
+            "UPDATE accounts
+             SET deleted_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?1 AND deleted_at IS NULL",
+            params![&input.account_id],
+        )
+        .map_err(|error| format!("Failed to move account to Trash: {error}"))?;
+
+    transaction
+        .commit()
+        .map_err(|error| format!("Failed to commit account delete transaction: {error}"))?;
+
+    Ok(DeleteAccountResult {
+        account_id: input.account_id.clone(),
+        affected_accounts,
+        total_pulls: usize::try_from(total_pulls).unwrap_or(0),
+    })
+}
+
 fn list_trashed_warp_pulls_from_database(
     connection: &Connection,
     query: &ListWarpPullsInput,
@@ -1880,6 +2014,42 @@ fn list_trashed_warp_pulls_from_database(
     })
 }
 
+fn list_trashed_accounts_from_database(
+    connection: &Connection,
+) -> Result<Vec<TrashedAccountRow>, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT a.id, a.uid, a.region, a.nickname, a.avatar_path,
+                    COUNT(wp.id) AS total_pulls,
+                    MAX(wp.pulled_at) AS last_pull_at,
+                    a.deleted_at
+             FROM accounts a
+             LEFT JOIN warp_pulls wp ON wp.account_id = a.id AND wp.deleted_at IS NULL
+             WHERE a.deleted_at IS NOT NULL
+             GROUP BY a.id, a.uid, a.region, a.nickname, a.avatar_path, a.deleted_at
+             ORDER BY a.deleted_at DESC, a.uid ASC, COALESCE(a.region, '') ASC, a.id ASC",
+        )
+        .map_err(|error| format!("Failed to prepare trashed account query: {error}"))?;
+
+    let rows = statement
+        .query_map([], |row| {
+            Ok(TrashedAccountRow {
+                id: row.get(0)?,
+                uid: row.get(1)?,
+                region: row.get(2)?,
+                nickname: row.get(3)?,
+                avatar_path: row.get(4)?,
+                total_pulls: row.get(5)?,
+                last_pull_at: row.get(6)?,
+                deleted_at: row.get(7)?,
+            })
+        })
+        .map_err(|error| format!("Failed to query trashed accounts: {error}"))?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Failed to decode trashed accounts: {error}"))
+}
+
 fn restore_trashed_warp_pull_in_database(
     connection: &mut Connection,
     input: &TrashWarpPullInput,
@@ -1920,6 +2090,26 @@ fn restore_trashed_warp_pull_in_database(
     })
 }
 
+fn restore_trashed_account_in_database(
+    connection: &mut Connection,
+    input: &TrashAccountInput,
+) -> Result<TrashAccountMutationResult, String> {
+    validate_trash_account(input)?;
+    let affected_accounts = connection
+        .execute(
+            "UPDATE accounts
+             SET deleted_at = NULL, updated_at = CURRENT_TIMESTAMP
+             WHERE id = ?1 AND deleted_at IS NOT NULL",
+            params![&input.account_id],
+        )
+        .map_err(|error| format!("Failed to restore trashed account: {error}"))?;
+
+    Ok(TrashAccountMutationResult {
+        account_id: input.account_id.clone(),
+        affected_accounts,
+    })
+}
+
 fn permanently_delete_trashed_warp_pull_from_database(
     connection: &mut Connection,
     input: &TrashWarpPullInput,
@@ -1940,6 +2130,25 @@ fn permanently_delete_trashed_warp_pull_from_database(
     })
 }
 
+fn permanently_delete_trashed_account_from_database(
+    connection: &mut Connection,
+    input: &TrashAccountInput,
+) -> Result<TrashAccountMutationResult, String> {
+    validate_trash_account(input)?;
+    let affected_accounts = connection
+        .execute(
+            "DELETE FROM accounts
+             WHERE id = ?1 AND deleted_at IS NOT NULL",
+            params![&input.account_id],
+        )
+        .map_err(|error| format!("Failed to permanently delete trashed account: {error}"))?;
+
+    Ok(TrashAccountMutationResult {
+        account_id: input.account_id.clone(),
+        affected_accounts,
+    })
+}
+
 fn purge_expired_trashed_warp_pulls(connection: &Connection) -> Result<usize, String> {
     connection
         .execute(
@@ -1949,6 +2158,17 @@ fn purge_expired_trashed_warp_pulls(connection: &Connection) -> Result<usize, St
             [],
         )
         .map_err(|error| format!("Failed to purge expired Trash records: {error}"))
+}
+
+fn purge_expired_trashed_accounts(connection: &Connection) -> Result<usize, String> {
+    connection
+        .execute(
+            "DELETE FROM accounts
+             WHERE deleted_at IS NOT NULL
+               AND deleted_at <= datetime('now', '-6 months')",
+            [],
+        )
+        .map_err(|error| format!("Failed to purge expired Trash accounts: {error}"))
 }
 
 fn build_warp_banner_summaries(
@@ -2607,7 +2827,7 @@ fn calculate_backup_content_hash(snapshot: &BackupSnapshot) -> Result<String, St
 fn read_backup_accounts(connection: &Connection) -> Result<Vec<BackupAccountRow>, String> {
     let mut statement = connection
         .prepare(
-            "SELECT id, uid, region, nickname, avatar_path, created_at, updated_at
+            "SELECT id, uid, region, nickname, avatar_path, created_at, updated_at, deleted_at
              FROM accounts
              ORDER BY uid, COALESCE(region, ''), id",
         )
@@ -2623,6 +2843,7 @@ fn read_backup_accounts(connection: &Connection) -> Result<Vec<BackupAccountRow>
                 avatar_path: row.get(4)?,
                 created_at: row.get(5)?,
                 updated_at: row.get(6)?,
+                deleted_at: row.get(7)?,
             })
         })
         .map_err(|error| format!("Failed to query account backup rows: {error}"))?;
@@ -2768,15 +2989,18 @@ fn restore_backup_accounts(
 ) -> Result<(), String> {
     let mut statement = transaction
         .prepare(
-            "INSERT INTO accounts (id, uid, region, nickname, avatar_path, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+            "INSERT INTO accounts (
+               id, uid, region, nickname, avatar_path, created_at, updated_at, deleted_at
+             )
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT(id) DO UPDATE SET
                uid = excluded.uid,
                region = excluded.region,
                nickname = excluded.nickname,
                avatar_path = excluded.avatar_path,
                created_at = excluded.created_at,
-               updated_at = excluded.updated_at",
+               updated_at = excluded.updated_at,
+               deleted_at = excluded.deleted_at",
         )
         .map_err(|error| format!("Failed to prepare account restore statement: {error}"))?;
 
@@ -2793,6 +3017,7 @@ fn restore_backup_accounts(
                 avatar_path,
                 &account.created_at,
                 &account.updated_at,
+                account.deleted_at.as_deref(),
             ])
             .map_err(|error| format!("Failed to restore account {}: {error}", account.uid))?;
     }
@@ -3463,6 +3688,10 @@ fn validate_trash_warp_pull(input: &TrashWarpPullInput) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_trash_account(input: &TrashAccountInput) -> Result<(), String> {
+    validate_account_id(&input.account_id, "Trash account id")
+}
+
 fn validate_delete_warp_pulls(input: &DeleteWarpPullsInput) -> Result<(), String> {
     validate_account_id(&input.account_id, "History account id")?;
 
@@ -3756,6 +3985,7 @@ fn upsert_account(
                uid = excluded.uid,
                region = excluded.region,
                nickname = excluded.nickname,
+               deleted_at = NULL,
                updated_at = CURRENT_TIMESTAMP",
             params![
                 &account.id,
@@ -4335,6 +4565,15 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("backup sync state table count");
+        let account_deleted_at_column_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*)
+                 FROM pragma_table_info('accounts')
+                 WHERE name = 'deleted_at'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("account deleted_at column count");
 
         assert_eq!(applied_migrations, planned_migrations());
         assert_eq!(table_count, 1);
@@ -4344,6 +4583,7 @@ mod tests {
         assert_eq!(cloud_event_table_count, 1);
         assert_eq!(cloud_policy_table_count, 1);
         assert_eq!(backup_sync_state_table_count, 1);
+        assert_eq!(account_deleted_at_column_count, 1);
     }
 
     #[test]
@@ -5084,6 +5324,101 @@ mod tests {
         )
         .expect("account trash can be listed");
         assert_eq!(trash.total, 2);
+    }
+
+    #[test]
+    fn moves_inactive_account_to_trash_and_restores_or_permanently_deletes_it() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+        upsert_warp_item_catalog(
+            &mut connection,
+            &[
+                catalog_item("character-1001", "1001", "Pela", "character", 4),
+                catalog_item("light-cone-2001", "2001", "Data Bank", "light_cone", 3),
+            ],
+        )
+        .expect("catalog sync");
+        save_manual_import_draft_to_database(&mut connection, &manual_import_draft())
+            .expect("manual import");
+        save_game_history_import_to_database(&mut connection, &game_history_import())
+            .expect("second account game import");
+
+        let delete_result = delete_account_from_database(
+            &mut connection,
+            &DeleteAccountInput {
+                account_id: "account-800000001".to_string(),
+            },
+        )
+        .expect("account moves to Trash");
+        let active_accounts = list_accounts_from_database(&connection).expect("active accounts");
+        let trashed_accounts =
+            list_trashed_accounts_from_database(&connection).expect("trashed accounts");
+        let hidden_history = list_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: "account-800000001".to_string(),
+                banner_type: None,
+                limit: Some(5),
+                offset: None,
+                search: None,
+                rarity: None,
+            },
+        )
+        .expect("deleted account history is hidden");
+
+        assert_eq!(delete_result.affected_accounts, 1);
+        assert_eq!(delete_result.total_pulls, 2);
+        assert_eq!(active_accounts.len(), 1);
+        assert_eq!(active_accounts[0].id, "account-1");
+        assert_eq!(trashed_accounts.len(), 1);
+        assert_eq!(trashed_accounts[0].id, "account-800000001");
+        assert_eq!(trashed_accounts[0].total_pulls, 2);
+        assert_eq!(hidden_history.total, 0);
+
+        let restore_result = restore_trashed_account_in_database(
+            &mut connection,
+            &TrashAccountInput {
+                account_id: "account-800000001".to_string(),
+            },
+        )
+        .expect("account restores");
+        let restored_accounts = list_accounts_from_database(&connection).expect("restored list");
+
+        assert_eq!(restore_result.affected_accounts, 1);
+        assert_eq!(restored_accounts.len(), 2);
+
+        delete_account_from_database(
+            &mut connection,
+            &DeleteAccountInput {
+                account_id: "account-800000001".to_string(),
+            },
+        )
+        .expect("account moves to Trash again");
+        let permanent_result = permanently_delete_trashed_account_from_database(
+            &mut connection,
+            &TrashAccountInput {
+                account_id: "account-800000001".to_string(),
+            },
+        )
+        .expect("trashed account deletes permanently");
+        let account_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM accounts WHERE id = 'account-800000001'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("account count");
+        let pull_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*) FROM warp_pulls WHERE account_id = 'account-800000001'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("pull count");
+
+        assert_eq!(permanent_result.affected_accounts, 1);
+        assert_eq!(account_count, 0);
+        assert_eq!(pull_count, 0);
     }
 
     #[test]

@@ -88,6 +88,7 @@ import {
 } from '../features/persistence/data/game-install-path'
 import { syncWarpItemCatalog } from '../features/persistence/data/warp-item-catalog-sync'
 import {
+  deleteAccount,
   deleteAccountWarpHistory,
   deleteWarpPulls,
   listAccounts,
@@ -127,9 +128,13 @@ import {
 import type { WarpPull } from '../features/warp-history/domain/warp-pull'
 import { TrashPanel, type TrashTab } from '../features/trash/components/TrashPanel'
 import {
+  listTrashedAccounts,
   listTrashedWarpPulls,
+  permanentlyDeleteTrashedAccount,
   permanentlyDeleteTrashedWarpPull,
+  restoreTrashedAccount,
   restoreTrashedWarpPull,
+  type TrashedAccount,
   type TrashedWarpPull,
 } from '../features/trash/data/trash-history'
 import { ConfirmDialog } from '../shared/ui/ConfirmDialog'
@@ -194,6 +199,15 @@ type BackupTrashConfirmation =
       kind: 'restore_selected' | 'delete_selected' | 'delete_all'
       totalBackups: number
     }
+
+type AccountDeleteConfirmation = {
+  account: WarpAccount
+}
+
+type AccountTrashConfirmation = {
+  account: TrashedAccount
+  kind: 'restore' | 'delete'
+}
 
 type BackupConfirmation =
   | {
@@ -309,6 +323,7 @@ export function App() {
     [],
   )
   const [trashedPulls, setTrashedPulls] = useState<TrashedWarpPull[]>([])
+  const [trashedAccounts, setTrashedAccounts] = useState<TrashedAccount[]>([])
   const [trashedBackupSnapshots, setTrashedBackupSnapshots] = useState<
     TrashedBackupSnapshotSummary[]
   >([])
@@ -316,6 +331,7 @@ export function App() {
   const [trashTotalPulls, setTrashTotalPulls] = useState(0)
   const [trashPage, setTrashPage] = useState(1)
   const [trashLoading, setTrashLoading] = useState(false)
+  const [trashAccountLoading, setTrashAccountLoading] = useState(false)
   const [trashBackupLoading, setTrashBackupLoading] = useState(false)
   const [trashSelecting, setTrashSelecting] = useState(false)
   const [selectedTrashPullIds, setSelectedTrashPullIds] = useState<Set<string>>(
@@ -325,6 +341,13 @@ export function App() {
   const [selectedBackupTrashFileNames, setSelectedBackupTrashFileNames] =
     useState<Set<string>>(() => new Set())
   const [trashError, setTrashError] = useState<string>()
+  const [movingAccountToTrashId, setMovingAccountToTrashId] = useState<string>()
+  const [restoringTrashedAccountId, setRestoringTrashedAccountId] =
+    useState<string>()
+  const [
+    permanentlyDeletingTrashedAccountId,
+    setPermanentlyDeletingTrashedAccountId,
+  ] = useState<string>()
   const [restoringTrashPullId, setRestoringTrashPullId] = useState<string>()
   const [permanentlyDeletingPullId, setPermanentlyDeletingPullId] =
     useState<string>()
@@ -338,6 +361,10 @@ export function App() {
     useState<TrashPullMutationConfirmation>()
   const [trashRestoreConfirmation, setTrashRestoreConfirmation] =
     useState<TrashPullMutationConfirmation>()
+  const [accountDeleteConfirmation, setAccountDeleteConfirmation] =
+    useState<AccountDeleteConfirmation>()
+  const [accountTrashConfirmation, setAccountTrashConfirmation] =
+    useState<AccountTrashConfirmation>()
   const [backupTrashConfirmation, setBackupTrashConfirmation] =
     useState<BackupTrashConfirmation>()
   const manualImportPreview = useMemo(
@@ -522,6 +549,17 @@ export function App() {
 
     return result
   }, [activeAccount.id, trashPage])
+
+  const refreshTrashedAccounts = useCallback(async () => {
+    try {
+      const nextAccounts = await listTrashedAccounts()
+      setTrashedAccounts(nextAccounts)
+      return nextAccounts
+    } catch {
+      setTrashedAccounts([])
+      return []
+    }
+  }, [])
 
   const refreshTrashedBackupSnapshots = useCallback(async () => {
     try {
@@ -734,15 +772,17 @@ export function App() {
         trashPageSize,
         (trashPage - 1) * trashPageSize,
       ),
+      listTrashedAccounts(),
       listTrashedBackupSnapshots(),
     ])
-      .then(([trashResult, backupTrashResult]) => {
+      .then(([trashResult, accountTrashResult, backupTrashResult]) => {
         if (!isActive) {
           return
         }
 
         setTrashedPulls(trashResult.pulls)
         setTrashTotalPulls(trashResult.total)
+        setTrashedAccounts(accountTrashResult)
         setTrashedBackupSnapshots(backupTrashResult)
         const pageCount = Math.max(1, Math.ceil(trashResult.total / trashPageSize))
         if (trashPage > pageCount) {
@@ -753,6 +793,7 @@ export function App() {
         if (isActive) {
           setTrashedPulls([])
           setTrashTotalPulls(0)
+          setTrashedAccounts([])
           setTrashedBackupSnapshots([])
           setTrashError(getErrorMessage(error))
         }
@@ -760,6 +801,7 @@ export function App() {
       .finally(() => {
         if (isActive) {
           setTrashLoading(false)
+          setTrashAccountLoading(false)
           setTrashBackupLoading(false)
         }
       })
@@ -1159,6 +1201,7 @@ export function App() {
     setTrashError(undefined)
     if (view === 'trash') {
       setTrashLoading(true)
+      setTrashAccountLoading(true)
       setTrashBackupLoading(true)
     } else {
       setTrashSelecting(false)
@@ -1193,6 +1236,7 @@ export function App() {
     setSelectedBackupTrashFileNames(new Set())
     if (activeView === 'trash') {
       setTrashLoading(true)
+      setTrashAccountLoading(true)
       setTrashBackupLoading(true)
     }
     setPersistedPulls([])
@@ -1218,6 +1262,50 @@ export function App() {
     setAvatarDialogAccountId(undefined)
     setAvatarSaveError(undefined)
   }, [avatarSaving])
+
+  const handleRequestDeleteAccount = useCallback(
+    (account: WarpAccount) => {
+      if (account.id === activeAccount.id || movingAccountToTrashId) {
+        return
+      }
+
+      setAccountDeleteConfirmation({ account })
+    },
+    [activeAccount.id, movingAccountToTrashId],
+  )
+
+  const handleConfirmDeleteAccount = useCallback(async () => {
+    if (!accountDeleteConfirmation || movingAccountToTrashId) {
+      return
+    }
+
+    const { account } = accountDeleteConfirmation
+    if (account.id === activeAccount.id) {
+      setAccountDeleteConfirmation(undefined)
+      return
+    }
+
+    setMovingAccountToTrashId(account.id)
+    setTrashError(undefined)
+
+    try {
+      await deleteAccount(account.id)
+      await Promise.all([refreshAccounts(), refreshTrashedAccounts()])
+      setAccountDeleteConfirmation(undefined)
+      scheduleAutoBackup('Account')
+    } catch (error) {
+      setTrashError(getErrorMessage(error))
+    } finally {
+      setMovingAccountToTrashId(undefined)
+    }
+  }, [
+    accountDeleteConfirmation,
+    activeAccount.id,
+    movingAccountToTrashId,
+    refreshAccounts,
+    refreshTrashedAccounts,
+    scheduleAutoBackup,
+  ])
 
   const handleSelectAccountAvatar = useCallback(
     async (avatarPath: string | undefined) => {
@@ -1659,6 +1747,73 @@ export function App() {
     refreshTrashedPulls,
     scheduleAutoBackup,
     trashDeleteConfirmation,
+  ])
+
+  const handleRequestRestoreTrashedAccount = useCallback(
+    (account: TrashedAccount) => {
+      if (restoringTrashedAccountId || permanentlyDeletingTrashedAccountId) {
+        return
+      }
+
+      setAccountTrashConfirmation({ account, kind: 'restore' })
+    },
+    [permanentlyDeletingTrashedAccountId, restoringTrashedAccountId],
+  )
+
+  const handleRequestDeleteTrashedAccount = useCallback(
+    (account: TrashedAccount) => {
+      if (restoringTrashedAccountId || permanentlyDeletingTrashedAccountId) {
+        return
+      }
+
+      setAccountTrashConfirmation({ account, kind: 'delete' })
+    },
+    [permanentlyDeletingTrashedAccountId, restoringTrashedAccountId],
+  )
+
+  const handleConfirmAccountTrashAction = useCallback(async () => {
+    if (!accountTrashConfirmation) {
+      return
+    }
+
+    const { account, kind } = accountTrashConfirmation
+
+    if (kind === 'restore') {
+      setRestoringTrashedAccountId(account.id)
+      setTrashError(undefined)
+
+      try {
+        await restoreTrashedAccount(account.id)
+        await Promise.all([refreshAccounts(), refreshTrashedAccounts()])
+        setAccountTrashConfirmation(undefined)
+        scheduleAutoBackup('Account restore')
+      } catch (error) {
+        setTrashError(getErrorMessage(error))
+      } finally {
+        setRestoringTrashedAccountId(undefined)
+      }
+
+      return
+    }
+
+    setPermanentlyDeletingTrashedAccountId(account.id)
+    setTrashError(undefined)
+
+    try {
+      await permanentlyDeleteTrashedAccount(account.id)
+      await refreshTrashedAccounts()
+      setAccountTrashConfirmation(undefined)
+      scheduleAutoBackup('Account Trash')
+    } catch (error) {
+      setTrashError(getErrorMessage(error))
+    } finally {
+      setPermanentlyDeletingTrashedAccountId(undefined)
+    }
+  }, [
+    accountTrashConfirmation,
+    refreshAccounts,
+    refreshTrashedAccounts,
+    scheduleAutoBackup,
   ])
 
   const handleRequestRestoreTrashedBackup = useCallback(
@@ -2750,6 +2905,8 @@ export function App() {
               <AccountManagementPanel
                 accounts={accounts}
                 activeAccountId={activeAccount.id}
+                isDeletingAccount={movingAccountToTrashId !== undefined}
+                onDeleteAccount={handleRequestDeleteAccount}
                 onOpenAccount={handleOpenAccount}
                 onOpenAvatarPicker={handleOpenAvatarPicker}
               />
@@ -2839,14 +2996,19 @@ export function App() {
               </header>
               <TrashPanel
                 activeTab={trashTab}
+                accounts={trashedAccounts}
                 backupSnapshots={trashedBackupSnapshots}
+                deletingAccountId={permanentlyDeletingTrashedAccountId}
                 deletingBackupFileName={permanentlyDeletingTrashedBackupFileName}
                 deletingPullId={permanentlyDeletingPullId}
                 error={trashError}
+                isAccountLoading={trashAccountLoading}
                 isBackupLoading={trashBackupLoading}
                 isBackupSelecting={backupTrashSelecting}
                 isHistoryLoading={trashLoading}
                 isSelecting={trashSelecting}
+                onAccountPermanentlyDelete={handleRequestDeleteTrashedAccount}
+                onAccountRestore={handleRequestRestoreTrashedAccount}
                 onBackupDeleteAll={handleRequestDeleteAllTrashedBackups}
                 onBackupDeleteSelected={handleRequestDeleteSelectedTrashedBackups}
                 onBackupPermanentlyDelete={handleRequestDeleteTrashedBackup}
@@ -2876,6 +3038,7 @@ export function App() {
                 page={trashPage}
                 pageSize={trashPageSize}
                 pulls={trashedPulls}
+                restoringAccountId={restoringTrashedAccountId}
                 restoringBackupFileName={restoringTrashedBackupFileName}
                 restoringPullId={restoringTrashPullId}
                 selectedBackupFileNames={selectedBackupTrashFileNames}
@@ -2924,6 +3087,17 @@ export function App() {
         onConfirm={handleConfirmManualImport}
         pendingLabel="Importing"
         title="Import manual note?"
+      />
+      <ConfirmDialog
+        confirmLabel="Move to Trash"
+        confirmIcon={Trash2}
+        description={formatAccountDeleteDescription(accountDeleteConfirmation)}
+        isOpen={accountDeleteConfirmation !== undefined}
+        isPending={movingAccountToTrashId !== undefined}
+        onCancel={() => setAccountDeleteConfirmation(undefined)}
+        onConfirm={handleConfirmDeleteAccount}
+        pendingLabel="Moving"
+        title="Move this account to Trash?"
       />
       <ConfirmDialog
         confirmLabel={
@@ -2983,6 +3157,29 @@ export function App() {
           setImportDialogOpen(false)
           handleOpenManualImport()
         }}
+      />
+      <ConfirmDialog
+        confirmLabel={
+          accountTrashConfirmation?.kind === 'restore'
+            ? 'Restore'
+            : 'Delete permanently'
+        }
+        confirmIcon={
+          accountTrashConfirmation?.kind === 'restore' ? RefreshCcw : Trash2
+        }
+        danger={accountTrashConfirmation?.kind === 'delete'}
+        description={formatAccountTrashDescription(accountTrashConfirmation)}
+        isOpen={accountTrashConfirmation !== undefined}
+        isPending={
+          restoringTrashedAccountId !== undefined ||
+          permanentlyDeletingTrashedAccountId !== undefined
+        }
+        onCancel={() => setAccountTrashConfirmation(undefined)}
+        onConfirm={handleConfirmAccountTrashAction}
+        pendingLabel={
+          accountTrashConfirmation?.kind === 'restore' ? 'Restoring' : 'Deleting'
+        }
+        title={formatAccountTrashTitle(accountTrashConfirmation)}
       />
       <ConfirmDialog
         confirmLabel="Restore"
@@ -3116,6 +3313,19 @@ function formatHistoryDeleteDescription(
   return `All ${confirmation.totalPulls} history records for UID ${confirmation.uid} will be moved to Trash. Other UIDs will not be affected, and these items can be restored for 6 months.`
 }
 
+function formatAccountDeleteDescription(
+  confirmation: AccountDeleteConfirmation | undefined,
+) {
+  if (!confirmation) {
+    return ''
+  }
+
+  const { account } = confirmation
+  const pulls = account.totalPulls === 1 ? '1 pull' : `${account.totalPulls} pulls`
+
+  return `UID ${account.uid} and its ${pulls} will be moved to Trash. The current active UID will not change, and this account can be restored for 6 months.`
+}
+
 function formatManualImportConfirmationDescription(
   confirmation: ManualImportConfirmation | undefined,
 ) {
@@ -3245,6 +3455,35 @@ function formatTrashDeleteTitle(
   }
 
   return 'Delete permanently?'
+}
+
+function formatAccountTrashDescription(
+  confirmation: AccountTrashConfirmation | undefined,
+) {
+  if (!confirmation) {
+    return ''
+  }
+
+  const { account } = confirmation
+  const pulls = account.totalPulls === 1 ? '1 pull' : `${account.totalPulls} pulls`
+
+  if (confirmation.kind === 'restore') {
+    return `UID ${account.uid} and its ${pulls} will return to Accounts and Dashboard.`
+  }
+
+  return `UID ${account.uid} and its ${pulls} will be permanently deleted. This action cannot be undone.`
+}
+
+function formatAccountTrashTitle(
+  confirmation: AccountTrashConfirmation | undefined,
+) {
+  if (!confirmation) {
+    return ''
+  }
+
+  return confirmation.kind === 'restore'
+    ? 'Restore this account?'
+    : 'Delete this account permanently?'
 }
 
 function formatBackupTrashDescription(

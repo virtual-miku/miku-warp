@@ -428,11 +428,26 @@ fn delete_account_warp_history(
 }
 
 #[tauri::command]
+fn delete_account(
+    app: tauri::AppHandle,
+    input: database::DeleteAccountInput,
+) -> Result<database::DeleteAccountResult, String> {
+    database::delete_account(&app, input)
+}
+
+#[tauri::command]
 fn list_trashed_warp_pulls(
     app: tauri::AppHandle,
     query: database::ListWarpPullsInput,
 ) -> Result<database::ListTrashedWarpPullsResult, String> {
     database::list_trashed_warp_pulls(&app, query)
+}
+
+#[tauri::command]
+fn list_trashed_accounts(
+    app: tauri::AppHandle,
+) -> Result<Vec<database::TrashedAccountRow>, String> {
+    database::list_trashed_accounts(&app)
 }
 
 #[tauri::command]
@@ -444,11 +459,27 @@ fn restore_trashed_warp_pull(
 }
 
 #[tauri::command]
+fn restore_trashed_account(
+    app: tauri::AppHandle,
+    input: database::TrashAccountInput,
+) -> Result<database::TrashAccountMutationResult, String> {
+    database::restore_trashed_account(&app, input)
+}
+
+#[tauri::command]
 fn permanently_delete_trashed_warp_pull(
     app: tauri::AppHandle,
     input: database::TrashWarpPullInput,
 ) -> Result<database::TrashWarpPullMutationResult, String> {
     database::permanently_delete_trashed_warp_pull(&app, input)
+}
+
+#[tauri::command]
+fn permanently_delete_trashed_account(
+    app: tauri::AppHandle,
+    input: database::TrashAccountInput,
+) -> Result<database::TrashAccountMutationResult, String> {
+    database::permanently_delete_trashed_account(&app, input)
 }
 
 #[tauri::command]
@@ -536,6 +567,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             cancel_google_drive_backup_connection,
             connect_google_drive_backup,
+            delete_account,
             delete_account_warp_history,
             delete_backup_snapshot,
             delete_warp_pull,
@@ -548,16 +580,19 @@ pub fn run() {
             get_database_status,
             import_game_history,
             list_accounts,
+            list_trashed_accounts,
             list_trashed_warp_pulls,
             list_warp_banner_summaries,
             list_trashed_backup_snapshots,
             list_google_drive_backup_snapshots,
             list_backup_snapshots,
             list_warp_pulls,
+            permanently_delete_trashed_account,
             permanently_delete_trashed_warp_pull,
             replace_database_from_backup_file,
             restore_google_drive_backup_snapshot,
             restore_backup_snapshot,
+            restore_trashed_account,
             restore_trashed_backup_snapshot,
             restore_latest_backup_snapshot,
             permanently_delete_trashed_backup_snapshot,

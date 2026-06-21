@@ -1,4 +1,4 @@
-import { CheckCircle2 } from 'lucide-react'
+import { CheckCircle2, Trash2 } from 'lucide-react'
 import { AppButton } from '../../../shared/ui/AppButton'
 import type { WarpAccount } from '../../persistence/data/warp-pull-history'
 import { AccountAvatar } from './AccountAvatar'
@@ -6,13 +6,17 @@ import { AccountAvatar } from './AccountAvatar'
 type AccountManagementPanelProps = {
   accounts: WarpAccount[]
   activeAccountId: string
+  isDeletingAccount?: boolean
   onOpenAccount: (accountId: string) => void
   onOpenAvatarPicker: (accountId: string) => void
+  onDeleteAccount: (account: WarpAccount) => void
 }
 
 export function AccountManagementPanel({
   accounts,
   activeAccountId,
+  isDeletingAccount = false,
+  onDeleteAccount,
   onOpenAccount,
   onOpenAvatarPicker,
 }: AccountManagementPanelProps) {
@@ -53,9 +57,24 @@ export function AccountManagementPanel({
                     Active
                   </span>
                 ) : (
-                  <AppButton onClick={() => onOpenAccount(account.id)}>
-                    Open
-                  </AppButton>
+                  <div className="account-management-actions">
+                    <AppButton
+                      disabled={isDeletingAccount}
+                      onClick={() => onOpenAccount(account.id)}
+                    >
+                      Open
+                    </AppButton>
+                    <button
+                      aria-label={`Move UID ${account.uid} to Trash`}
+                      className="icon-button account-delete-button"
+                      disabled={isDeletingAccount}
+                      onClick={() => onDeleteAccount(account)}
+                      title="Move account to Trash"
+                      type="button"
+                    >
+                      <Trash2 size={16} aria-hidden="true" />
+                    </button>
+                  </div>
                 )}
               </article>
             )

@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { UserRound } from 'lucide-react'
 import { getCatalogAssetUrl } from '../../warp-history/data/catalog-assets'
 
+const DEFAULT_ACCOUNT_AVATAR_PATH =
+  '/icon/avatar/UI_Message_Contacts_Anonymous.png'
+
 type AccountAvatarProps = {
   avatarPath?: string
   fallbackSize?: number
@@ -12,8 +15,10 @@ export function AccountAvatar({
   fallbackSize = 20,
 }: AccountAvatarProps) {
   const [erroredAvatarPath, setErroredAvatarPath] = useState<string>()
-  const avatarUrl = getCatalogAssetUrl(avatarPath)
-  const shouldShowImage = avatarUrl && avatarPath !== erroredAvatarPath
+  const visibleAvatarPath = avatarPath ?? DEFAULT_ACCOUNT_AVATAR_PATH
+  const avatarUrl = getCatalogAssetUrl(visibleAvatarPath)
+  const shouldShowImage =
+    avatarUrl && visibleAvatarPath !== erroredAvatarPath
 
   if (shouldShowImage) {
     return (
@@ -21,7 +26,7 @@ export function AccountAvatar({
         alt=""
         loading="lazy"
         onError={() => {
-          setErroredAvatarPath(avatarPath)
+          setErroredAvatarPath(visibleAvatarPath)
         }}
         src={avatarUrl}
       />

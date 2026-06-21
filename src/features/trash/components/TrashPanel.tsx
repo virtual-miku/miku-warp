@@ -9,19 +9,23 @@ import {
   X,
 } from 'lucide-react'
 import type { TrashedBackupSnapshotSummary } from '../../persistence/data/backup-export'
+import { AccountAvatar } from '../../accounts/components/AccountAvatar'
 import { getCatalogAssetUrl } from '../../warp-history/data/catalog-assets'
 import { getBannerLabel } from '../../warp-history/domain/banner'
 import { AppButton } from '../../../shared/ui/AppButton'
-import type { TrashedWarpPull } from '../data/trash-history'
+import type { TrashedAccount, TrashedWarpPull } from '../data/trash-history'
 
-export type TrashTab = 'history' | 'backups'
+export type TrashTab = 'history' | 'accounts' | 'backups'
 
 type TrashPanelProps = {
   activeTab: TrashTab
+  accounts: TrashedAccount[]
   backupSnapshots: TrashedBackupSnapshotSummary[]
+  deletingAccountId?: string
   deletingBackupFileName?: string
   deletingPullId?: string
   error?: string
+  isAccountLoading: boolean
   isBackupLoading: boolean
   isBackupSelecting: boolean
   isHistoryLoading: boolean
@@ -29,11 +33,14 @@ type TrashPanelProps = {
   page: number
   pageSize: number
   pulls: TrashedWarpPull[]
+  restoringAccountId?: string
   restoringBackupFileName?: string
   restoringPullId?: string
   selectedBackupFileNames: Set<string>
   selectedPullIds: Set<string>
   totalPulls: number
+  onAccountPermanentlyDelete: (account: TrashedAccount) => void
+  onAccountRestore: (account: TrashedAccount) => void
   onBackupDeleteAll: () => void
   onBackupDeleteSelected: () => void
   onBackupPermanentlyDelete: (snapshot: TrashedBackupSnapshotSummary) => void
@@ -54,10 +61,13 @@ type TrashPanelProps = {
 
 export function TrashPanel({
   activeTab,
+  accounts,
   backupSnapshots,
+  deletingAccountId,
   deletingBackupFileName,
   deletingPullId,
   error,
+  isAccountLoading,
   isBackupLoading,
   isBackupSelecting,
   isHistoryLoading,
@@ -65,11 +75,14 @@ export function TrashPanel({
   page,
   pageSize,
   pulls,
+  restoringAccountId,
   restoringBackupFileName,
   restoringPullId,
   selectedBackupFileNames,
   selectedPullIds,
   totalPulls,
+  onAccountPermanentlyDelete,
+  onAccountRestore,
   onBackupDeleteAll,
   onBackupDeleteSelected,
   onBackupPermanentlyDelete,
@@ -90,17 +103,22 @@ export function TrashPanel({
   const pageCount = Math.max(1, Math.ceil(totalPulls / pageSize))
   const isHistoryMutating =
     deletingPullId !== undefined || restoringPullId !== undefined
+  const isAccountMutating =
+    deletingAccountId !== undefined || restoringAccountId !== undefined
   const isBackupMutating =
     deletingBackupFileName !== undefined || restoringBackupFileName !== undefined
-  const isMutating = isHistoryMutating || isBackupMutating
+  const isMutating = isHistoryMutating || isAccountMutating || isBackupMutating
+  const titleByTab: Record<TrashTab, string> = {
+    history: 'Deleted history',
+    accounts: 'Deleted accounts',
+    backups: 'Deleted backups',
+  }
 
   return (
     <section className="history-panel trash-panel" aria-label="Trash history">
       <header className="panel-header">
         <div>
-          <h2>
-            {activeTab === 'history' ? 'Deleted history' : 'Deleted backups'}
-          </h2>
+          <h2>{titleByTab[activeTab]}</h2>
           <span>Items are removed permanently after 6 months.</span>
         </div>
         {activeTab === 'history' ? (
@@ -116,7 +134,7 @@ export function TrashPanel({
             onRestoreSelected={onRestoreSelected}
             onSelectionModeChange={onSelectionModeChange}
           />
-        ) : (
+        ) : activeTab === 'backups' ? (
           <TrashBackupActions
             isDeleting={deletingBackupFileName !== undefined}
             isLoading={isBackupLoading}
@@ -129,7 +147,7 @@ export function TrashPanel({
             onRestoreSelected={onBackupRestoreSelected}
             onSelectionModeChange={onBackupSelectionModeChange}
           />
-        )}
+        ) : null}
       </header>
       <div className="banner-tabs trash-tabs" role="tablist" aria-label="Trash categories">
         <button
@@ -140,6 +158,15 @@ export function TrashPanel({
           type="button"
         >
           History {totalPulls}
+        </button>
+        <button
+          aria-selected={activeTab === 'accounts'}
+          className={activeTab === 'accounts' ? 'banner-tab banner-tab-active' : 'banner-tab'}
+          onClick={() => onTabChange('accounts')}
+          role="tab"
+          type="button"
+        >
+          Accounts {accounts.length}
         </button>
         <button
           aria-selected={activeTab === 'backups'}
@@ -179,6 +206,27 @@ export function TrashPanel({
             <div className="warp-empty">
               <strong>{isHistoryLoading ? 'Loading Trash' : 'Trash is empty'}</strong>
               <span>Deleted warp records will stay here for 6 months.</span>
+            </div>
+          )
+        ) : activeTab === 'accounts' ? (
+          accounts.length > 0 ? (
+            accounts.map((account) => (
+              <TrashAccountRow
+                account={account}
+                isDeleting={deletingAccountId === account.id}
+                isDisabled={isMutating}
+                isRestoring={restoringAccountId === account.id}
+                key={account.id}
+                onPermanentlyDelete={onAccountPermanentlyDelete}
+                onRestore={onAccountRestore}
+              />
+            ))
+          ) : (
+            <div className="warp-empty">
+              <strong>
+                {isAccountLoading ? 'Loading account Trash' : 'No deleted accounts'}
+              </strong>
+              <span>Deleted accounts will stay here for 6 months.</span>
             </div>
           )
         ) : backupSnapshots.length > 0 ? (
@@ -547,6 +595,62 @@ function TrashBackupRow({
   )
 }
 
+function TrashAccountRow({
+  account,
+  isDeleting,
+  isDisabled,
+  isRestoring,
+  onPermanentlyDelete,
+  onRestore,
+}: {
+  account: TrashedAccount
+  isDeleting: boolean
+  isDisabled: boolean
+  isRestoring: boolean
+  onPermanentlyDelete: (account: TrashedAccount) => void
+  onRestore: (account: TrashedAccount) => void
+}) {
+  return (
+    <article className="trash-row trash-account-row">
+      <div className="trash-account-avatar" aria-hidden="true">
+        <AccountAvatar avatarPath={account.avatarPath} fallbackSize={18} />
+      </div>
+      <div className="trash-item-copy">
+        <strong>UID {account.uid}</strong>
+        <span>{formatAccountMeta(account)}</span>
+      </div>
+      <div className="trash-date">
+        <span>{formatLastPull(account.lastPullAt)}</span>
+        <span>Deleted {formatDateTime(account.deletedAt, true)}</span>
+      </div>
+      <div className="trash-actions">
+        <AppButton
+          disabled={isDisabled}
+          icon={RotateCcw}
+          onClick={() => onRestore(account)}
+          variant="ghost"
+        >
+          {isRestoring ? 'Restoring' : 'Restore'}
+        </AppButton>
+        <button
+          aria-label={
+            isDeleting
+              ? `Deleting UID ${account.uid}`
+              : `Permanently delete UID ${account.uid}`
+          }
+          className="icon-button trash-permanent-button"
+          disabled={isDisabled}
+          onClick={() => onPermanentlyDelete(account)}
+          title="Delete permanently"
+          type="button"
+        >
+          <Trash2 size={16} aria-hidden="true" />
+        </button>
+      </div>
+    </article>
+  )
+}
+
 function TrashItemIcon({
   iconPath,
   rarity,
@@ -571,6 +675,18 @@ function TrashItemIcon({
       )}
     </div>
   )
+}
+
+function formatAccountMeta(account: TrashedAccount) {
+  const pulls =
+    account.totalPulls === 1 ? '1 pull' : `${account.totalPulls} pulls`
+  const region = account.region ?? 'asia'
+
+  return `${pulls} - ${region.toUpperCase()}`
+}
+
+function formatLastPull(value: string | undefined) {
+  return value ? `Last pull ${formatDateTime(value)}` : 'No saved pulls'
 }
 
 function formatDateTime(value: string | number, isUtc = false) {

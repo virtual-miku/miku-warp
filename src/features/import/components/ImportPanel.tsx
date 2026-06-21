@@ -286,6 +286,7 @@ function ImportControls({
           </div>
         ) : null}
         <div className="tool-row manual-import-row">
+          <span className="manual-import-divider-label">Or</span>
           <div>
             <strong>Manual import from text</strong>
             <span>{manualImportPreview.totalPulls} detected</span>
@@ -307,7 +308,7 @@ function formatGameHistoryScanDetail(
   }
 
   if (!scan) {
-    return 'Local cache'
+    return 'Open Warp Records in-game first, then scan local cache.'
   }
 
   if (scan.status === 'found') {

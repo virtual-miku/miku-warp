@@ -188,6 +188,17 @@
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
+.account-management-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.account-delete-button {
+  color: var(--danger);
+}
+
 .account-management-icon {
   width: 75px;
   height: 75px;
@@ -985,6 +996,26 @@
   color: var(--text-muted);
 }
 
+.trash-account-avatar {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--panel-bg);
+  color: var(--accent);
+}
+
+.trash-account-avatar img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
 .trash-row:last-child {
   border-bottom: 0;
 }
@@ -1273,9 +1304,24 @@
 }
 
 .manual-import-row {
+  position: relative;
   margin-top: 4px;
   padding-top: 14px;
   border-top: 1px solid var(--border);
+}
+
+.manual-import-divider-label {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  padding: 0 8px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  text-transform: uppercase;
+  transform: translate(-50%, -50%);
 }
 
 .game-path-field {
@@ -2348,6 +2394,7 @@
     grid-template-columns: 40px minmax(0, 1fr);
   }
 
+  .account-management-card .account-management-actions,
   .account-management-card .app-button,
   .account-management-card .status-pill {
     grid-column: 2;
