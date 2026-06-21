@@ -40,6 +40,11 @@ export type CloudBackupPolicy = {
   updatedAt: string
 }
 
+export type GoogleOAuthClientInput = {
+  clientId: string
+  clientSecret?: string
+}
+
 export function createInitialGoogleDriveBackupStatus(): CloudBackupStatus {
   return {
     provider: 'google_drive',
@@ -53,7 +58,7 @@ export function createInitialGoogleDriveBackupStatus(): CloudBackupStatus {
     canUpload: false,
     label: getCloudBackupStatusLabel('not_configured'),
     detail:
-      'Google Drive backup is not available in this build. Local JSON backup still works.',
+      'Google Drive credentials are stored securely by the desktop operating system.',
   }
 }
 

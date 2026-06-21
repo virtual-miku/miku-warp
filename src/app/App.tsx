@@ -23,6 +23,7 @@ import {
   createInitialGoogleDriveBackupStatus,
   type CloudBackupPolicy,
   type CloudBackupStatus,
+  type GoogleOAuthClientInput,
 } from '../features/backup/domain/cloud-backup'
 import {
   ImportDialog,
@@ -2034,14 +2035,14 @@ export function App() {
     scheduleAutoBackup,
   ])
 
-  const handleConnectGoogleDrive = useCallback(async () => {
+  const handleConnectGoogleDrive = useCallback(async (input?: GoogleOAuthClientInput) => {
     if (
       backupDeleting ||
       backupExporting ||
       backupImporting ||
       backupRestoring ||
       cloudBackupBusy ||
-      !cloudBackupStatus.canConnect
+      (!input && !cloudBackupStatus.canConnect)
     ) {
       return
     }
@@ -2052,7 +2053,7 @@ export function App() {
     setBackupNotice(undefined)
 
     try {
-      const startStatus = await connectGoogleDriveBackup()
+      const startStatus = await connectGoogleDriveBackup(input)
       setCloudBackupStatus(startStatus)
 
       const status = await waitForGoogleDriveAuthCompletion(
@@ -2236,7 +2237,8 @@ export function App() {
       setBackupNotice({
         tone: 'success',
         title: 'Google Drive disconnected',
-        detail: 'Local Google Drive token was removed from secure storage.',
+        detail:
+          'Google Drive credentials and the local token were removed from secure storage.',
       })
     } catch (error) {
       const fallbackStatus = await refreshCloudBackupStatus()

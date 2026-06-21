@@ -1,6 +1,7 @@
 import type {
   CloudBackupPolicy,
   CloudBackupStatus,
+  GoogleOAuthClientInput,
 } from '../../backup/domain/cloud-backup'
 import { invokeTauri } from './tauri-invoke'
 import type { RestoreBackupSnapshotResult } from './backup-export'
@@ -72,8 +73,10 @@ export function updateCloudBackupPolicy(input: UpdateCloudBackupPolicyInput) {
   })
 }
 
-export function connectGoogleDriveBackup() {
-  return invokeTauri<CloudBackupStatus>('connect_google_drive_backup')
+export function connectGoogleDriveBackup(input?: GoogleOAuthClientInput) {
+  return invokeTauri<CloudBackupStatus>('connect_google_drive_backup', {
+    input: input ?? null,
+  })
 }
 
 export function cancelGoogleDriveBackupConnection() {

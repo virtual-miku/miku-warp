@@ -452,7 +452,8 @@ pub struct WarpBannerSummaryRow {
     pub five_star_pity_total: i64,
     pub rate_up_wins: i64,
     pub rate_up_losses: i64,
-    pub rate_up_uncertain: i64,
+    pub rate_up_standard_losses: i64,
+    pub rate_up_celestial_losses: i64,
     pub next_five_star_guaranteed: Option<bool>,
     pub last_four_star_pity: Option<i64>,
     pub last_five_star_pity: Option<i64>,
@@ -533,7 +534,8 @@ struct WarpBannerSummaryAccumulator {
     five_star_pity_total: i64,
     rate_up_wins: i64,
     rate_up_losses: i64,
-    rate_up_uncertain: i64,
+    rate_up_standard_losses: i64,
+    rate_up_celestial_losses: i64,
     next_five_star_guaranteed: Option<bool>,
     last_four_star_pity: Option<i64>,
     last_five_star_pity: Option<i64>,
@@ -2005,34 +2007,27 @@ fn update_rate_up_outcome(
     };
 
     match outcome {
-        RateUpOutcome::Loss => {
+        RateUpOutcome::StandardLoss => {
             summary.rate_up_losses += 1;
+            summary.rate_up_standard_losses += 1;
             summary.next_five_star_guaranteed = Some(true);
         }
         RateUpOutcome::Featured => {
-            if summary.next_five_star_guaranteed == Some(false) {
-                summary.rate_up_wins += 1;
-            } else if summary.next_five_star_guaranteed.is_none() {
-                summary.rate_up_uncertain += 1;
-            }
-
+            summary.rate_up_wins += 1;
             summary.next_five_star_guaranteed = Some(false);
         }
-        RateUpOutcome::CelestialInvitation => {
-            if summary.next_five_star_guaranteed == Some(true) {
-                summary.next_five_star_guaranteed = Some(false);
-            } else {
-                summary.rate_up_uncertain += 1;
-                summary.next_five_star_guaranteed = None;
-            }
+        RateUpOutcome::CelestialLoss => {
+            summary.rate_up_losses += 1;
+            summary.rate_up_celestial_losses += 1;
+            summary.next_five_star_guaranteed = Some(true);
         }
     }
 }
 
 enum RateUpOutcome {
     Featured,
-    Loss,
-    CelestialInvitation,
+    StandardLoss,
+    CelestialLoss,
 }
 
 const CELESTIAL_INVITATION_V3_2_START_DATE: &str = "2025-04-09";
@@ -2048,11 +2043,11 @@ fn classify_rate_up_outcome(
     }
 
     if is_known_off_rate_item(banner_type, item_name) {
-        return Some(RateUpOutcome::Loss);
+        return Some(RateUpOutcome::StandardLoss);
     }
 
     if is_celestial_invitation_candidate(banner_type, item_name, pulled_at) {
-        return Some(RateUpOutcome::CelestialInvitation);
+        return Some(RateUpOutcome::CelestialLoss);
     }
 
     Some(RateUpOutcome::Featured)
@@ -4265,7 +4260,8 @@ impl WarpBannerSummaryAccumulator {
             five_star_pity_total: self.five_star_pity_total,
             rate_up_wins: self.rate_up_wins,
             rate_up_losses: self.rate_up_losses,
-            rate_up_uncertain: self.rate_up_uncertain,
+            rate_up_standard_losses: self.rate_up_standard_losses,
+            rate_up_celestial_losses: self.rate_up_celestial_losses,
             next_five_star_guaranteed: self.next_five_star_guaranteed,
             last_four_star_pity: self.last_four_star_pity,
             last_five_star_pity: self.last_five_star_pity,
@@ -5438,7 +5434,7 @@ mod tests {
     }
 
     #[test]
-    fn summarizes_only_non_guaranteed_rate_up_wins() {
+    fn summarizes_every_featured_five_star_as_a_rate_up_win() {
         let summaries = build_warp_banner_summaries(vec![
             WarpBannerSummaryCandidate {
                 banner_type: "character_event".to_string(),
@@ -5480,18 +5476,20 @@ mod tests {
             .find(|summary| summary.banner_type == "standard")
             .expect("standard summary");
 
-        assert_eq!(character_event.rate_up_wins, 2);
+        assert_eq!(character_event.rate_up_wins, 3);
         assert_eq!(character_event.rate_up_losses, 1);
-        assert_eq!(character_event.rate_up_uncertain, 0);
+        assert_eq!(character_event.rate_up_standard_losses, 1);
+        assert_eq!(character_event.rate_up_celestial_losses, 0);
         assert_eq!(character_event.next_five_star_guaranteed, Some(false));
         assert_eq!(standard.rate_up_wins, 0);
         assert_eq!(standard.rate_up_losses, 0);
-        assert_eq!(standard.rate_up_uncertain, 0);
+        assert_eq!(standard.rate_up_standard_losses, 0);
+        assert_eq!(standard.rate_up_celestial_losses, 0);
         assert_eq!(standard.next_five_star_guaranteed, None);
     }
 
     #[test]
-    fn keeps_celestial_invitation_results_out_of_known_win_rate() {
+    fn counts_standard_and_celestial_invitation_losses_separately() {
         let summaries = build_warp_banner_summaries(vec![
             WarpBannerSummaryCandidate {
                 banner_type: "character_event".to_string(),
@@ -5541,17 +5539,52 @@ mod tests {
             .find(|summary| summary.banner_type == "character_event")
             .expect("character event summary");
 
-        assert_eq!(summary.rate_up_wins, 2);
-        assert_eq!(summary.rate_up_losses, 1);
-        assert_eq!(summary.rate_up_uncertain, 3);
-        assert_eq!(summary.next_five_star_guaranteed, None);
+        assert_eq!(summary.rate_up_wins, 3);
+        assert_eq!(summary.rate_up_losses, 4);
+        assert_eq!(summary.rate_up_standard_losses, 1);
+        assert_eq!(summary.rate_up_celestial_losses, 3);
+        assert_eq!(summary.next_five_star_guaranteed, Some(true));
+    }
+
+    #[test]
+    fn classifies_collaboration_history_rate_up_results() {
+        let pulls = [
+            ("Saber", "2025-07-11T11:23:51"),
+            ("Fu Xuan", "2025-07-11T11:28:44"),
+            ("Saber", "2025-07-11T11:33:00"),
+            ("Seele", "2025-07-12T15:00:32"),
+            ("Archer", "2025-07-21T06:20:23"),
+            ("Bronya", "2025-08-02T06:48:18"),
+            ("Archer", "2025-08-21T06:32:20"),
+            ("Bronya", "2025-09-15T04:27:36"),
+            ("Saber", "2025-09-15T04:31:41"),
+        ]
+        .into_iter()
+        .map(|(item_name, pulled_at)| WarpBannerSummaryCandidate {
+            banner_type: "collaboration_character".to_string(),
+            item_name: item_name.to_string(),
+            rarity: 5,
+            pulled_at: pulled_at.to_string(),
+        })
+        .collect();
+
+        let summary = build_warp_banner_summaries(pulls)
+            .into_iter()
+            .next()
+            .expect("collaboration character summary");
+
+        assert_eq!(summary.rate_up_wins, 5);
+        assert_eq!(summary.rate_up_losses, 4);
+        assert_eq!(summary.rate_up_standard_losses, 2);
+        assert_eq!(summary.rate_up_celestial_losses, 2);
+        assert_eq!(summary.next_five_star_guaranteed, Some(false));
     }
 
     #[test]
     fn expands_celestial_invitation_candidates_by_version() {
         assert!(matches!(
             classify_rate_up_outcome("character_event", "Blade", "2025-04-09 00:00:00"),
-            Some(RateUpOutcome::CelestialInvitation)
+            Some(RateUpOutcome::CelestialLoss)
         ));
         assert!(matches!(
             classify_rate_up_outcome("character_event", "Yunli", "2026-04-21 23:59:59"),
@@ -5563,7 +5596,7 @@ mod tests {
                 "Silver Wolf",
                 "2026-04-22 00:00:00"
             ),
-            Some(RateUpOutcome::CelestialInvitation)
+            Some(RateUpOutcome::CelestialLoss)
         ));
         assert!(matches!(
             classify_rate_up_outcome(

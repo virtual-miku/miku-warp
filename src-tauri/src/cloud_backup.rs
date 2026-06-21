@@ -3,7 +3,6 @@ use keyring::{Entry, Error as KeyringError};
 use rand::{rngs::OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::env;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -13,12 +12,11 @@ use std::time::{Duration, Instant};
 use url::Url;
 
 const GOOGLE_DRIVE_APP_DATA_SCOPE: &str = "https://www.googleapis.com/auth/drive.appdata";
-const GOOGLE_OAUTH_CLIENT_ID_ENV: &str = "MIKU_WARP_GOOGLE_CLIENT_ID";
-const LEGACY_GOOGLE_OAUTH_CLIENT_ID_ENV: &str = "WARP_TRACKER_GOOGLE_CLIENT_ID";
-const GOOGLE_OAUTH_CLIENT_SECRET_ENV: &str = "MIKU_WARP_GOOGLE_CLIENT_SECRET";
-const LEGACY_GOOGLE_OAUTH_CLIENT_SECRET_ENV: &str = "WARP_TRACKER_GOOGLE_CLIENT_SECRET";
 const KEYRING_SERVICE_NAME: &str = "app.warptracker.desktop.google-drive";
+const GOOGLE_OAUTH_CLIENT_CONFIG_KEY: &str = "google-oauth-client-config";
 const GOOGLE_DRIVE_REFRESH_TOKEN_KEY: &str = "google-drive-refresh-token";
+const GOOGLE_OAUTH_CLIENT_ID_MAX_LENGTH: usize = 512;
+const GOOGLE_OAUTH_CLIENT_SECRET_MAX_LENGTH: usize = 1024;
 const GOOGLE_AUTHORIZATION_ENDPOINT: &str = "https://accounts.google.com/o/oauth2/v2/auth";
 const GOOGLE_TOKEN_ENDPOINT: &str = "https://oauth2.googleapis.com/token";
 const GOOGLE_DRIVE_FILES_ENDPOINT: &str = "https://www.googleapis.com/drive/v3/files";
@@ -115,9 +113,17 @@ pub struct RestoreCloudBackupSnapshotInput {
     pub size: Option<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GoogleOAuthClientInput {
+    pub client_id: String,
+    pub client_secret: Option<String>,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum SecretStoreError {
     Unavailable(String),
+    InvalidData(String),
 }
 
 pub trait SecretStore {
@@ -129,7 +135,7 @@ pub trait SecretStore {
 #[derive(Debug, Default)]
 pub struct KeyringSecretStore;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq, Serialize)]
 struct GoogleOAuthClientConfig {
     client_id: Option<String>,
     client_secret: Option<String>,
@@ -200,20 +206,24 @@ impl SecretStore for KeyringSecretStore {
 }
 
 pub fn get_cloud_backup_status() -> CloudBackupStatus {
-    cloud_backup_status_with_auth_flow(
-        &KeyringSecretStore,
-        read_google_oauth_client_config_from_environment(),
-        read_google_drive_auth_flow_state(),
-    )
+    cloud_backup_status_from_store(&KeyringSecretStore, read_google_drive_auth_flow_state())
 }
 
-pub fn connect_google_drive_backup() -> Result<CloudBackupStatus, String> {
+pub fn connect_google_drive_backup(
+    input: Option<GoogleOAuthClientInput>,
+) -> Result<CloudBackupStatus, String> {
     let secret_store = KeyringSecretStore;
-    let oauth_config = read_google_oauth_client_config_from_environment();
+
+    if let Some(input) = input {
+        save_google_oauth_client_config(&secret_store, input)?;
+    }
+
+    let oauth_config =
+        read_google_oauth_client_config(&secret_store).map_err(secret_store_error_message)?;
     let client_id = oauth_config
         .client_id
         .clone()
-        .ok_or_else(google_drive_unavailable_message)?;
+        .ok_or_else(google_drive_not_configured_message)?;
     let current_status = cloud_backup_status(&secret_store, oauth_config.clone());
 
     if matches!(
@@ -253,14 +263,9 @@ pub fn cancel_google_drive_backup_connection() -> Result<CloudBackupStatus, Stri
 pub fn disconnect_google_drive_backup() -> Result<CloudBackupStatus, String> {
     let secret_store = KeyringSecretStore;
     cancel_google_drive_auth_flow()?;
-    secret_store
-        .delete_secret(GOOGLE_DRIVE_REFRESH_TOKEN_KEY)
-        .map_err(secret_store_error_message)?;
+    delete_google_drive_credentials(&secret_store)?;
 
-    Ok(cloud_backup_status(
-        &secret_store,
-        read_google_oauth_client_config_from_environment(),
-    ))
+    Ok(get_cloud_backup_status())
 }
 
 pub fn upload_google_drive_backup_snapshot(
@@ -269,11 +274,12 @@ pub fn upload_google_drive_backup_snapshot(
     bytes: &[u8],
 ) -> Result<UploadCloudBackupSnapshotResult, String> {
     let secret_store = KeyringSecretStore;
-    let oauth_config = read_google_oauth_client_config_from_environment();
+    let oauth_config =
+        read_google_oauth_client_config(&secret_store).map_err(secret_store_error_message)?;
     let client_id = oauth_config
         .client_id
         .as_deref()
-        .ok_or_else(google_drive_unavailable_message)?;
+        .ok_or_else(google_drive_not_configured_message)?;
     let access_token = refresh_google_access_token(
         &secret_store,
         client_id,
@@ -297,11 +303,12 @@ pub fn upload_google_drive_backup_snapshot(
 
 pub fn list_google_drive_backup_snapshots() -> Result<Vec<CloudBackupSnapshotSummary>, String> {
     let secret_store = KeyringSecretStore;
-    let oauth_config = read_google_oauth_client_config_from_environment();
+    let oauth_config =
+        read_google_oauth_client_config(&secret_store).map_err(secret_store_error_message)?;
     let client_id = oauth_config
         .client_id
         .as_deref()
-        .ok_or_else(google_drive_unavailable_message)?;
+        .ok_or_else(google_drive_not_configured_message)?;
     let access_token = refresh_google_access_token(
         &secret_store,
         client_id,
@@ -315,11 +322,12 @@ pub fn download_google_drive_backup_snapshot(
     remote_file_id: &str,
 ) -> Result<DownloadCloudBackupSnapshotResult, String> {
     let secret_store = KeyringSecretStore;
-    let oauth_config = read_google_oauth_client_config_from_environment();
+    let oauth_config =
+        read_google_oauth_client_config(&secret_store).map_err(secret_store_error_message)?;
     let client_id = oauth_config
         .client_id
         .as_deref()
-        .ok_or_else(google_drive_unavailable_message)?;
+        .ok_or_else(google_drive_not_configured_message)?;
     let access_token = refresh_google_access_token(
         &secret_store,
         client_id,
@@ -340,7 +348,7 @@ fn cloud_backup_status(
     let token_lookup = secret_store.read_secret(GOOGLE_DRIVE_REFRESH_TOKEN_KEY);
 
     match token_lookup {
-        Err(SecretStoreError::Unavailable(error)) => create_status(
+        Err(error) => create_status(
             CloudBackupConnectionStatus::StorageUnavailable,
             SecureTokenStorageStatus::Unavailable,
             oauth_config.client_id.is_some(),
@@ -349,18 +357,19 @@ fn cloud_backup_status(
             false,
             "Secure storage unavailable",
             format!(
-                "OS credential storage is unavailable: {error}. Google Drive backup will stay disabled so tokens are not stored unsafely."
+                "Secure credential storage is unavailable: {}. Google Drive backup will stay disabled so credentials are not stored unsafely.",
+                secret_store_error_detail(&error)
             ),
         ),
         Ok(_token) if oauth_config.client_id.is_none() => create_status(
             CloudBackupConnectionStatus::NotConfigured,
             SecureTokenStorageStatus::Ready,
             false,
-            false,
+            true,
             false,
             false,
             "Drive backup unavailable",
-            google_drive_unavailable_message(),
+            google_drive_not_configured_message(),
         ),
         Ok(Some(_token)) => create_status(
             CloudBackupConnectionStatus::Connected,
@@ -377,10 +386,43 @@ fn cloud_backup_status(
             SecureTokenStorageStatus::Ready,
             true,
             true,
-            false,
+            true,
             false,
             "Not connected",
             String::new(),
+        ),
+    }
+}
+
+fn cloud_backup_status_from_store(
+    secret_store: &impl SecretStore,
+    auth_flow_state: GoogleDriveAuthFlowState,
+) -> CloudBackupStatus {
+    match read_google_oauth_client_config(secret_store) {
+        Ok(oauth_config) => {
+            cloud_backup_status_with_auth_flow(secret_store, oauth_config, auth_flow_state)
+        }
+        Err(SecretStoreError::Unavailable(error)) => create_status(
+            CloudBackupConnectionStatus::StorageUnavailable,
+            SecureTokenStorageStatus::Unavailable,
+            false,
+            false,
+            false,
+            false,
+            "Secure storage unavailable",
+            format!(
+                "Secure credential storage is unavailable: {error}. Google Drive credentials were not stored."
+            ),
+        ),
+        Err(SecretStoreError::InvalidData(error)) => create_status(
+            CloudBackupConnectionStatus::NotConfigured,
+            SecureTokenStorageStatus::Ready,
+            false,
+            true,
+            false,
+            false,
+            "Drive credentials need attention",
+            error,
         ),
     }
 }
@@ -423,7 +465,7 @@ fn apply_google_auth_flow_state(
             status.secure_storage_status,
             status.oauth_client_configured,
             true,
-            false,
+            true,
             false,
             "Connection failed",
             detail,
@@ -1166,45 +1208,115 @@ fn create_status(
     }
 }
 
-fn read_google_oauth_client_config_from_environment() -> GoogleOAuthClientConfig {
-    GoogleOAuthClientConfig {
-        client_id: read_google_oauth_client_id_from_environment(),
-        client_secret: read_google_oauth_client_secret_from_environment(),
+fn read_google_oauth_client_config(
+    secret_store: &impl SecretStore,
+) -> Result<GoogleOAuthClientConfig, SecretStoreError> {
+    let Some(serialized_config) = secret_store.read_secret(GOOGLE_OAUTH_CLIENT_CONFIG_KEY)? else {
+        return Ok(GoogleOAuthClientConfig::default());
+    };
+    let config =
+        serde_json::from_str::<GoogleOAuthClientConfig>(&serialized_config).map_err(|_| {
+            SecretStoreError::InvalidData(
+                "Saved Google Drive credentials could not be read. Enter them again.".to_string(),
+            )
+        })?;
+
+    validate_google_oauth_client_config(&config).map_err(|_| {
+        SecretStoreError::InvalidData(
+            "Saved Google Drive credentials are invalid. Enter them again.".to_string(),
+        )
+    })?;
+
+    Ok(config)
+}
+
+fn save_google_oauth_client_config(
+    secret_store: &impl SecretStore,
+    input: GoogleOAuthClientInput,
+) -> Result<(), String> {
+    let config = normalize_google_oauth_client_input(input)?;
+    let serialized_config = serde_json::to_string(&config)
+        .map_err(|error| format!("Failed to prepare Google Drive credentials: {error}"))?;
+
+    secret_store
+        .write_secret(GOOGLE_OAUTH_CLIENT_CONFIG_KEY, &serialized_config)
+        .map_err(secret_store_error_message)?;
+
+    let verified_config =
+        read_google_oauth_client_config(secret_store).map_err(secret_store_error_message);
+
+    match verified_config {
+        Ok(saved_config) if saved_config == config => Ok(()),
+        Ok(_) => {
+            let _ = secret_store.delete_secret(GOOGLE_OAUTH_CLIENT_CONFIG_KEY);
+            Err(
+                "Google Drive credentials were saved, but Miku Warp could not verify them."
+                    .to_string(),
+            )
+        }
+        Err(error) => {
+            let _ = secret_store.delete_secret(GOOGLE_OAUTH_CLIENT_CONFIG_KEY);
+            Err(error)
+        }
     }
 }
 
-fn read_google_oauth_client_id_from_environment() -> Option<String> {
-    [
-        GOOGLE_OAUTH_CLIENT_ID_ENV,
-        LEGACY_GOOGLE_OAUTH_CLIENT_ID_ENV,
-    ]
-    .into_iter()
-    .find_map(|env_key| {
-        env::var(env_key)
-            .ok()
-            .map(|client_id| client_id.trim().to_string())
-            .filter(|client_id| !client_id.is_empty())
-    })
+fn normalize_google_oauth_client_input(
+    input: GoogleOAuthClientInput,
+) -> Result<GoogleOAuthClientConfig, String> {
+    let client_id = input.client_id.trim().to_string();
+    let client_secret = input
+        .client_secret
+        .map(|secret| secret.trim().to_string())
+        .filter(|secret| !secret.is_empty());
+    let config = GoogleOAuthClientConfig {
+        client_id: Some(client_id),
+        client_secret,
+    };
+
+    validate_google_oauth_client_config(&config)?;
+
+    Ok(config)
 }
 
-fn read_google_oauth_client_secret_from_environment() -> Option<String> {
-    let runtime_client_secret = [
-        GOOGLE_OAUTH_CLIENT_SECRET_ENV,
-        LEGACY_GOOGLE_OAUTH_CLIENT_SECRET_ENV,
-    ]
-    .into_iter()
-    .find_map(|env_key| {
-        env::var(env_key)
-            .ok()
-            .map(|client_secret| client_secret.trim().to_string())
-            .filter(|client_secret| !client_secret.is_empty())
-    });
+fn validate_google_oauth_client_config(config: &GoogleOAuthClientConfig) -> Result<(), String> {
+    let client_id = config.client_id.as_deref().unwrap_or_default();
+    let valid_client_id = !client_id.is_empty()
+        && client_id.len() <= GOOGLE_OAUTH_CLIENT_ID_MAX_LENGTH
+        && client_id.ends_with(".apps.googleusercontent.com")
+        && !client_id.chars().any(char::is_whitespace)
+        && !client_id.chars().any(char::is_control);
 
-    runtime_client_secret
+    if !valid_client_id {
+        return Err("Enter a valid Google Desktop OAuth Client ID.".to_string());
+    }
+
+    if config
+        .client_secret
+        .as_deref()
+        .is_some_and(|client_secret| {
+            client_secret.len() > GOOGLE_OAUTH_CLIENT_SECRET_MAX_LENGTH
+                || client_secret.chars().any(char::is_control)
+        })
+    {
+        return Err("Enter a valid Google Desktop OAuth Client Secret.".to_string());
+    }
+
+    Ok(())
 }
 
-fn google_drive_unavailable_message() -> String {
-    "Google Drive backup is not available in this build. Local JSON backup still works.".to_string()
+fn delete_google_drive_credentials(secret_store: &impl SecretStore) -> Result<(), String> {
+    let refresh_token_result = secret_store.delete_secret(GOOGLE_DRIVE_REFRESH_TOKEN_KEY);
+    let client_config_result = secret_store.delete_secret(GOOGLE_OAUTH_CLIENT_CONFIG_KEY);
+
+    refresh_token_result.map_err(secret_store_error_message)?;
+    client_config_result.map_err(secret_store_error_message)?;
+
+    Ok(())
+}
+
+fn google_drive_not_configured_message() -> String {
+    "Enter the Google Desktop OAuth credentials to enable Google Drive backup.".to_string()
 }
 
 fn to_secret_store_error(error: KeyringError) -> SecretStoreError {
@@ -1216,6 +1328,13 @@ fn secret_store_error_message(error: SecretStoreError) -> String {
         SecretStoreError::Unavailable(error) => {
             format!("Secure token storage is unavailable: {error}")
         }
+        SecretStoreError::InvalidData(error) => error,
+    }
+}
+
+fn secret_store_error_detail(error: &SecretStoreError) -> &str {
+    match error {
+        SecretStoreError::Unavailable(error) | SecretStoreError::InvalidData(error) => error,
     }
 }
 
@@ -1267,7 +1386,7 @@ mod tests {
             SecureTokenStorageStatus::Ready
         );
         assert!(!status.oauth_client_configured);
-        assert!(!status.can_connect);
+        assert!(status.can_connect);
         assert!(!status.can_disconnect);
         assert!(!status.can_upload);
     }
@@ -1288,9 +1407,79 @@ mod tests {
         );
         assert!(status.oauth_client_configured);
         assert!(status.can_connect);
-        assert!(!status.can_disconnect);
+        assert!(status.can_disconnect);
         assert_eq!(status.label, "Not connected");
         assert!(status.detail.is_empty());
+    }
+
+    #[test]
+    fn securely_persists_and_removes_google_oauth_client_config() {
+        let store = MemorySecretStore::default();
+
+        save_google_oauth_client_config(&store, google_oauth_client_input(Some("client-secret")))
+            .expect("OAuth client config can be saved");
+        store
+            .write_secret(GOOGLE_DRIVE_REFRESH_TOKEN_KEY, "refresh-token")
+            .expect("refresh token can be written");
+
+        let saved_config =
+            read_google_oauth_client_config(&store).expect("OAuth client config can be read");
+        let connected_status =
+            cloud_backup_status_from_store(&store, GoogleDriveAuthFlowState::Idle);
+
+        assert_eq!(
+            saved_config.client_id.as_deref(),
+            Some("123-example.apps.googleusercontent.com")
+        );
+        assert_eq!(saved_config.client_secret.as_deref(), Some("client-secret"));
+        assert_eq!(
+            connected_status.connection_status,
+            CloudBackupConnectionStatus::Connected
+        );
+
+        delete_google_drive_credentials(&store).expect("credentials can be deleted");
+
+        assert_eq!(
+            store
+                .read_secret(GOOGLE_OAUTH_CLIENT_CONFIG_KEY)
+                .expect("OAuth client config key can be read"),
+            None
+        );
+        assert_eq!(
+            store
+                .read_secret(GOOGLE_DRIVE_REFRESH_TOKEN_KEY)
+                .expect("refresh token key can be read"),
+            None
+        );
+        let disconnected_status =
+            cloud_backup_status_from_store(&store, GoogleDriveAuthFlowState::Idle);
+        assert_eq!(
+            disconnected_status.connection_status,
+            CloudBackupConnectionStatus::NotConfigured
+        );
+        assert!(!disconnected_status.oauth_client_configured);
+    }
+
+    #[test]
+    fn rejects_invalid_google_oauth_client_id_without_storing_it() {
+        let store = MemorySecretStore::default();
+
+        let error = save_google_oauth_client_config(
+            &store,
+            GoogleOAuthClientInput {
+                client_id: "not-a-google-client-id".to_string(),
+                client_secret: Some("secret".to_string()),
+            },
+        )
+        .expect_err("invalid OAuth client id must be rejected");
+
+        assert!(error.contains("valid Google Desktop OAuth Client ID"));
+        assert_eq!(
+            store
+                .read_secret(GOOGLE_OAUTH_CLIENT_CONFIG_KEY)
+                .expect("OAuth client config key can be read"),
+            None
+        );
     }
 
     #[test]
@@ -1721,6 +1910,13 @@ mod tests {
         GoogleOAuthClientConfig {
             client_id: client_id.map(ToString::to_string),
             client_secret: None,
+        }
+    }
+
+    fn google_oauth_client_input(client_secret: Option<&str>) -> GoogleOAuthClientInput {
+        GoogleOAuthClientInput {
+            client_id: "123-example.apps.googleusercontent.com".to_string(),
+            client_secret: client_secret.map(ToString::to_string),
         }
     }
 }

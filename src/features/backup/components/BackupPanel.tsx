@@ -1,6 +1,21 @@
-import { Cloud, RefreshCcw, FileJson, Trash2 } from 'lucide-react'
+import {
+  Cloud,
+  FileJson,
+  KeyRound,
+  LogOut,
+  RefreshCcw,
+  Trash2,
+  Upload,
+  X,
+} from 'lucide-react'
+import { useState, type FormEvent } from 'react'
 import { AppButton } from '../../../shared/ui/AppButton'
-import type { CloudBackupPolicy, CloudBackupStatus } from '../domain/cloud-backup'
+import {
+  getCloudBackupPolicyDetail,
+  type CloudBackupPolicy,
+  type CloudBackupStatus,
+  type GoogleOAuthClientInput,
+} from '../domain/cloud-backup'
 
 export type BackupNotice = {
   tone: 'success' | 'error'
@@ -46,7 +61,7 @@ type BackupPanelProps = {
   snapshots: BackupSnapshotInfo[]
   onDeleteSnapshot: (fileName: string) => void
   onCancelGoogleDrive: () => void
-  onConnectGoogleDrive: () => void
+  onConnectGoogleDrive: (input?: GoogleOAuthClientInput) => void
   onDisconnectGoogleDrive: () => void
   onAutoBackupPolicyChange: (enabled: boolean) => void
   onRestoreGoogleDriveBackup: (snapshot: CloudBackupSnapshotInfo) => void
@@ -57,24 +72,59 @@ type BackupPanelProps = {
 }
 
 export function BackupPanel({
+  cloudBackupPolicy,
+  cloudSnapshots,
+  cloudBackupStatus,
+  isCloudCancelling,
+  isCloudConnecting,
+  isCloudDisconnecting,
+  isCloudPolicyUpdating,
+  isCloudRestoring,
+  isCloudUploading,
   isExporting,
   isImporting,
   isDeleting,
   isRestoring,
   notice,
   deletingFileName,
+  restoringCloudFileId,
   restoringFileName,
   snapshots,
   onDeleteSnapshot,
+  onAutoBackupPolicyChange,
+  onCancelGoogleDrive,
+  onConnectGoogleDrive,
+  onDisconnectGoogleDrive,
+  onRestoreGoogleDriveBackup,
+  onUploadGoogleDriveBackup,
   onExportBackup,
   onImportBackupJson,
   onRestoreSnapshot,
 }: BackupPanelProps) {
-  const isBusy = isExporting || isImporting || isRestoring || isDeleting
+  const isGoogleDriveConfigured = cloudBackupStatus.oauthClientConfigured
+  const isGoogleDriveConnecting =
+    cloudBackupStatus.connectionStatus === 'connecting'
+  const isGoogleDriveConnected =
+    cloudBackupStatus.connectionStatus === 'connected'
+  const isCloudBusy =
+    isCloudConnecting ||
+    isCloudCancelling ||
+    isCloudDisconnecting ||
+    isCloudPolicyUpdating ||
+    isCloudRestoring ||
+    isCloudUploading
+  const isBusy =
+    isExporting || isImporting || isRestoring || isDeleting || isCloudBusy
   const visibleSnapshots = snapshots
     .filter((snapshot) => !snapshot.isAutoSave)
     .slice(0, 3)
-  const visibleNotice = notice && !isGoogleDriveNotice(notice) ? notice : undefined
+  const visibleCloudSnapshots = cloudSnapshots.slice(0, 1)
+  const visibleNotice = notice
+  const autoBackupToggleDisabled =
+    isBusy ||
+    isCloudPolicyUpdating ||
+    (!cloudBackupPolicy.autoBackupEnabled && !cloudBackupStatus.canUpload)
+  const oauthFormDisabled = isBusy || !cloudBackupStatus.canConnect
 
   return (
     <section
@@ -83,6 +133,160 @@ export function BackupPanel({
       aria-label="Backup"
     >
       <div className="tool-panel-body">
+        <div className="backup-section">
+          {!isGoogleDriveConfigured ? (
+            <GoogleOAuthSetupForm
+              disabled={oauthFormDisabled}
+              isConnecting={isCloudConnecting}
+              onConnect={onConnectGoogleDrive}
+              statusDetail={cloudBackupStatus.detail}
+            />
+          ) : (
+            <>
+              <div className="tool-row">
+                <div>
+                  <strong>Google Drive</strong>
+                  <span title={cloudBackupStatus.detail}>
+                    {cloudBackupStatus.label}
+                  </span>
+                </div>
+                <div className="backup-action-group">
+                  {isGoogleDriveConnected ? (
+                    <AppButton
+                      disabled={isBusy || !cloudBackupStatus.canUpload}
+                      icon={Upload}
+                      onClick={onUploadGoogleDriveBackup}
+                      variant="ghost"
+                    >
+                      {isCloudUploading ? 'Uploading' : 'Upload'}
+                    </AppButton>
+                  ) : null}
+                  {!isGoogleDriveConnected && !isGoogleDriveConnecting ? (
+                    <AppButton
+                      disabled={isBusy || !cloudBackupStatus.canDisconnect}
+                      icon={LogOut}
+                      onClick={onDisconnectGoogleDrive}
+                      variant="ghost"
+                    >
+                      {isCloudDisconnecting
+                        ? 'Removing credentials'
+                        : 'Change credentials'}
+                    </AppButton>
+                  ) : null}
+                  <AppButton
+                    disabled={
+                      isGoogleDriveConnecting
+                        ? isCloudCancelling
+                        : isBusy ||
+                          (isGoogleDriveConnected
+                            ? !cloudBackupStatus.canDisconnect
+                            : !cloudBackupStatus.canConnect)
+                    }
+                    icon={
+                      isGoogleDriveConnecting
+                        ? X
+                        : isGoogleDriveConnected
+                          ? LogOut
+                          : KeyRound
+                    }
+                    onClick={
+                      isGoogleDriveConnecting
+                        ? onCancelGoogleDrive
+                        : isGoogleDriveConnected
+                          ? onDisconnectGoogleDrive
+                          : () => onConnectGoogleDrive()
+                    }
+                  >
+                    {getGoogleDriveActionLabel(
+                      cloudBackupStatus,
+                      isGoogleDriveConnecting,
+                      isCloudCancelling,
+                      isCloudDisconnecting,
+                    )}
+                  </AppButton>
+                </div>
+              </div>
+              {!isGoogleDriveConnected && cloudBackupStatus.detail ? (
+                <p className="backup-status-detail">
+                  {cloudBackupStatus.detail}
+                </p>
+              ) : null}
+              <div className="backup-policy-row">
+                <div>
+                  <strong>Auto backup</strong>
+                  <span>
+                    {getCloudBackupPolicyDetail(
+                      cloudBackupPolicy,
+                      cloudBackupStatus.canUpload,
+                    )}
+                  </span>
+                </div>
+                <button
+                  aria-checked={cloudBackupPolicy.autoBackupEnabled}
+                  aria-label="Auto backup to Google Drive"
+                  className={`switch-control${
+                    cloudBackupPolicy.autoBackupEnabled
+                      ? ' switch-control-on'
+                      : ''
+                  }`}
+                  disabled={autoBackupToggleDisabled}
+                  onClick={() =>
+                    onAutoBackupPolicyChange(
+                      !cloudBackupPolicy.autoBackupEnabled,
+                    )
+                  }
+                  role="switch"
+                  type="button"
+                >
+                  <span aria-hidden="true" />
+                </button>
+              </div>
+              {isGoogleDriveConnected ? (
+                <div className="backup-snapshot-list" aria-label="Cloud backups">
+                  {visibleCloudSnapshots.length > 0 ? (
+                    visibleCloudSnapshots.map((snapshot) => (
+                      <div
+                        className="backup-snapshot-row"
+                        key={snapshot.remoteFileId}
+                      >
+                        <div>
+                          <strong>
+                            {snapshot.remoteModifiedTime
+                              ? `Backup ${formatSnapshotTime(snapshot.remoteModifiedTime)}`
+                              : 'Time unavailable'}
+                          </strong>
+                          <span title={snapshot.fileName}>
+                            {formatBackupSizeKilobytes(snapshot.size)}
+                          </span>
+                        </div>
+                        <div className="backup-snapshot-actions">
+                          <AppButton
+                            disabled={isBusy}
+                            icon={RefreshCcw}
+                            onClick={() => onRestoreGoogleDriveBackup(snapshot)}
+                            variant="ghost"
+                          >
+                            {restoringCloudFileId === snapshot.remoteFileId
+                              ? 'Restoring'
+                              : 'Restore'}
+                          </AppButton>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="backup-snapshot-row">
+                      <div>
+                        <strong>No cloud autosave yet</strong>
+                        <span>It will upload after the next saved change</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
+
         <div className="backup-section">
           <div className="tool-row">
             <div>
@@ -162,15 +366,120 @@ export function BackupPanel({
   )
 }
 
-function isGoogleDriveNotice(notice: BackupNotice) {
-  const searchableText = `${notice.title} ${notice.detail}`.toLowerCase()
+type GoogleOAuthSetupFormProps = {
+  disabled: boolean
+  isConnecting: boolean
+  onConnect: (input: GoogleOAuthClientInput) => void
+  statusDetail: string
+}
+
+function GoogleOAuthSetupForm({
+  disabled,
+  isConnecting,
+  onConnect,
+  statusDetail,
+}: GoogleOAuthSetupFormProps) {
+  const [clientId, setClientId] = useState('')
+  const [clientSecret, setClientSecret] = useState('')
+  const canSubmit = !disabled && clientId.trim().length > 0
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    if (!canSubmit) {
+      return
+    }
+
+    onConnect({
+      clientId: clientId.trim(),
+      clientSecret: clientSecret.trim() || undefined,
+    })
+  }
 
   return (
-    searchableText.includes('google drive') ||
-    searchableText.includes('drive autosave') ||
-    searchableText.includes('cloud backup') ||
-    searchableText.includes('cloud autosave')
+    <>
+      <div className="tool-row">
+        <div>
+          <strong>Google Drive</strong>
+          <span>Secure OAuth setup</span>
+        </div>
+      </div>
+      <form className="backup-oauth-form" onSubmit={handleSubmit}>
+        <label className="backup-oauth-field">
+          <span>Desktop Client ID</span>
+          <input
+            autoComplete="off"
+            disabled={disabled}
+            maxLength={512}
+            onChange={(event) => setClientId(event.target.value)}
+            placeholder="your-client-id.apps.googleusercontent.com"
+            required
+            spellCheck={false}
+            type="text"
+            value={clientId}
+          />
+        </label>
+        <label className="backup-oauth-field">
+          <span>Desktop Client Secret (optional)</span>
+          <input
+            autoComplete="new-password"
+            disabled={disabled}
+            maxLength={1024}
+            onChange={(event) => setClientSecret(event.target.value)}
+            placeholder="Enter the client secret when Google provides one"
+            spellCheck={false}
+            type="password"
+            value={clientSecret}
+          />
+        </label>
+        <div className="backup-oauth-actions">
+          <AppButton disabled={!canSubmit} icon={KeyRound} type="submit">
+            {isConnecting ? 'Connecting' : 'Save & connect'}
+          </AppButton>
+        </div>
+      </form>
+      {statusDetail ? (
+        <p className="backup-status-detail">{statusDetail}</p>
+      ) : null}
+    </>
   )
+}
+
+function getGoogleDriveActionLabel(
+  status: CloudBackupStatus,
+  isConnecting: boolean,
+  isCancelling: boolean,
+  isDisconnecting: boolean,
+) {
+  if (isCancelling) {
+    return 'Cancelling'
+  }
+
+  if (status.connectionStatus === 'connecting') {
+    return 'Cancel'
+  }
+
+  if (isDisconnecting) {
+    return 'Disconnecting'
+  }
+
+  if (status.connectionStatus === 'connected') {
+    return 'Disconnect'
+  }
+
+  if (status.connectionStatus === 'connection_failed') {
+    return 'Retry'
+  }
+
+  if (status.connectionStatus === 'needs_reauth') {
+    return 'Re-login'
+  }
+
+  if (isConnecting) {
+    return 'Connecting'
+  }
+
+  return 'Connect'
 }
 
 function formatSnapshotTime(value: string) {

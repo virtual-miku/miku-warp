@@ -116,8 +116,8 @@
 }
 
 .account-panel-avatar {
-  width: 38px;
-  height: 38px;
+  width: 75px;
+  height: 75px;
   flex: 0 0 auto;
   display: grid;
   place-items: center;
@@ -174,7 +174,7 @@
 .account-management-card {
   min-height: 72px;
   display: grid;
-  grid-template-columns: 44px minmax(0, 1fr) auto;
+  grid-template-columns: 75px minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
   padding: 12px;
@@ -189,8 +189,8 @@
 }
 
 .account-management-icon {
-  width: 40px;
-  height: 40px;
+  width: 75px;
+  height: 75px;
   display: grid;
   place-items: center;
   overflow: hidden;
@@ -564,18 +564,79 @@
 }
 
 .banner-detail-item strong.rate-up-score-poor,
+.rate-up-loss-trigger,
 .rate-up-losses {
   color: var(--status-poor);
 }
 
 .rate-up-wins,
+.rate-up-loss-trigger,
 .rate-up-losses {
   font-weight: 800;
 }
 
-.rate-up-uncertain {
-  color: var(--status-average);
-  font-weight: 800;
+.rate-up-loss-breakdown {
+  position: relative;
+  display: inline-block;
+}
+
+.rate-up-loss-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0 1px;
+  border: 0;
+  border-bottom: 1px dashed currentColor;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.rate-up-loss-trigger:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.rate-up-loss-tooltip {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 20;
+  min-width: 190px;
+  display: grid;
+  gap: 5px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--button-bg);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 28%);
+  color: var(--text-strong);
+  font-size: 11px;
+  line-height: 1.35;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.rate-up-loss-tooltip[hidden] {
+  display: none;
+}
+
+.rate-up-standard-losses,
+.rate-up-standard-losses b {
+  color: var(--status-poor);
+}
+
+.rate-up-celestial-losses,
+.rate-up-celestial-losses b {
+  color: var(--rarity-5);
+}
+
+.rate-up-loss-tooltip small {
+  padding-top: 3px;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 10px;
 }
 
 .warp-result-gallery {
@@ -1271,6 +1332,49 @@
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
+}
+
+.backup-oauth-form {
+  display: grid;
+  gap: 10px;
+}
+
+.backup-oauth-field {
+  display: grid;
+  gap: 6px;
+}
+
+.backup-oauth-field span {
+  color: var(--text-strong);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.backup-oauth-field input {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-bg);
+  color: var(--text-strong);
+  font: inherit;
+  font-size: 13px;
+}
+
+.backup-oauth-field input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.backup-oauth-field input:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.backup-oauth-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .backup-status-detail {

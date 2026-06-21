@@ -22,8 +22,10 @@ fn get_cloud_backup_status() -> cloud_backup::CloudBackupStatus {
 }
 
 #[tauri::command]
-fn connect_google_drive_backup() -> Result<cloud_backup::CloudBackupStatus, String> {
-    cloud_backup::connect_google_drive_backup()
+fn connect_google_drive_backup(
+    input: Option<cloud_backup::GoogleOAuthClientInput>,
+) -> Result<cloud_backup::CloudBackupStatus, String> {
+    cloud_backup::connect_google_drive_backup(input)
 }
 
 #[tauri::command]
