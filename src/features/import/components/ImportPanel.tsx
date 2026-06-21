@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { FileInput, FolderSearch, History, Search, X } from 'lucide-react'
 import { AppButton } from '../../../shared/ui/AppButton'
 import type {
@@ -6,7 +6,6 @@ import type {
   ImportGameHistoryResult,
 } from '../../persistence/data/game-history-source'
 import type { GameInstallPathCandidate } from '../../persistence/data/game-install-path'
-import type { ManualImportPreview } from '../domain/manual-note-parser'
 
 export type ImportPanelProps = {
   gameHistoryImportError?: string
@@ -20,7 +19,6 @@ export type ImportPanelProps = {
   isGamePathScanning: boolean
   isGamePathSelecting: boolean
   isGameHistoryScanning: boolean
-  manualImportPreview: ManualImportPreview
   onFindGamePath: () => void
   onImportGameHistory: () => void
   onSelectGamePath: () => void
@@ -120,7 +118,6 @@ function ImportControls({
   isGamePathScanning,
   isGamePathSelecting,
   isGameHistoryScanning,
-  manualImportPreview,
   onFindGamePath,
   onImportGameHistory,
   onSelectGamePath,
@@ -289,7 +286,6 @@ function ImportControls({
           <span className="manual-import-divider-label">Or</span>
           <div>
             <strong>Manual import from text</strong>
-            <span>{manualImportPreview.totalPulls} detected</span>
           </div>
           <AppButton icon={FileInput} onClick={onOpenManualImport}>
             Open
@@ -302,13 +298,21 @@ function ImportControls({
 function formatGameHistoryScanDetail(
   scan: GameHistorySourceScanResult | undefined,
   isScanning: boolean,
-) {
+): ReactNode {
   if (isScanning) {
     return 'Scanning local cache'
   }
 
   if (!scan) {
-    return 'Open Warp > View Details > Records in Honkai: Star Rail game, then press scan button.'
+    return (
+      <>
+        Open{' '}
+        <strong className="game-history-scan-path">
+          Warp &gt; View Details &gt; Records
+        </strong>{' '}
+        in Honkai: Star Rail, then press the Scan button on the right -&gt;
+      </>
+    )
   }
 
   if (scan.status === 'found') {

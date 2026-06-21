@@ -11,23 +11,32 @@ describe('parseManualWarpNote', () => {
   it('parses timestamp groups and matches known items', () => {
     const preview = parseManualWarpNote(manualNoteSample, itemCatalog)
 
-    expect(preview.sections).toEqual([])
-    expect(preview.groups).toHaveLength(2)
-    expect(preview.totalPulls).toBe(20)
-    expect(preview.recognizedPulls).toBe(20)
+    expect(preview.sections.map((section) => section.bannerType)).toEqual([
+      'collaboration_character',
+      'collaboration_light_cone',
+      'character_event',
+      'light_cone_event',
+      'standard',
+    ])
+    expect(preview.groups).toHaveLength(5)
+    expect(preview.totalPulls).toBe(5)
+    expect(preview.recognizedPulls).toBe(5)
     expect(preview.unresolvedNames).toEqual([])
 
     expect(preview.groups[0]).toMatchObject({
-      lineNumber: 1,
-      rawTimestamp: '2025-07-11 11:20:01',
-      pulledAt: '2025-07-11T11:20:01',
+      lineNumber: 2,
+      rawTimestamp: '2025-07-11 11:23:51',
+      pulledAt: '2025-07-11T11:23:51',
+      bannerType: 'collaboration_character',
     })
 
-    expect(preview.groups[1]).toMatchObject({
-      lineNumber: 12,
-      rawTimestamp: '2025-07-11 11:20:25',
-      pulledAt: '2025-07-11T11:20:25',
-    })
+    expect(preview.groups.map((group) => group.pulls[0]?.rawName)).toEqual([
+      'Saber',
+      'A Thankless Coronation',
+      'Sparkle',
+      'Earthly Escapade',
+      'Clara',
+    ])
   })
 
   it('normalizes curly apostrophes when matching catalog items', () => {

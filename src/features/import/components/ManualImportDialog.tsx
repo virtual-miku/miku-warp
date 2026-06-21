@@ -192,7 +192,7 @@ export function ManualImportDialog({
                 ))}
               </select>
               <span>
-                {preview.totalPulls} detected pulls will be added to this UID.
+                {formatManualPullCount(preview.totalPulls)} will be added to this UID.
               </span>
             </div>
 
@@ -459,4 +459,8 @@ function formatTargetAccountMeta(account: ManualImportTargetAccount) {
   const region = account.region ?? 'asia'
 
   return `${pulls}, ${region.toUpperCase()}`
+}
+
+function formatManualPullCount(totalPulls: number) {
+  return `${totalPulls} ${totalPulls === 1 ? 'pull' : 'pulls'}`
 }

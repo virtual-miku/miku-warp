@@ -2822,7 +2822,7 @@ export function App() {
                   {!hasDashboardHistory ? (
                     <DashboardEmptyState
                       isLoading={isDashboardHistoryLoading}
-                      onOpenImport={() => setImportDialogOpen(true)}
+                      onOpenImport={() => setActiveView('import')}
                     />
                   ) : (
                     <>
@@ -2934,7 +2934,6 @@ export function App() {
                   isGameHistoryScanning={gameHistoryScanning}
                   isGamePathScanning={gamePathScanning}
                   isGamePathSelecting={gamePathSelecting}
-                  manualImportPreview={manualImportPreview}
                   onFindGamePath={handleFindGamePath}
                   onImportGameHistory={handleImportGameHistory}
                   onSelectGamePath={handleSelectGamePath}
@@ -3147,7 +3146,6 @@ export function App() {
         isGamePathScanning={gamePathScanning}
         isGamePathSelecting={gamePathSelecting}
         isOpen={importDialogOpen}
-        manualImportPreview={manualImportPreview}
         onClose={() => setImportDialogOpen(false)}
         onFindGamePath={handleFindGamePath}
         onImportGameHistory={handleImportGameHistory}

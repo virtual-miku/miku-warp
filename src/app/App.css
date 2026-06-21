@@ -1419,6 +1419,13 @@
   overflow-wrap: anywhere;
 }
 
+.tool-row .game-history-scan-path {
+  display: inline;
+  color: var(--text-strong);
+  font-size: inherit;
+  font-weight: 800;
+}
+
 .backup-action-group {
   display: flex;
   justify-content: flex-end;
