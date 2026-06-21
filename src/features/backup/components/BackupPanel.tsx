@@ -1,11 +1,10 @@
 import {
-  Cloud,
+  DatabaseBackup,
   FileJson,
   KeyRound,
   LogOut,
   RefreshCcw,
   Trash2,
-  Upload,
   X,
 } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
@@ -154,11 +153,11 @@ export function BackupPanel({
                   {isGoogleDriveConnected ? (
                     <AppButton
                       disabled={isBusy || !cloudBackupStatus.canUpload}
-                      icon={Upload}
+                      icon={DatabaseBackup}
                       onClick={onUploadGoogleDriveBackup}
                       variant="ghost"
                     >
-                      {isCloudUploading ? 'Uploading' : 'Upload'}
+                      {isCloudUploading ? 'Backing up' : 'Back up now'}
                     </AppButton>
                   ) : null}
                   {!isGoogleDriveConnected && !isGoogleDriveConnecting ? (
@@ -295,11 +294,11 @@ export function BackupPanel({
             <div className="backup-action-group">
               <AppButton
                 disabled={isBusy}
-                icon={Cloud}
+                icon={DatabaseBackup}
                 onClick={onExportBackup}
                 variant="ghost"
               >
-                {isExporting ? 'Exporting' : 'Export'}
+                {isExporting ? 'Backing up' : 'Back up now'}
               </AppButton>
               <AppButton
                 disabled={isBusy}
@@ -307,7 +306,7 @@ export function BackupPanel({
                 onClick={onImportBackupJson}
                 variant="ghost"
               >
-                {isImporting ? 'Importing' : 'Import JSON'}
+                {isImporting ? 'Importing' : 'Import'}
               </AppButton>
             </div>
           </div>

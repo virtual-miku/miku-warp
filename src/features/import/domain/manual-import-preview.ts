@@ -228,8 +228,8 @@ function annotateManualImportPity(rows: ManualImportPreviewRow[]) {
     pityState.fourStarPity += 1
     pityState.fiveStarPity += 1
 
-    row.pityFourAtPull = pityState.fourStarPity
-    row.pityFiveAtPull = pityState.fiveStarPity
+    row.pityFourAtPull = row.pityOverride ?? pityState.fourStarPity
+    row.pityFiveAtPull = row.pityOverride ?? pityState.fiveStarPity
 
     if (rarity === 5) {
       pityState.fourStarPity = 0

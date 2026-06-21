@@ -285,7 +285,7 @@ function ImportControls({
         <div className="tool-row manual-import-row">
           <span className="manual-import-divider-label">Or</span>
           <div>
-            <strong>Manual import from text</strong>
+            <strong>Manual import</strong>
           </div>
           <AppButton icon={FileInput} onClick={onOpenManualImport}>
             Open
@@ -307,10 +307,10 @@ function formatGameHistoryScanDetail(
     return (
       <>
         Open{' '}
-        <strong className="game-history-scan-path">
-          Warp &gt; View Details &gt; Records
+        <strong className="game-history-scan">
+          Warp -&gt; View Details -&gt; Records
         </strong>{' '}
-        in Honkai: Star Rail, then press the Scan button on the right -&gt;
+        in Honkai: Star Rail, then press the <strong className="game-history-scan">Scan</strong> button on the right -&gt;
       </>
     )
   }

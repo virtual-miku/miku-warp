@@ -26,6 +26,7 @@ export type ManualImportPull = {
   rawName: string
   normalizedName: string
   pulledAt: string
+  pityOverride?: number
   bannerType?: BannerType
   matchedBy: 'exact' | 'alias' | 'unmatched'
   matchedName?: string

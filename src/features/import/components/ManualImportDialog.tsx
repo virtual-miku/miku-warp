@@ -20,6 +20,11 @@ import {
 } from '../domain/manual-import-preview'
 import { manualNoteSample } from '../data/manual-note-sample'
 import { AppButton } from '../../../shared/ui/AppButton'
+import { ManualItemSelector } from './ManualItemSelector'
+import {
+  buildManualItemSelectorPreview,
+  type ManualItemSelection,
+} from '../domain/manual-item-selector'
 import {
   getBannerLabel,
   type BannerType,
@@ -28,6 +33,7 @@ import type { Rarity } from '../../warp-history/domain/warp-pull'
 
 const previewPageSize = 25
 type RarityFilter = Rarity | 'all'
+type ManualImportMode = 'text' | 'selector'
 
 export type ManualImportSaveNotice = {
   tone: 'success' | 'error'
@@ -49,7 +55,7 @@ type ManualImportDialogProps = {
   isOpen: boolean
   isSaving: boolean
   note: string
-  onSave: (accountId: string) => void
+  onSave: (accountId: string, preview: ManualImportPreview) => void
   onClose: () => void
   onNoteChange: (value: string) => void
   onSaveNoticeClose: () => void
@@ -74,14 +80,23 @@ export function ManualImportDialog({
   saveNotice,
   targetAccountId,
 }: ManualImportDialogProps) {
+  const [importMode, setImportMode] = useState<ManualImportMode>('text')
+  const [selectorSelections, setSelectorSelections] = useState<
+    ManualItemSelection[]
+  >([])
   const [activeCategoryKey, setActiveCategoryKey] =
     useState<ManualImportPreviewCategoryKey | 'all'>('all')
   const [activeRarityFilter, setActiveRarityFilter] =
     useState<RarityFilter>('all')
   const [previewPage, setPreviewPage] = useState(1)
+  const selectorPreview = useMemo(
+    () => buildManualItemSelectorPreview(selectorSelections),
+    [selectorSelections],
+  )
+  const activePreview = importMode === 'text' ? preview : selectorPreview
   const categories = useMemo(
-    () => getManualImportPreviewCategories(preview, fallbackBannerType),
-    [fallbackBannerType, preview],
+    () => getManualImportPreviewCategories(activePreview, fallbackBannerType),
+    [activePreview, fallbackBannerType],
   )
 
   if (!isOpen) {
@@ -96,10 +111,10 @@ export function ManualImportDialog({
     selectedCategoryKey === 'all'
       ? { fallbackBannerType }
       : { categoryKey: selectedCategoryKey, fallbackBannerType }
-  const status = getManualImportStatus(preview)
-  const rarityCounts = getManualImportRarityCounts(preview, categoryFilter)
+  const status = getManualImportStatus(activePreview)
+  const rarityCounts = getManualImportRarityCounts(activePreview, categoryFilter)
   const categoryRows = getManualImportPreviewRows(
-    preview,
+    activePreview,
     Number.MAX_SAFE_INTEGER,
     categoryFilter,
   )
@@ -121,7 +136,10 @@ export function ManualImportDialog({
     accounts.find((account) => account.id === targetAccountId) ?? accounts[0]
   const selectedTargetAccountId = targetAccount?.id ?? targetAccountId
   const canSave =
-    status === 'ready' && preview.totalPulls > 0 && !isSaving && Boolean(targetAccount)
+    status === 'ready' &&
+    activePreview.totalPulls > 0 &&
+    !isSaving &&
+    Boolean(targetAccount)
   const handleCategoryChange = (
     nextCategoryKey: ManualImportPreviewCategoryKey | 'all',
   ) => {
@@ -153,27 +171,78 @@ export function ManualImportDialog({
           </button>
         </header>
 
+        <div
+          aria-label="Manual import method"
+          className="manual-import-mode-tabs"
+          role="tablist"
+        >
+          <button
+            aria-selected={importMode === 'text'}
+            className={
+              importMode === 'text'
+                ? 'manual-import-mode-tab manual-import-mode-tab-active'
+                : 'manual-import-mode-tab'
+            }
+            onClick={() => setImportMode('text')}
+            role="tab"
+            type="button"
+          >
+            Text
+          </button>
+          <button
+            aria-selected={importMode === 'selector'}
+            className={
+              importMode === 'selector'
+                ? 'manual-import-mode-tab manual-import-mode-tab-active'
+                : 'manual-import-mode-tab'
+            }
+            onClick={() => setImportMode('selector')}
+            role="tab"
+            type="button"
+          >
+            Item selector
+          </button>
+        </div>
+
         <div className="manual-import-grid">
-          <section className="manual-import-editor" aria-label="Manual note input">
-            <label className="field-label" htmlFor="manual-note-input">
-              Note
-            </label>
-            <textarea
-              className="manual-note-input"
-              id="manual-note-input"
-              spellCheck={false}
-              value={note}
-              onChange={(event) => onNoteChange(event.target.value)}
+          {importMode === 'text' ? (
+            <section
+              className="manual-import-editor"
+              aria-label="Manual note input"
+            >
+              <label className="field-label" htmlFor="manual-note-input">
+                Note
+              </label>
+              <textarea
+                className="manual-note-input"
+                id="manual-note-input"
+                spellCheck={false}
+                value={note}
+                onChange={(event) => onNoteChange(event.target.value)}
+              />
+              <div className="manual-import-actions">
+                <AppButton
+                  icon={Clipboard}
+                  onClick={() => onNoteChange(manualNoteSample)}
+                >
+                  Sample
+                </AppButton>
+                <AppButton
+                  icon={Eraser}
+                  variant="ghost"
+                  onClick={() => onNoteChange('')}
+                >
+                  Clear
+                </AppButton>
+              </div>
+            </section>
+          ) : (
+            <ManualItemSelector
+              fallbackBannerType={fallbackBannerType}
+              onChange={setSelectorSelections}
+              selections={selectorSelections}
             />
-            <div className="manual-import-actions">
-              <AppButton icon={Clipboard} onClick={() => onNoteChange(manualNoteSample)}>
-                Sample
-              </AppButton>
-              <AppButton icon={Eraser} variant="ghost" onClick={() => onNoteChange('')}>
-                Clear
-              </AppButton>
-            </div>
-          </section>
+          )}
 
           <section className="manual-import-preview" aria-label="Manual import preview">
             <div className="manual-target-account-field">
@@ -192,7 +261,7 @@ export function ManualImportDialog({
                 ))}
               </select>
               <span>
-                {formatManualPullCount(preview.totalPulls)} will be added to this UID.
+                {formatManualPullCount(activePreview.totalPulls)} will be added to this UID.
               </span>
             </div>
 
@@ -208,7 +277,7 @@ export function ManualImportDialog({
                 aria-selected={selectedCategoryKey === 'all'}
                 onClick={() => handleCategoryChange('all')}
               >
-                All {preview.totalPulls}
+                All {activePreview.totalPulls}
               </button>
               {categories.map((category) => (
                 <button
@@ -255,9 +324,9 @@ export function ManualImportDialog({
               </button>
             </div>
 
-            {preview.issues.length > 0 ? (
+            {activePreview.issues.length > 0 ? (
               <div className="manual-issue-list" aria-label="Manual import issues">
-                {preview.issues.slice(0, 4).map((issue) => (
+                {activePreview.issues.slice(0, 4).map((issue) => (
                   <div className="manual-issue-row" key={`${issue.lineNumber}-${issue.value}`}>
                     <span>Line {issue.lineNumber}</span>
                     <strong>{issue.value || issue.message}</strong>
@@ -269,7 +338,10 @@ export function ManualImportDialog({
             <div className="manual-preview-table" aria-label="Recognized pull rows">
               {previewRows.length > 0 ? (
                 previewRows.map((pull) => (
-                  <div className="manual-preview-row" key={`${pull.lineNumber}-${pull.rawName}`}>
+                  <div
+                    className="manual-preview-row"
+                    key={`${pull.lineNumber}-${pull.sequenceInGroup}-${pull.rawName}`}
+                  >
                     <ManualPreviewItemIcon pull={pull} />
                     <div>
                       <div className="manual-preview-title">
@@ -330,7 +402,7 @@ export function ManualImportDialog({
               <AppButton
                 icon={Save}
                 disabled={!canSave}
-                onClick={() => onSave(selectedTargetAccountId)}
+                onClick={() => onSave(selectedTargetAccountId, activePreview)}
               >
                 {isSaving ? 'Saving' : 'Import'}
               </AppButton>
@@ -404,11 +476,11 @@ function ManualPreviewItemIcon({ pull }: { pull: ManualImportPreviewRow }) {
 }
 
 function formatPreviewPity(pull: ManualImportPreviewRow) {
-  if (pull.pityFiveAtPull) {
+  if (pull.item?.rarity === 5 && pull.pityFiveAtPull) {
     return `Pity ${pull.pityFiveAtPull}`
   }
 
-  if (pull.pityFourAtPull) {
+  if (pull.item?.rarity === 4 && pull.pityFourAtPull) {
     return `Pity ${pull.pityFourAtPull}`
   }
 

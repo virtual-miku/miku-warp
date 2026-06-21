@@ -33,6 +33,7 @@ export type ManualImportDraftPull = {
   rawItemName: string
   itemName: string
   manualIdentityKey: string
+  pityOverride?: number
 }
 
 export type ManualImportDraft = {
@@ -96,6 +97,7 @@ export function buildManualImportDraft(
           warpItemId: pull.item.id,
           sequenceInTimestampGroup: pull.sequenceInGroup,
         }),
+        pityOverride: pull.pityOverride,
       })
     })
   })

@@ -36,7 +36,10 @@ import {
 } from '../features/import/components/ManualImportDialog'
 import { manualNoteSample } from '../features/import/data/manual-note-sample'
 import { buildManualImportDraft } from '../features/import/domain/manual-import-draft'
-import { parseManualWarpNote } from '../features/import/domain/manual-note-parser'
+import {
+  parseManualWarpNote,
+  type ManualImportPreview,
+} from '../features/import/domain/manual-note-parser'
 import {
   saveManualImportDraft,
   toSaveManualImportDraftPayload,
@@ -225,6 +228,7 @@ type BackupConfirmation =
 
 type ManualImportConfirmation = {
   accountId: string
+  preview: ManualImportPreview
   totalPulls: number
   uid: string
 }
@@ -1968,7 +1972,10 @@ export function App() {
     refreshTrashedBackupSnapshots,
   ])
 
-  const handleRequestManualImportSave = (accountId: string) => {
+  const handleRequestManualImportSave = (
+    accountId: string,
+    preview: ManualImportPreview,
+  ) => {
     if (manualImportSaving) {
       return
     }
@@ -1989,12 +1996,16 @@ export function App() {
     setManualImportTargetAccountId(targetAccount.id)
     setManualImportConfirmation({
       accountId: targetAccount.id,
-      totalPulls: manualImportPreview.totalPulls,
+      preview,
+      totalPulls: preview.totalPulls,
       uid: targetAccount.uid,
     })
   }
 
-  const handleSaveManualImport = async (targetAccountId: string) => {
+  const handleSaveManualImport = async (
+    targetAccountId: string,
+    preview: ManualImportPreview,
+  ) => {
     if (manualImportSaving) {
       return
     }
@@ -2007,7 +2018,7 @@ export function App() {
       ? toManualImportAccountInput(targetAccount)
       : activeAccount
 
-    const draft = buildManualImportDraft(manualImportPreview, {
+    const draft = buildManualImportDraft(preview, {
       accountId: saveAccount.id,
       fallbackBannerType: manualFallbackBannerType,
       timezone: 'Asia/Jakarta',
@@ -2077,9 +2088,9 @@ export function App() {
       return
     }
 
-    const { accountId } = manualImportConfirmation
+    const { accountId, preview } = manualImportConfirmation
     setManualImportConfirmation(undefined)
-    await handleSaveManualImport(accountId)
+    await handleSaveManualImport(accountId, preview)
   }
 
   const handleExportBackup = useCallback(async () => {

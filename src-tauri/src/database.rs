@@ -33,6 +33,8 @@ const ACCOUNT_AVATAR_SQL: &str = include_str!("../migrations/0007_account_avatar
 const ACCOUNT_AVATAR_COLUMN: &str = "avatar_path";
 const ACCOUNT_TRASH_VERSION: &str = "0008_account_trash";
 const ACCOUNT_TRASH_SQL: &str = include_str!("../migrations/0008_account_trash.sql");
+const MANUAL_PITY_OVERRIDE_VERSION: &str = "0009_manual_pity_override";
+const MANUAL_PITY_OVERRIDE_SQL: &str = include_str!("../migrations/0009_manual_pity_override.sql");
 const GOOGLE_DRIVE_PROVIDER: &str = "google_drive";
 const DATA_CHANGED_TRIGGER: &str = "data_changed";
 
@@ -99,6 +101,8 @@ pub struct SaveManualImportDraftPullInput {
     pub warp_item_id: String,
     pub pulled_at: String,
     pub pulled_at_timezone: Option<String>,
+    #[serde(default)]
+    pub pity_override: Option<i64>,
     pub source_line_number: i64,
     pub sequence_in_timestamp_group: i64,
     pub raw_item_name: String,
@@ -531,6 +535,7 @@ struct ExistingWarpItem {
 
 struct WarpPullPityCandidate {
     id: String,
+    manual_pity_override: Option<i64>,
     rarity: i64,
 }
 
@@ -555,6 +560,7 @@ struct GameHistoryDuplicateCandidate {
 struct WarpBannerSummaryCandidate {
     banner_type: String,
     item_name: String,
+    manual_pity_override: Option<i64>,
     rarity: i64,
     pulled_at: String,
 }
@@ -691,6 +697,8 @@ struct BackupWarpPullRow {
     raw_item_name: Option<String>,
     pity_4: Option<i64>,
     pity_5: Option<i64>,
+    #[serde(default)]
+    manual_pity_override: Option<i64>,
     created_at: String,
     #[serde(default)]
     deleted_at: Option<String>,
@@ -728,6 +736,10 @@ const MIGRATIONS: &[Migration] = &[
     Migration {
         version: ACCOUNT_TRASH_VERSION,
         sql: ACCOUNT_TRASH_SQL,
+    },
+    Migration {
+        version: MANUAL_PITY_OVERRIDE_VERSION,
+        sql: MANUAL_PITY_OVERRIDE_SQL,
     },
 ];
 
@@ -1355,9 +1367,9 @@ fn save_manual_import_draft_to_database(
                 "INSERT OR IGNORE INTO warp_pulls (
                    id, account_id, banner_id, warp_item_id, pulled_at, pulled_at_timezone,
                    source, source_import_id, source_line_number, sequence_in_timestamp_group,
-                   raw_item_name
+                   raw_item_name, manual_pity_override
                  )
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'manual', ?7, ?8, ?9, ?10)",
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'manual', ?7, ?8, ?9, ?10, ?11)",
             )
             .map_err(|error| format!("Failed to prepare manual pull insert statement: {error}"))?;
 
@@ -1382,6 +1394,7 @@ fn save_manual_import_draft_to_database(
                     pull.source_line_number,
                     pull.sequence_in_timestamp_group,
                     &pull.raw_item_name,
+                    pull.pity_override,
                 ])
                 .map_err(|error| {
                     format!(
@@ -1405,6 +1418,7 @@ fn save_manual_import_draft_to_database(
                     source_line_number: pull.source_line_number,
                     sequence_in_timestamp_group: pull.sequence_in_timestamp_group,
                     raw_item_name: &pull.raw_item_name,
+                    pity_override: pull.pity_override,
                 },
             )? {
                 records_restored += 1;
@@ -1782,7 +1796,8 @@ fn list_warp_banner_summaries_from_database(
 
     let mut statement = connection
         .prepare(
-            "SELECT b.banner_type, wi.name, wi.rarity, wp.pulled_at
+            "SELECT b.banner_type, wi.name, wi.rarity, wp.pulled_at,
+                    wp.manual_pity_override
              FROM warp_pulls wp
              INNER JOIN accounts a ON a.id = wp.account_id
              INNER JOIN banners b ON b.id = wp.banner_id
@@ -1801,6 +1816,7 @@ fn list_warp_banner_summaries_from_database(
                 item_name: row.get(1)?,
                 rarity: row.get(2)?,
                 pulled_at: row.get(3)?,
+                manual_pity_override: row.get(4)?,
             })
         })
         .map_err(|error| format!("Failed to query banner summary rows: {error}"))?;
@@ -2250,7 +2266,9 @@ fn build_warp_banner_summaries(
 
         if pull.rarity == 5 {
             update_rate_up_outcome(summary, &pull.item_name, &pull.pulled_at);
-            let five_star_pity = summary.current_five_star_pity;
+            let five_star_pity = pull
+                .manual_pity_override
+                .unwrap_or(summary.current_five_star_pity);
             summary.five_star_count += 1;
             summary.five_star_pity_total += five_star_pity;
             summary.last_five_star_pity = Some(five_star_pity);
@@ -2258,7 +2276,9 @@ fn build_warp_banner_summaries(
             summary.current_four_star_pity = 0;
             summary.current_five_star_pity = 0;
         } else if pull.rarity == 4 {
-            let four_star_pity = summary.current_four_star_pity;
+            let four_star_pity = pull
+                .manual_pity_override
+                .unwrap_or(summary.current_four_star_pity);
             summary.four_star_count += 1;
             summary.four_star_pity_total += four_star_pity;
             summary.last_four_star_pity = Some(four_star_pity);
@@ -3005,8 +3025,8 @@ fn read_backup_warp_pulls(connection: &Connection) -> Result<Vec<BackupWarpPullR
         .prepare(
             "SELECT id, account_id, banner_id, warp_item_id, pulled_at, pulled_at_timezone,
                     gacha_id, source, source_import_id, source_line_number,
-                    sequence_in_timestamp_group, raw_item_name, pity_4, pity_5, created_at,
-                    deleted_at
+                    sequence_in_timestamp_group, raw_item_name, pity_4, pity_5,
+                    manual_pity_override, created_at, deleted_at
              FROM warp_pulls
              ORDER BY account_id, banner_id, pulled_at, sequence_in_timestamp_group, id",
         )
@@ -3029,8 +3049,9 @@ fn read_backup_warp_pulls(connection: &Connection) -> Result<Vec<BackupWarpPullR
                 raw_item_name: row.get(11)?,
                 pity_4: row.get(12)?,
                 pity_5: row.get(13)?,
-                created_at: row.get(14)?,
-                deleted_at: row.get(15)?,
+                manual_pity_override: row.get(14)?,
+                created_at: row.get(15)?,
+                deleted_at: row.get(16)?,
             })
         })
         .map_err(|error| format!("Failed to query warp pull backup rows: {error}"))?;
@@ -3217,10 +3238,10 @@ fn restore_backup_warp_pulls(
             "INSERT OR IGNORE INTO warp_pulls (
                id, account_id, banner_id, warp_item_id, pulled_at, pulled_at_timezone,
                gacha_id, source, source_import_id, source_line_number,
-               sequence_in_timestamp_group, raw_item_name, pity_4, pity_5, created_at,
-               deleted_at
+               sequence_in_timestamp_group, raw_item_name, pity_4, pity_5,
+               manual_pity_override, created_at, deleted_at
              )
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
         )
         .map_err(|error| format!("Failed to prepare warp pull restore statement: {error}"))?;
     let mut inserted = 0;
@@ -3243,6 +3264,7 @@ fn restore_backup_warp_pulls(
                 pull.raw_item_name.as_deref(),
                 pull.pity_4,
                 pull.pity_5,
+                pull.manual_pity_override,
                 &pull.created_at,
                 pull.deleted_at.as_deref(),
             ])
@@ -3808,7 +3830,7 @@ fn recompute_pity_for_account_banner(
     let pull_rows = {
         let mut statement = transaction
             .prepare(
-                "SELECT wp.id, wi.rarity
+                "SELECT wp.id, wi.rarity, wp.manual_pity_override
                  FROM warp_pulls wp
                  INNER JOIN warp_items wi ON wi.id = wp.warp_item_id
                  WHERE wp.account_id = ?1
@@ -3822,6 +3844,7 @@ fn recompute_pity_for_account_banner(
                 Ok(WarpPullPityCandidate {
                     id: row.get(0)?,
                     rarity: row.get(1)?,
+                    manual_pity_override: row.get(2)?,
                 })
             })
             .map_err(|error| format!("Failed to query pulls for pity recompute: {error}"))?;
@@ -3841,12 +3864,12 @@ fn recompute_pity_for_account_banner(
         five_star_pity += 1;
 
         let pity_four_at_pull = if pull.rarity >= 4 {
-            Some(four_star_pity)
+            Some(pull.manual_pity_override.unwrap_or(four_star_pity))
         } else {
             None
         };
         let pity_five_at_pull = if pull.rarity == 5 {
-            Some(five_star_pity)
+            Some(pull.manual_pity_override.unwrap_or(five_star_pity))
         } else {
             None
         };
@@ -4008,6 +4031,13 @@ fn validate_manual_import_pull(pull: &SaveManualImportDraftPullInput) -> Result<
         ));
     }
 
+    if !matches!(pull.pity_override, None | Some(1..=999)) {
+        return Err(format!(
+            "Manual import pull {} has an invalid pity override.",
+            pull.raw_item_name
+        ));
+    }
+
     if pull.source_line_number < 1 {
         return Err(format!(
             "Manual import pull {} has invalid source line number.",
@@ -4066,6 +4096,7 @@ struct ManualImportRestoreInput<'a> {
     source_line_number: i64,
     sequence_in_timestamp_group: i64,
     raw_item_name: &'a str,
+    pity_override: Option<i64>,
 }
 
 fn restore_trashed_manual_import_pull(
@@ -4084,6 +4115,7 @@ fn restore_trashed_manual_import_pull(
                  source_line_number = ?8,
                  sequence_in_timestamp_group = ?9,
                  raw_item_name = ?10,
+                 manual_pity_override = ?11,
                  deleted_at = NULL
              WHERE id = ?1 AND deleted_at IS NOT NULL",
             params![
@@ -4097,6 +4129,7 @@ fn restore_trashed_manual_import_pull(
                 input.source_line_number,
                 input.sequence_in_timestamp_group,
                 input.raw_item_name,
+                input.pity_override,
             ],
         )
         .map_err(|error| {
@@ -4316,7 +4349,8 @@ fn enrich_manual_pull_with_game_history(
                  pulled_at_timezone = COALESCE(?4, pulled_at_timezone),
                  gacha_id = ?5,
                  sequence_in_timestamp_group = ?6,
-                 raw_item_name = COALESCE(?7, raw_item_name)
+                 raw_item_name = COALESCE(?7, raw_item_name),
+                 manual_pity_override = NULL
              WHERE id = ?1",
             params![
                 manual_pull_id,
@@ -4351,6 +4385,7 @@ fn restore_trashed_manual_pull_with_game_history(
                  source_line_number = ?7,
                  sequence_in_timestamp_group = ?8,
                  raw_item_name = COALESCE(?9, raw_item_name),
+                 manual_pity_override = NULL,
                  deleted_at = NULL
              WHERE id = ?1 AND deleted_at IS NOT NULL",
             params![
@@ -4805,6 +4840,15 @@ mod tests {
                 |row| row.get(0),
             )
             .expect("account deleted_at column count");
+        let manual_pity_override_column_count: i64 = connection
+            .query_row(
+                "SELECT COUNT(*)
+                 FROM pragma_table_info('warp_pulls')
+                 WHERE name = 'manual_pity_override'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("manual pity override column count");
 
         assert_eq!(applied_migrations, planned_migrations());
         assert_eq!(table_count, 1);
@@ -4815,6 +4859,7 @@ mod tests {
         assert_eq!(cloud_policy_table_count, 1);
         assert_eq!(backup_sync_state_table_count, 1);
         assert_eq!(account_deleted_at_column_count, 1);
+        assert_eq!(manual_pity_override_column_count, 1);
     }
 
     #[test]
@@ -6157,30 +6202,35 @@ mod tests {
             WarpBannerSummaryCandidate {
                 banner_type: "character_event".to_string(),
                 item_name: "Sparkle".to_string(),
+                manual_pity_override: None,
                 rarity: 5,
                 pulled_at: "2025-01-01T00:00:01Z".to_string(),
             },
             WarpBannerSummaryCandidate {
                 banner_type: "character_event".to_string(),
                 item_name: "Yanqing".to_string(),
+                manual_pity_override: None,
                 rarity: 5,
                 pulled_at: "2025-01-01T00:00:02Z".to_string(),
             },
             WarpBannerSummaryCandidate {
                 banner_type: "character_event".to_string(),
                 item_name: "Acheron".to_string(),
+                manual_pity_override: None,
                 rarity: 5,
                 pulled_at: "2025-01-01T00:00:03Z".to_string(),
             },
             WarpBannerSummaryCandidate {
                 banner_type: "character_event".to_string(),
                 item_name: "Firefly".to_string(),
+                manual_pity_override: None,
                 rarity: 5,
                 pulled_at: "2025-01-01T00:00:04Z".to_string(),
             },
             WarpBannerSummaryCandidate {
                 banner_type: "standard".to_string(),
                 item_name: "Bronya".to_string(),
+                manual_pity_override: None,
                 rarity: 5,
                 pulled_at: "2025-01-01T00:00:05Z".to_string(),
             },
@@ -6212,42 +6262,49 @@ mod tests {
             WarpBannerSummaryCandidate {
                 banner_type: "character_event".to_string(),
                 item_name: "Fu Xuan".to_string(),
+                manual_pity_override: None,
                 rarity: 5,
                 pulled_at: "2025-04-08T23:59:59Z".to_string(),
             },
             WarpBannerSummaryCandidate {
                 banner_type: "character_event".to_string(),
                 item_name: "Blade".to_string(),
+                manual_pity_override: None,
                 rarity: 5,
                 pulled_at: "2025-04-09T00:00:00Z".to_string(),
             },
             WarpBannerSummaryCandidate {
                 banner_type: "character_event".to_string(),
                 item_name: "Sparkle".to_string(),
+                manual_pity_override: None,
                 rarity: 5,
                 pulled_at: "2025-05-01T00:00:00Z".to_string(),
             },
             WarpBannerSummaryCandidate {
                 banner_type: "character_event".to_string(),
                 item_name: "Yanqing".to_string(),
+                manual_pity_override: None,
                 rarity: 5,
                 pulled_at: "2025-06-01T00:00:00Z".to_string(),
             },
             WarpBannerSummaryCandidate {
                 banner_type: "character_event".to_string(),
                 item_name: "Seele".to_string(),
+                manual_pity_override: None,
                 rarity: 5,
                 pulled_at: "2025-07-01T00:00:00Z".to_string(),
             },
             WarpBannerSummaryCandidate {
                 banner_type: "character_event".to_string(),
                 item_name: "Yunli".to_string(),
+                manual_pity_override: None,
                 rarity: 5,
                 pulled_at: "2026-04-21T23:59:59Z".to_string(),
             },
             WarpBannerSummaryCandidate {
                 banner_type: "character_event".to_string(),
                 item_name: "Argenti".to_string(),
+                manual_pity_override: None,
                 rarity: 5,
                 pulled_at: "2026-04-22T00:00:00Z".to_string(),
             },
@@ -6281,6 +6338,7 @@ mod tests {
         .map(|(item_name, pulled_at)| WarpBannerSummaryCandidate {
             banner_type: "collaboration_character".to_string(),
             item_name: item_name.to_string(),
+            manual_pity_override: None,
             rarity: 5,
             pulled_at: pulled_at.to_string(),
         })
@@ -6369,6 +6427,56 @@ mod tests {
         assert_eq!(pulls[0].item_name, "Sparkle");
         assert_eq!(pulls[0].pity_four_at_pull, Some(1));
         assert_eq!(pulls[0].pity_five_at_pull, Some(3));
+    }
+
+    #[test]
+    fn preserves_manual_pity_override_in_history_summary_and_backup() {
+        let mut connection = Connection::open_in_memory().expect("in-memory database");
+        apply_migrations(&connection).expect("migration applies");
+        upsert_warp_item_catalog(
+            &mut connection,
+            &[
+                catalog_item("light-cone-2001", "2001", "Data Bank", "light_cone", 3),
+                catalog_item("character-1002", "1002", "Sparkle", "character", 5),
+            ],
+        )
+        .expect("catalog sync");
+        let mut sparkle = manual_import_pull("character_event", "character-1002", "Sparkle", 2);
+        sparkle.pity_override = Some(77);
+        let draft = manual_import_draft_with_pulls(vec![
+            manual_import_pull("character_event", "light-cone-2001", "Data Bank", 1),
+            sparkle,
+        ]);
+
+        save_manual_import_draft_to_database(&mut connection, &draft).expect("manual import");
+
+        let pulls = list_warp_pulls_from_database(
+            &connection,
+            &ListWarpPullsInput {
+                account_id: "account-1".to_string(),
+                banner_type: Some("character_event".to_string()),
+                limit: Some(10),
+                offset: None,
+                search: None,
+                rarity: None,
+            },
+        )
+        .expect("saved pulls can be listed")
+        .pulls;
+        let summaries = list_warp_banner_summaries_from_database(
+            &connection,
+            &ListWarpBannerSummariesInput {
+                account_id: "account-1".to_string(),
+            },
+        )
+        .expect("summary can be listed");
+        let backup_pulls = read_backup_warp_pulls(&connection).expect("backup pulls can be read");
+
+        assert_eq!(pulls[0].item_name, "Sparkle");
+        assert_eq!(pulls[0].pity_five_at_pull, Some(77));
+        assert_eq!(summaries[0].last_five_star_pity, Some(77));
+        assert_eq!(summaries[0].five_star_pity_total, 77);
+        assert_eq!(backup_pulls[1].manual_pity_override, Some(77));
     }
 
     #[test]
@@ -6555,6 +6663,7 @@ mod tests {
             warp_item_id: warp_item_id.to_string(),
             pulled_at: "2025-07-11T11:20:01".to_string(),
             pulled_at_timezone: Some("Asia/Jakarta".to_string()),
+            pity_override: None,
             source_line_number: sequence_in_timestamp_group + 2,
             sequence_in_timestamp_group,
             raw_item_name: raw_item_name.to_string(),

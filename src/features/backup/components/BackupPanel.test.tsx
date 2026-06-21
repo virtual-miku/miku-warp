@@ -31,6 +31,7 @@ describe('BackupPanel Google Drive setup', () => {
     expect(html).not.toContain('Desktop Client ID')
     expect(html).not.toContain('Desktop Client Secret')
     expect(html).toContain('Auto backup')
+    expect(html.match(/Back up now/g)).toHaveLength(2)
     expect(html).toContain('Disconnect')
   })
 })

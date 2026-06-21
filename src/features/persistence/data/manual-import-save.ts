@@ -27,6 +27,7 @@ export type SaveManualImportDraftPullPayload = Pick<
   | 'warpItemId'
   | 'pulledAt'
   | 'pulledAtTimezone'
+  | 'pityOverride'
   | 'sourceLineNumber'
   | 'sequenceInTimestampGroup'
   | 'rawItemName'
@@ -71,6 +72,7 @@ function toSaveManualImportDraftPullPayload(
     warpItemId: pull.warpItemId,
     pulledAt: pull.pulledAt,
     pulledAtTimezone: pull.pulledAtTimezone,
+    pityOverride: pull.pityOverride,
     sourceLineNumber: pull.sourceLineNumber,
     sequenceInTimestampGroup: pull.sequenceInTimestampGroup,
     rawItemName: pull.rawItemName,
