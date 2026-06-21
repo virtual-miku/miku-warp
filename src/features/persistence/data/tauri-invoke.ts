@@ -1,4 +1,8 @@
 import { invoke as invokeCommand } from '@tauri-apps/api/core'
+import {
+  loadLanguagePreference,
+  translate,
+} from '../../settings/domain/localization'
 
 type TauriWindow = Window & {
   __TAURI_INTERNALS__?: {
@@ -6,17 +10,17 @@ type TauriWindow = Window & {
   }
 }
 
-const DESKTOP_RUNTIME_UNAVAILABLE_MESSAGE =
-  'Browser preview cannot access local files or game folders. Open Miku Warp in the desktop app, then try again.'
-
 export function createDesktopRuntimeUnavailableError(action: string) {
-  return new Error(
-    `${action} needs the Miku Warp desktop app. ${DESKTOP_RUNTIME_UNAVAILABLE_MESSAGE}`,
-  )
+  const language = loadLanguagePreference()
+  return new Error(translate(language, 'desktop.actionNeedsApp', {
+    action,
+    detail: translate(language, 'desktop.unavailable'),
+  }))
 }
 
 export function getDesktopRuntimeUnavailableMessage() {
-  return DESKTOP_RUNTIME_UNAVAILABLE_MESSAGE
+  const language = loadLanguagePreference()
+  return translate(language, 'desktop.unavailable')
 }
 
 export function invokeTauri<T>(
@@ -25,7 +29,9 @@ export function invokeTauri<T>(
 ): Promise<T> {
   if (!hasTauriInvoke()) {
     return Promise.reject(
-      createDesktopRuntimeUnavailableError('This action'),
+      createDesktopRuntimeUnavailableError(
+        translate(loadLanguagePreference(), 'desktop.thisAction'),
+      ),
     )
   }
 

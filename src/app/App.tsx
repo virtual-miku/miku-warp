@@ -121,7 +121,6 @@ import {
 import { WarpResultGallery } from '../features/warp-history/components/WarpResultGallery'
 import { itemCatalog } from '../features/warp-history/data/item-catalog'
 import {
-  getBannerFilterLabel,
   type BannerFilterType,
   type BannerType,
 } from '../features/warp-history/domain/banner'
@@ -142,6 +141,7 @@ import {
   type TrashedWarpPull,
 } from '../features/trash/data/trash-history'
 import { SettingsPanel } from '../features/settings/components/SettingsPanel'
+import { LocalizationProvider } from '../features/settings/components/LocalizationProvider'
 import {
   getTrashRetentionPolicy,
   updateTrashRetentionPolicy,
@@ -157,6 +157,8 @@ import {
   saveTimeZonePreference,
   translate,
   type AppLanguage,
+  type MessageKey,
+  type Translator,
   type TimeZonePreference,
 } from '../features/settings/domain/localization'
 import {
@@ -165,6 +167,10 @@ import {
   saveThemePreference,
   type ThemePreference,
 } from '../features/settings/domain/theme'
+import {
+  formatLocalizedPullCount,
+  getLocalizedBannerFilterLabel,
+} from '../features/settings/domain/localized-labels'
 import { ConfirmDialog } from '../shared/ui/ConfirmDialog'
 import './App.css'
 
@@ -275,6 +281,11 @@ export function App() {
   const [trashRetentionDays, setTrashRetentionDays] =
     useState<TrashRetentionDays>(183)
   const [trashRetentionUpdating, setTrashRetentionUpdating] = useState(false)
+  const t = useCallback(
+    (key: MessageKey, values?: Record<string, string | number>) =>
+      translate(languagePreference, key, values),
+    [languagePreference],
+  )
   const [activeBannerType, setActiveBannerType] =
     useState<BannerFilterType>(defaultBannerType)
   const [manualImportOpen, setManualImportOpen] = useState(false)
@@ -695,7 +706,7 @@ export function App() {
       if (result.cloudError) {
         setBackupNotice({
           tone: 'error',
-          title: 'Drive autosave pending',
+          title: t('notice.drivePending'),
           detail: result.cloudError,
         })
       }
@@ -703,7 +714,7 @@ export function App() {
       setAutoBackupQueued(true)
       setBackupNotice({
         tone: 'error',
-        title: 'Autosave failed',
+        title: t('notice.autosaveFailed'),
         detail: getErrorMessage(error),
       })
     } finally {
@@ -719,14 +730,15 @@ export function App() {
     refreshBackupSnapshots,
     refreshCloudBackupSnapshots,
     refreshCloudBackupStatus,
+    t,
   ])
 
   const scheduleAutoBackup = useCallback((label: string) => {
     setAutoBackupQueued(true)
     setAutoBackupRequestId((requestId) => requestId + 1)
 
-    return `${label} saved. Backup will run automatically.`
-  }, [])
+    return t('notice.autoScheduled', { label })
+  }, [t])
 
   useEffect(() => {
     if (autoBackupRequestId === 0) {
@@ -1230,7 +1242,7 @@ export function App() {
       setHistoryTotalPulls(pulls.total)
       setBannerSummaries(summaries)
       await refreshAccounts()
-      scheduleAutoBackup('Game import')
+      scheduleAutoBackup(t('import.gameImport'))
       setImportDialogOpen(false)
       setActiveView('dashboard')
     } catch (error) {
@@ -1249,6 +1261,7 @@ export function App() {
     historySearchQuery,
     refreshAccounts,
     scheduleAutoBackup,
+    t,
   ])
 
   const handleBannerTypeChange = (bannerType: BannerFilterType) => {
@@ -1399,7 +1412,7 @@ export function App() {
       await deleteAccount(account.id)
       await Promise.all([refreshAccounts(), refreshTrashedAccounts()])
       setAccountDeleteConfirmation(undefined)
-      scheduleAutoBackup('Account')
+      scheduleAutoBackup(t('nav.accounts'))
     } catch (error) {
       setTrashError(getErrorMessage(error))
     } finally {
@@ -1412,6 +1425,7 @@ export function App() {
     refreshAccounts,
     refreshTrashedAccounts,
     scheduleAutoBackup,
+    t,
   ])
 
   const handleSelectAccountAvatar = useCallback(
@@ -1426,7 +1440,7 @@ export function App() {
       try {
         await updateAccountAvatar(avatarDialogAccount.id, avatarPath)
         await refreshAccounts()
-        scheduleAutoBackup('Account avatar')
+        scheduleAutoBackup(t('avatar.choose'))
         setAvatarDialogAccountId(undefined)
       } catch (error) {
         setAvatarSaveError(getErrorMessage(error))
@@ -1434,7 +1448,7 @@ export function App() {
         setAvatarSaving(false)
       }
     },
-    [avatarDialogAccount, avatarSaving, refreshAccounts, scheduleAutoBackup],
+    [avatarDialogAccount, avatarSaving, refreshAccounts, scheduleAutoBackup, t],
   )
 
   const handleHistorySelectionModeChange = (isSelecting: boolean) => {
@@ -1555,7 +1569,7 @@ export function App() {
         setHistoryDeleteConfirmation(undefined)
         setHistorySelecting(false)
         setSelectedHistoryPullIds(new Set())
-        scheduleAutoBackup('History')
+        scheduleAutoBackup(t('history.title'))
       } finally {
         setDeletingSelectedHistory(false)
       }
@@ -1574,7 +1588,7 @@ export function App() {
       setHistoryDeleteConfirmation(undefined)
       setHistorySelecting(false)
       setSelectedHistoryPullIds(new Set())
-      scheduleAutoBackup('History')
+      scheduleAutoBackup(t('history.title'))
     } finally {
       setDeletingAllHistory(false)
       setHistoryLoading(false)
@@ -1584,6 +1598,7 @@ export function App() {
     refreshAccounts,
     refreshWarpHistory,
     scheduleAutoBackup,
+    t,
   ])
 
   const performRestoreTrashPull = useCallback(
@@ -1603,7 +1618,7 @@ export function App() {
           refreshAccounts(),
         ])
         setSelectedTrashPullIds(new Set())
-        scheduleAutoBackup('Trash restore')
+        scheduleAutoBackup(t('common.restore'))
       } catch (error) {
         setTrashError(getErrorMessage(error))
       } finally {
@@ -1618,6 +1633,7 @@ export function App() {
       refreshWarpHistory,
       scheduleAutoBackup,
       restoringTrashPullId,
+      t,
     ],
   )
 
@@ -1640,7 +1656,7 @@ export function App() {
           refreshAccounts(),
         ])
         setSelectedTrashPullIds(new Set())
-        scheduleAutoBackup('Trash restore')
+        scheduleAutoBackup(t('common.restore'))
       } catch (error) {
         setTrashError(getErrorMessage(error))
       } finally {
@@ -1655,6 +1671,7 @@ export function App() {
       refreshWarpHistory,
       restoringTrashPullId,
       scheduleAutoBackup,
+      t,
     ],
   )
 
@@ -1843,7 +1860,7 @@ export function App() {
       setTrashDeleteConfirmation(undefined)
       await refreshTrashedPulls()
       setSelectedTrashPullIds(new Set())
-      scheduleAutoBackup('Trash')
+      scheduleAutoBackup(t('nav.trash'))
     } catch (error) {
       setTrashError(getErrorMessage(error))
     } finally {
@@ -1854,6 +1871,7 @@ export function App() {
     refreshTrashedPulls,
     scheduleAutoBackup,
     trashDeleteConfirmation,
+    t,
   ])
 
   const handleRequestRestoreTrashedAccount = useCallback(
@@ -1893,7 +1911,7 @@ export function App() {
         await restoreTrashedAccount(account.id)
         await Promise.all([refreshAccounts(), refreshTrashedAccounts()])
         setAccountTrashConfirmation(undefined)
-        scheduleAutoBackup('Account restore')
+        scheduleAutoBackup(t('common.restore'))
       } catch (error) {
         setTrashError(getErrorMessage(error))
       } finally {
@@ -1910,7 +1928,7 @@ export function App() {
       await permanentlyDeleteTrashedAccount(account.id)
       await refreshTrashedAccounts()
       setAccountTrashConfirmation(undefined)
-      scheduleAutoBackup('Account Trash')
+      scheduleAutoBackup(t('nav.trash'))
     } catch (error) {
       setTrashError(getErrorMessage(error))
     } finally {
@@ -1921,6 +1939,7 @@ export function App() {
     refreshAccounts,
     refreshTrashedAccounts,
     scheduleAutoBackup,
+    t,
   ])
 
   const handleRequestRestoreTrashedBackup = useCallback(
@@ -2035,11 +2054,15 @@ export function App() {
         setSelectedBackupTrashFileNames(new Set())
         setBackupNotice({
           tone: 'success',
-          title: 'Backup restored',
+          title: t('notice.backupRestored'),
           detail:
             restoredResults.length === 1
-              ? `${restoredResults[0].fileName} returned to Local backup.`
-              : `${restoredResults.length} backups returned to Local backup.`,
+              ? t('notice.backupReturned', {
+                  file: restoredResults[0].fileName,
+                })
+              : t('notice.backupsReturned', {
+                  count: restoredResults.length,
+                }),
         })
       } catch (error) {
         setTrashError(getErrorMessage(error))
@@ -2073,6 +2096,7 @@ export function App() {
     backupTrashConfirmation,
     refreshBackupSnapshots,
     refreshTrashedBackupSnapshots,
+    t,
   ])
 
   const handleRequestManualImportSave = (
@@ -2090,8 +2114,8 @@ export function App() {
     if (!targetAccount) {
       setManualImportSaveNotice({
         tone: 'error',
-        title: 'Choose UID',
-        detail: 'Select the UID that should receive this manual import.',
+        title: t('notice.chooseUid'),
+        detail: t('notice.chooseUidDetail'),
       })
       return
     }
@@ -2130,8 +2154,8 @@ export function App() {
     if (draft.status !== 'ready') {
       setManualImportSaveNotice({
         tone: 'error',
-        title: 'Needs review',
-        detail: 'Resolve import issues before saving.',
+        title: t('notice.needsReview'),
+        detail: t('notice.needsReviewDetail'),
       })
       return
     }
@@ -2161,14 +2185,20 @@ export function App() {
       const changedRecords = result.recordsInserted + result.recordsRestored
       const autoBackupDetail =
         changedRecords > 0
-          ? scheduleAutoBackup('Manual import')
+          ? scheduleAutoBackup(t('import.manual'))
           : undefined
 
       setManualImportSaveNotice({
         tone: 'success',
-        title: 'Saved',
+        title: t('notice.saved'),
         detail: [
-          `${result.recordsInserted} inserted, ${result.recordsRestored} restored, ${result.recordsSkipped} skipped, ${result.duplicateRecords} duplicates. Catalog ${catalogResult.totalInDatabase} items.`,
+          t('notice.manualSavedDetail', {
+            inserted: result.recordsInserted,
+            restored: result.recordsRestored,
+            skipped: result.recordsSkipped,
+            duplicates: result.duplicateRecords,
+            catalog: catalogResult.totalInDatabase,
+          }),
           autoBackupDetail,
         ]
           .filter(Boolean)
@@ -2178,7 +2208,7 @@ export function App() {
     } catch (error) {
       setManualImportSaveNotice({
         tone: 'error',
-        title: 'Save failed',
+        title: t('notice.saveFailed'),
         detail: getErrorMessage(error),
       })
     } finally {
@@ -2210,13 +2240,13 @@ export function App() {
 
       setBackupNotice({
         tone: 'success',
-        title: 'Backup exported',
-        detail: formatBackupExportDetail(result),
+        title: t('notice.backupExported'),
+        detail: formatBackupExportDetail(result, t),
       })
     } catch (error) {
       setBackupNotice({
         tone: 'error',
-        title: 'Export failed',
+        title: t('notice.exportFailed'),
         detail: getErrorMessage(error),
       })
     } finally {
@@ -2229,6 +2259,7 @@ export function App() {
     backupRestoring,
     cloudBackupBusy,
     refreshBackupSnapshots,
+    t,
   ])
 
   const handleImportBackupJson = useCallback(async () => {
@@ -2243,7 +2274,7 @@ export function App() {
     }
 
     const confirmed = window.confirm(
-      'Import this JSON backup and replace all current local warp history with the file contents?',
+      t('notice.replaceConfirm'),
     )
 
     if (!confirmed) {
@@ -2282,17 +2313,17 @@ export function App() {
         setBannerSummaries([])
       }
       await refreshBackupSnapshots()
-      scheduleAutoBackup('JSON import')
+      scheduleAutoBackup(t('notice.jsonImported'))
 
       setBackupNotice({
         tone: 'success',
-        title: 'JSON imported',
-        detail: formatBackupReplaceDetail(result),
+        title: t('notice.jsonImported'),
+        detail: formatBackupReplaceDetail(result, t),
       })
     } catch (error) {
       setBackupNotice({
         tone: 'error',
-        title: 'JSON import failed',
+        title: t('notice.jsonImportFailed'),
         detail: getErrorMessage(error),
       })
     } finally {
@@ -2309,6 +2340,7 @@ export function App() {
     refreshAccounts,
     refreshBackupSnapshots,
     scheduleAutoBackup,
+    t,
   ])
 
   const handleConnectGoogleDrive = useCallback(async (input?: GoogleOAuthClientInput) => {
@@ -2351,19 +2383,19 @@ export function App() {
         }
         setBackupNotice({
           tone: 'success',
-          title: 'Google Drive connected',
-          detail: status.detail,
+          title: t('notice.driveConnected'),
+          detail: t('backup.detail.connected'),
         })
       } else {
         setBackupNotice({
           tone: 'error',
           title:
             status.connectionStatus === 'connection_failed'
-              ? 'Google Drive connection failed'
-              : 'Google Drive connection incomplete',
+              ? t('notice.driveConnectionFailed')
+              : t('notice.driveConnectionIncomplete'),
           detail:
             status.detail ||
-            'Google login did not finish yet. Try Connect again when the browser login is complete.',
+            t('notice.driveLoginIncomplete'),
         })
       }
     } catch (error) {
@@ -2374,7 +2406,7 @@ export function App() {
       const fallbackStatus = await refreshCloudBackupStatus()
       setBackupNotice({
         tone: 'error',
-        title: 'Google Drive connect failed',
+        title: t('notice.driveConnectFailed'),
         detail: `${getErrorMessage(error)}\n${fallbackStatus.detail}`,
       })
     } finally {
@@ -2393,6 +2425,7 @@ export function App() {
     refreshCloudBackupSnapshots,
     refreshCloudBackupStatus,
     scheduleAutoBackup,
+    t,
   ])
 
   const handleCancelGoogleDriveConnection = useCallback(async () => {
@@ -2413,15 +2446,15 @@ export function App() {
       setCloudBackupStatus(status)
       setBackupNotice({
         tone: 'success',
-        title: 'Google Drive connection cancelled',
-        detail: 'You can start a new Google Drive connection now.',
+        title: t('notice.driveCancelled'),
+        detail: t('notice.driveCancelledDetail'),
       })
     } catch (error) {
       const fallbackStatus = await refreshCloudBackupStatus()
       setCloudBackupStatus(fallbackStatus)
       setBackupNotice({
         tone: 'error',
-        title: 'Could not cancel Google Drive connection',
+        title: t('notice.driveCancelFailed'),
         detail: getErrorMessage(error),
       })
     } finally {
@@ -2433,6 +2466,7 @@ export function App() {
     cloudBackupConnecting,
     cloudBackupStatus.connectionStatus,
     refreshCloudBackupStatus,
+    t,
   ])
 
   const handleAutoBackupPolicyChange = useCallback(
@@ -2444,8 +2478,8 @@ export function App() {
       if (enabled && !cloudBackupStatus.canUpload) {
         setBackupNotice({
           tone: 'error',
-          title: 'Auto backup unavailable',
-          detail: 'Connect Google Drive before enabling automatic backup.',
+          title: t('notice.autoUnavailable'),
+          detail: t('notice.autoUnavailableDetail'),
         })
         return
       }
@@ -2460,21 +2494,21 @@ export function App() {
         })
         setCloudBackupPolicy(policy)
         if (enabled) {
-          scheduleAutoBackup('Auto backup')
+          scheduleAutoBackup(t('backup.auto'))
         } else {
           await refreshAutoBackupSyncStatus()
         }
         setBackupNotice({
           tone: 'success',
-          title: 'Auto backup updated',
+          title: t('notice.autoUpdated'),
           detail: enabled
-            ? 'Google Drive autosave will run after saved changes.'
-            : 'Google Drive autosave is off. Local autosave stays on.',
+            ? t('notice.autoEnabled')
+            : t('notice.autoDisabled'),
         })
       } catch (error) {
         setBackupNotice({
           tone: 'error',
-          title: 'Auto backup update failed',
+          title: t('notice.autoUpdateFailed'),
           detail: getErrorMessage(error),
         })
       } finally {
@@ -2487,6 +2521,7 @@ export function App() {
       refreshAutoBackupSyncStatus,
       scheduleAutoBackup,
       setCloudBackupPolicy,
+      t,
     ],
   )
 
@@ -2512,15 +2547,14 @@ export function App() {
       await refreshAutoBackupSyncStatus()
       setBackupNotice({
         tone: 'success',
-        title: 'Google Drive disconnected',
-        detail:
-          'Google Drive credentials and the local token were removed from secure storage.',
+        title: t('notice.driveDisconnected'),
+        detail: t('notice.driveDisconnectedDetail'),
       })
     } catch (error) {
       const fallbackStatus = await refreshCloudBackupStatus()
       setBackupNotice({
         tone: 'error',
-        title: 'Google Drive disconnect failed',
+        title: t('notice.driveDisconnectFailed'),
         detail: `${getErrorMessage(error)}\n${fallbackStatus.detail}`,
       })
     } finally {
@@ -2535,6 +2569,7 @@ export function App() {
     cloudBackupStatus.canDisconnect,
     refreshAutoBackupSyncStatus,
     refreshCloudBackupStatus,
+    t,
   ])
 
   const handleUploadGoogleDriveBackup = useCallback(async () => {
@@ -2559,14 +2594,14 @@ export function App() {
       await refreshCloudBackupSnapshots().catch(() => undefined)
       setBackupNotice({
         tone: 'success',
-        title: 'Google Drive upload complete',
-        detail: formatCloudBackupUploadDetail(result),
+        title: t('notice.driveUploadComplete'),
+        detail: formatCloudBackupUploadDetail(result, t),
       })
     } catch (error) {
       const fallbackStatus = await refreshCloudBackupStatus()
       setBackupNotice({
         tone: 'error',
-        title: 'Google Drive upload failed',
+        title: t('notice.driveUploadFailed'),
         detail: `${getErrorMessage(error)}\n${fallbackStatus.detail}`,
       })
     } finally {
@@ -2582,6 +2617,7 @@ export function App() {
     refreshAutoBackupSyncStatus,
     refreshCloudBackupStatus,
     refreshCloudBackupSnapshots,
+    t,
   ])
 
   const performRestoreGoogleDriveBackup = useCallback(
@@ -2605,18 +2641,18 @@ export function App() {
         const result = await restoreGoogleDriveBackupSnapshot(snapshot)
         await refreshWarpHistory()
         await refreshAccounts()
-        scheduleAutoBackup('Cloud restore')
+        scheduleAutoBackup(t('notice.cloudRestored'))
 
         setBackupNotice({
           tone: 'success',
-          title: 'Cloud backup restored',
-          detail: formatBackupRestoreDetail(result),
+          title: t('notice.cloudRestored'),
+          detail: formatBackupRestoreDetail(result, t),
         })
       } catch (error) {
         const fallbackStatus = await refreshCloudBackupStatus()
         setBackupNotice({
           tone: 'error',
-          title: 'Cloud restore failed',
+          title: t('notice.cloudRestoreFailed'),
           detail: `${getErrorMessage(error)}\n${fallbackStatus.detail}`,
         })
       } finally {
@@ -2634,6 +2670,7 @@ export function App() {
       refreshAccounts,
       refreshWarpHistory,
       scheduleAutoBackup,
+      t,
     ],
   )
 
@@ -2676,17 +2713,17 @@ export function App() {
         await refreshWarpHistory()
         await refreshAccounts()
         await refreshBackupSnapshots()
-        scheduleAutoBackup('Backup restore')
+        scheduleAutoBackup(t('notice.backupRestored'))
 
         setBackupNotice({
           tone: 'success',
-          title: 'Backup restored',
-          detail: formatBackupRestoreDetail(result),
+          title: t('notice.backupRestored'),
+          detail: formatBackupRestoreDetail(result, t),
         })
       } catch (error) {
         setBackupNotice({
           tone: 'error',
-          title: 'Restore failed',
+          title: t('notice.restoreFailed'),
           detail: getErrorMessage(error),
         })
       } finally {
@@ -2703,6 +2740,7 @@ export function App() {
       refreshBackupSnapshots,
       refreshWarpHistory,
       scheduleAutoBackup,
+      t,
     ],
   )
 
@@ -2724,13 +2762,16 @@ export function App() {
 
         setBackupNotice({
           tone: 'success',
-          title: 'Backup moved to Trash',
-          detail: `${result.fileName} moved to Trash. ${result.remainingSnapshots} local backups left.`,
+          title: t('notice.backupTrashed'),
+          detail: t('notice.backupTrashedDetail', {
+            file: result.fileName,
+            count: result.remainingSnapshots,
+          }),
         })
       } catch (error) {
         setBackupNotice({
           tone: 'error',
-          title: 'Delete failed',
+          title: t('notice.deleteFailed'),
           detail: getErrorMessage(error),
         })
       } finally {
@@ -2745,6 +2786,7 @@ export function App() {
       cloudBackupBusy,
       refreshBackupSnapshots,
       refreshTrashedBackupSnapshots,
+      t,
     ],
   )
 
@@ -2798,9 +2840,9 @@ export function App() {
   ])
 
   return (
-    <>
+    <LocalizationProvider language={languagePreference}>
       <main className="app-shell">
-        <aside className="sidebar" aria-label="Workspace">
+        <aside className="sidebar" aria-label={t('accessibility.workspace')}>
           <div className="brand">
             <div className="brand-mark" aria-hidden="true">
               <img src="/miku-warp.png" alt="" />
@@ -2811,7 +2853,7 @@ export function App() {
             </div>
           </div>
 
-          <nav className="sidebar-nav" aria-label="Main navigation">
+          <nav className="sidebar-nav" aria-label={t('accessibility.mainNavigation')}>
             <button
               aria-current={activeView === 'dashboard' ? 'page' : undefined}
               className={
@@ -2892,7 +2934,7 @@ export function App() {
             </button>
           </nav>
 
-          <section className="account-panel" aria-label="Selected account">
+          <section className="account-panel" aria-label={t('accessibility.selectedAccount')}>
             <div className="account-panel-main">
               <div className="account-panel-avatar" aria-hidden="true">
                 <AccountAvatar
@@ -2901,21 +2943,21 @@ export function App() {
                 />
               </div>
               <div className="account-panel-copy">
-                <span className="eyebrow">Active UID</span>
+                <span className="eyebrow">{t('sidebar.activeUid')}</span>
                 <strong>{activeAccount.uid}</strong>
-                <span>{formatAccountMeta(activeAccountSummary)}</span>
+                <span>{formatAccountMeta(activeAccountSummary, t)}</span>
               </div>
             </div>
             {accounts.length > 0 ? (
               <select
-                aria-label="Switch active UID"
+                aria-label={t('accessibility.switchActiveUid')}
                 className="account-select"
                 onChange={(event) => handleAccountChange(event.target.value)}
                 value={activeAccount.id}
               >
                 {accounts.map((account) => (
                   <option key={account.id} value={account.id}>
-                    {account.uid} - {account.totalPulls} pulls
+                    {account.uid} - {formatLocalizedPullCount(t, account.totalPulls)}
                   </option>
                 ))}
               </select>
@@ -2930,7 +2972,7 @@ export function App() {
                 <div>
                   <h1>
                     {hasDashboardHistory
-                      ? getBannerFilterLabel(activeBannerType)
+                      ? getLocalizedBannerFilterLabel(t, activeBannerType)
                       : translate(languagePreference, 'nav.dashboard')}
                   </h1>
                 </div>
@@ -3233,42 +3275,45 @@ export function App() {
         timeZone={timeZonePreference}
       />
       <ConfirmDialog
-        confirmLabel="Import"
+        confirmLabel={t('common.import')}
         confirmIcon={FileInput}
         danger={false}
         description={formatManualImportConfirmationDescription(
           manualImportConfirmation,
+          t,
         )}
         isOpen={manualImportConfirmation !== undefined}
         isPending={manualImportSaving}
         onCancel={() => setManualImportConfirmation(undefined)}
         onConfirm={handleConfirmManualImport}
-        pendingLabel="Importing"
-        title="Import manual note?"
+        pendingLabel={t('common.importing')}
+        title={t('dialog.importManualTitle')}
       />
       <ConfirmDialog
-        confirmLabel="Move to Trash"
+        confirmLabel={t('dialog.moveToTrash')}
         confirmIcon={Trash2}
         description={formatAccountDeleteDescription(
           accountDeleteConfirmation,
           formatRetentionLabel(languagePreference, trashRetentionDays),
+          t,
         )}
         isOpen={accountDeleteConfirmation !== undefined}
         isPending={movingAccountToTrashId !== undefined}
         onCancel={() => setAccountDeleteConfirmation(undefined)}
         onConfirm={handleConfirmDeleteAccount}
-        pendingLabel="Moving"
-        title="Move this account to Trash?"
+        pendingLabel={t('dialog.moving')}
+        title={t('dialog.moveAccountTitle')}
       />
       <ConfirmDialog
         confirmLabel={
           historyDeleteConfirmation?.kind === 'all'
-            ? 'Move all to Trash'
-            : 'Move to Trash'
+            ? t('dialog.moveAllToTrash')
+            : t('dialog.moveToTrash')
         }
         description={formatHistoryDeleteDescription(
           historyDeleteConfirmation,
           formatRetentionLabel(languagePreference, trashRetentionDays),
+          t,
         )}
         isOpen={historyDeleteConfirmation !== undefined}
         isPending={deletingSelectedHistory || deletingAllHistory}
@@ -3276,26 +3321,26 @@ export function App() {
         onConfirm={handleConfirmHistoryDelete}
         title={
           historyDeleteConfirmation?.kind === 'all'
-            ? 'Move all history to Trash?'
-            : 'Move selected history to Trash?'
+            ? t('dialog.moveAllHistoryTitle')
+            : t('dialog.moveSelectedHistoryTitle')
         }
       />
       <ConfirmDialog
         confirmLabel={
           backupConfirmation?.kind === 'delete_snapshot'
-            ? 'Move to Trash'
-            : 'Restore backup'
+            ? t('dialog.moveToTrash')
+            : t('dialog.restoreBackup')
         }
         confirmIcon={
           backupConfirmation?.kind === 'delete_snapshot' ? Trash2 : RefreshCcw
         }
         danger={backupConfirmation?.kind === 'delete_snapshot'}
-        description={formatBackupConfirmationDescription(backupConfirmation)}
+        description={formatBackupConfirmationDescription(backupConfirmation, t)}
         isOpen={backupConfirmation !== undefined}
         isPending={backupDeleting || backupRestoring || cloudBackupRestoring}
         onCancel={() => setBackupConfirmation(undefined)}
         onConfirm={handleConfirmBackupAction}
-        title={formatBackupConfirmationTitle(backupConfirmation)}
+        title={formatBackupConfirmationTitle(backupConfirmation, t)}
       />
       <ImportDialog
         gameHistoryImportError={gameHistoryImportError}
@@ -3324,14 +3369,14 @@ export function App() {
       <ConfirmDialog
         confirmLabel={
           accountTrashConfirmation?.kind === 'restore'
-            ? 'Restore'
-            : 'Delete permanently'
+            ? t('common.restore')
+            : t('common.deletePermanently')
         }
         confirmIcon={
           accountTrashConfirmation?.kind === 'restore' ? RefreshCcw : Trash2
         }
         danger={accountTrashConfirmation?.kind === 'delete'}
-        description={formatAccountTrashDescription(accountTrashConfirmation)}
+        description={formatAccountTrashDescription(accountTrashConfirmation, t)}
         isOpen={accountTrashConfirmation !== undefined}
         isPending={
           restoringTrashedAccountId !== undefined ||
@@ -3340,36 +3385,38 @@ export function App() {
         onCancel={() => setAccountTrashConfirmation(undefined)}
         onConfirm={handleConfirmAccountTrashAction}
         pendingLabel={
-          accountTrashConfirmation?.kind === 'restore' ? 'Restoring' : 'Deleting'
+          accountTrashConfirmation?.kind === 'restore'
+            ? t('common.restoring')
+            : t('common.deleting')
         }
-        title={formatAccountTrashTitle(accountTrashConfirmation)}
+        title={formatAccountTrashTitle(accountTrashConfirmation, t)}
       />
       <ConfirmDialog
-        confirmLabel="Restore"
+        confirmLabel={t('common.restore')}
         confirmIcon={RefreshCcw}
         danger={false}
-        description={formatTrashRestoreDescription(trashRestoreConfirmation)}
+        description={formatTrashRestoreDescription(trashRestoreConfirmation, t)}
         isOpen={trashRestoreConfirmation !== undefined}
         isPending={restoringTrashPullId !== undefined}
         onCancel={() => setTrashRestoreConfirmation(undefined)}
         onConfirm={handleConfirmTrashRestore}
-        title={formatTrashRestoreTitle(trashRestoreConfirmation)}
+        title={formatTrashRestoreTitle(trashRestoreConfirmation, t)}
       />
       <ConfirmDialog
-        confirmLabel="Delete permanently"
-        description={formatTrashDeleteDescription(trashDeleteConfirmation)}
+        confirmLabel={t('common.deletePermanently')}
+        description={formatTrashDeleteDescription(trashDeleteConfirmation, t)}
         isOpen={trashDeleteConfirmation !== undefined}
         isPending={permanentlyDeletingPullId !== undefined}
         onCancel={() => setTrashDeleteConfirmation(undefined)}
         onConfirm={handleConfirmPermanentTrashDelete}
-        title={formatTrashDeleteTitle(trashDeleteConfirmation)}
+        title={formatTrashDeleteTitle(trashDeleteConfirmation, t)}
       />
       <ConfirmDialog
         confirmLabel={
           backupTrashConfirmation &&
           isBackupTrashRestoreConfirmation(backupTrashConfirmation)
-            ? 'Restore'
-            : 'Delete permanently'
+            ? t('common.restore')
+            : t('common.deletePermanently')
         }
         confirmIcon={
           backupTrashConfirmation &&
@@ -3382,7 +3429,7 @@ export function App() {
             ? !isBackupTrashRestoreConfirmation(backupTrashConfirmation)
             : false
         }
-        description={formatBackupTrashDescription(backupTrashConfirmation)}
+        description={formatBackupTrashDescription(backupTrashConfirmation, t)}
         isOpen={backupTrashConfirmation !== undefined}
         isPending={
           restoringTrashedBackupFileName !== undefined ||
@@ -3390,74 +3437,95 @@ export function App() {
         }
         onCancel={() => setBackupTrashConfirmation(undefined)}
         onConfirm={handleConfirmBackupTrashAction}
-        title={formatBackupTrashTitle(backupTrashConfirmation)}
+        title={formatBackupTrashTitle(backupTrashConfirmation, t)}
       />
       <ConfirmDialog
-        confirmLabel="Close app"
+        confirmLabel={t('dialog.closeApp')}
         confirmIcon={X}
         danger={false}
         description={formatCloseBackupWarningDescription(
           autoBackupRunning,
           autoBackupSyncStatus,
+          t,
         )}
         isOpen={closeConfirmationOpen}
         isPending={false}
         onCancel={() => setCloseConfirmationOpen(false)}
         onConfirm={handleConfirmCloseApp}
-        pendingLabel="Closing"
-        title="Backup is not finished"
+        pendingLabel={t('dialog.closing')}
+        title={t('dialog.backupUnfinished')}
       />
-    </>
+    </LocalizationProvider>
   )
 }
 
 export default App
 
-function formatBackupExportDetail(result: ExportBackupSnapshotResult) {
+function formatBackupExportDetail(
+  result: ExportBackupSnapshotResult,
+  t: Translator,
+) {
   return [
-    `${result.warpPulls} pulls, ${result.warpItems} catalog items, ${result.importBatches} import batches.`,
-    `Saved to ${result.backupPath}`,
+    t('detail.backupExport', {
+      pulls: result.warpPulls,
+      items: result.warpItems,
+      batches: result.importBatches,
+    }),
+    t('detail.savedTo', { path: result.backupPath }),
   ].join('\n')
 }
 
-function formatBackupRestoreDetail(result: RestoreBackupSnapshotResult) {
+function formatBackupRestoreDetail(
+  result: RestoreBackupSnapshotResult,
+  t: Translator,
+) {
   return [
-    `${result.warpPullsInserted} inserted, ${result.duplicateWarpPulls} skipped as duplicates.`,
-    `${result.recomputedBanners} banner pity groups recomputed.`,
-    `Restored from ${result.backupPath}`,
+    t('detail.backupRestore', {
+      inserted: result.warpPullsInserted,
+      duplicates: result.duplicateWarpPulls,
+    }),
+    t('detail.pityRecomputed', { count: result.recomputedBanners }),
+    t('detail.restoredFrom', { path: result.backupPath }),
   ].join('\n')
 }
 
-function formatBackupReplaceDetail(result: RestoreBackupSnapshotResult) {
+function formatBackupReplaceDetail(
+  result: RestoreBackupSnapshotResult,
+  t: Translator,
+) {
   return [
-    `${result.warpPullsInserted} pulls imported from JSON.`,
-    `${result.accounts} accounts and ${result.importBatches} import batches restored.`,
-    `Current local history was replaced from ${result.backupPath}.`,
+    t('detail.jsonPulls', { count: result.warpPullsInserted }),
+    t('detail.jsonAccounts', {
+      accounts: result.accounts,
+      batches: result.importBatches,
+    }),
+    t('detail.jsonReplaced', { path: result.backupPath }),
   ].join('\n')
 }
 
 function formatCloseBackupWarningDescription(
   autoBackupRunning: boolean,
   status: AutoBackupSyncStatus | undefined,
+  t: Translator,
 ) {
   if (autoBackupRunning) {
-    return 'Miku Warp is still saving the latest backup. Closing now may leave the newest changes waiting for the next app launch.'
+    return t('dialog.closeSaving')
   }
 
   if (status?.cloudRequired && !status.cloudUpToDate) {
-    return 'The latest local autosave is ready, but Google Drive backup is still pending. Closing now will keep local data safe and retry cloud backup next time.'
+    return t('dialog.closeCloudPending')
   }
 
-  return 'The latest changes have not finished autosaving yet. Closing now may leave them waiting for the next app launch.'
+  return t('dialog.closePending')
 }
 
-function formatAccountMeta(account: WarpAccount | undefined) {
+function formatAccountMeta(account: WarpAccount | undefined, t: Translator) {
   if (!account) {
-    return 'Asia server'
+    return t('accounts.asiaServer')
   }
 
   const region = account.region ?? 'asia'
-  const pulls = account.totalPulls === 1 ? '1 pull' : `${account.totalPulls} pulls`
+  const pulls = formatLocalizedPullCount(t, account.totalPulls)
 
   return `${region.toUpperCase()} - ${pulls}`
 }
@@ -3465,40 +3533,56 @@ function formatAccountMeta(account: WarpAccount | undefined) {
 function formatHistoryDeleteDescription(
   confirmation: HistoryDeleteConfirmation | undefined,
   retentionLabel: string,
+  t: Translator,
 ) {
   if (!confirmation) {
     return ''
   }
 
   if (confirmation.kind === 'selected') {
-    return `${confirmation.totalPulls} selected history items will be moved to Trash for UID ${confirmation.uid}. Their banner pity will be recalculated, and they can be restored for ${retentionLabel}.`
+    return t('dialog.historySelectedTrash', {
+      count: confirmation.totalPulls,
+      uid: confirmation.uid,
+      retention: retentionLabel,
+    })
   }
 
-  return `All ${confirmation.totalPulls} history records for UID ${confirmation.uid} will be moved to Trash. Other UIDs will not be affected, and these items can be restored for ${retentionLabel}.`
+  return t('dialog.historyAllTrash', {
+    count: confirmation.totalPulls,
+    uid: confirmation.uid,
+    retention: retentionLabel,
+  })
 }
 
 function formatAccountDeleteDescription(
   confirmation: AccountDeleteConfirmation | undefined,
   retentionLabel: string,
+  t: Translator,
 ) {
   if (!confirmation) {
     return ''
   }
 
   const { account } = confirmation
-  const pulls = account.totalPulls === 1 ? '1 pull' : `${account.totalPulls} pulls`
-
-  return `UID ${account.uid} and its ${pulls} will be moved to Trash. The current active UID will not change, and this account can be restored for ${retentionLabel}.`
+  return t('dialog.accountTrash', {
+    uid: account.uid,
+    pulls: formatLocalizedPullCount(t, account.totalPulls),
+    retention: retentionLabel,
+  })
 }
 
 function formatManualImportConfirmationDescription(
   confirmation: ManualImportConfirmation | undefined,
+  t: Translator,
 ) {
   if (!confirmation) {
     return ''
   }
 
-  return `${confirmation.totalPulls} detected pulls will be imported into UID ${confirmation.uid}. Existing matching pulls will be skipped as duplicates.`
+  return t('dialog.manualImportDescription', {
+    count: confirmation.totalPulls,
+    uid: confirmation.uid,
+  })
 }
 
 function toManualImportAccountInput(
@@ -3514,63 +3598,78 @@ function toManualImportAccountInput(
 
 function formatBackupConfirmationDescription(
   confirmation: BackupConfirmation | undefined,
+  t: Translator,
 ) {
   if (!confirmation) {
     return ''
   }
 
   if (confirmation.kind === 'restore_cloud_snapshot') {
-    return 'This Google Drive autosave will be restored into the local database. Existing matching pulls will be skipped as duplicates.'
+    return t('dialog.cloudRestoreDescription')
   }
 
-  const uidLabel = formatBackupUidLabel(confirmation.snapshot.uids)
+  const uidLabel = formatBackupUidLabel(confirmation.snapshot.uids, t)
 
   if (confirmation.kind === 'delete_snapshot') {
-    return `${confirmation.snapshot.fileName} (${uidLabel}) will be moved to Trash. Current history will not be changed, and the backup can still be restored from Trash.`
+    return t('dialog.backupTrashDescription', {
+      file: confirmation.snapshot.fileName,
+      uids: uidLabel,
+    })
   }
 
-  return `${confirmation.snapshot.fileName} contains ${uidLabel}. Its history will be merged into the local database, while matching records are skipped.`
+  return t('dialog.backupRestoreDescription', {
+    file: confirmation.snapshot.fileName,
+    uids: uidLabel,
+  })
 }
 
 function formatBackupConfirmationTitle(
   confirmation: BackupConfirmation | undefined,
+  t: Translator,
 ) {
   if (confirmation?.kind === 'delete_snapshot') {
-    return 'Move this backup to Trash?'
+    return t('dialog.backupTrashTitle')
   }
 
   if (confirmation?.kind === 'restore_cloud_snapshot') {
-    return 'Restore cloud backup?'
+    return t('dialog.cloudRestoreTitle')
   }
 
-  return 'Restore this backup?'
+  return t('dialog.backupRestoreTitle')
 }
 
-function formatBackupUidLabel(uids: string[]) {
+function formatBackupUidLabel(uids: string[], t: Translator) {
   if (uids.length === 0) {
-    return 'no identified UID'
+    return t('dialog.noUid')
   }
 
   if (uids.length === 1) {
     return `UID ${uids[0]}`
   }
 
-  return `UIDs ${uids.join(', ')}`
+  return t('dialog.multipleUids', { uids: uids.join(', ') })
 }
 
 function formatTrashRestoreDescription(
   confirmation: TrashPullMutationConfirmation | undefined,
+  t: Translator,
 ) {
   if (!confirmation) {
     return ''
   }
 
   if (confirmation.kind === 'selected') {
-    return `${confirmation.totalPulls} selected history items will return to UID ${confirmation.uid}, and their banner pity will be recalculated.`
+    return t('dialog.restoreSelectedHistoryDescription', {
+      count: confirmation.totalPulls,
+      uid: confirmation.uid,
+    })
   }
 
   if (confirmation.kind === 'single') {
-    return `${confirmation.pull.itemName} will return to UID ${confirmation.uid} history, and its banner pity will be recalculated.`
+    return t('dialog.restoreHistoryDescription', {
+      item: confirmation.pull.itemName,
+      uid: confirmation.uid,
+    })
   }
 
   return ''
@@ -3578,13 +3677,14 @@ function formatTrashRestoreDescription(
 
 function formatTrashRestoreTitle(
   confirmation: TrashPullMutationConfirmation | undefined,
+  t: Translator,
 ) {
   if (confirmation?.kind === 'selected') {
-    return 'Restore selected history?'
+    return t('dialog.restoreSelectedHistoryTitle')
   }
 
   if (confirmation?.kind === 'single') {
-    return 'Restore this history item?'
+    return t('dialog.restoreHistoryTitle')
   }
 
   return ''
@@ -3592,67 +3692,87 @@ function formatTrashRestoreTitle(
 
 function formatTrashDeleteDescription(
   confirmation: TrashPullMutationConfirmation | undefined,
+  t: Translator,
 ) {
   if (!confirmation) {
     return ''
   }
 
   if (confirmation.kind === 'selected') {
-    return `${confirmation.totalPulls} selected history items will be permanently deleted from UID ${confirmation.uid}. This action cannot be undone.`
+    return t('dialog.deleteSelectedHistoryDescription', {
+      count: confirmation.totalPulls,
+      uid: confirmation.uid,
+    })
   }
 
   if (confirmation.kind === 'all') {
-    return `All ${confirmation.totalPulls} history items in Trash for UID ${confirmation.uid} will be permanently deleted. This action cannot be undone.`
+    return t('dialog.deleteAllHistoryDescription', {
+      count: confirmation.totalPulls,
+      uid: confirmation.uid,
+    })
   }
 
-  return `${confirmation.pull.itemName} will be permanently deleted from UID ${confirmation.uid}. This action cannot be undone.`
+  return t('dialog.deleteHistoryDescription', {
+    item: confirmation.pull.itemName,
+    uid: confirmation.uid,
+  })
 }
 
 function formatTrashDeleteTitle(
   confirmation: TrashPullMutationConfirmation | undefined,
+  t: Translator,
 ) {
   if (confirmation?.kind === 'selected') {
-    return 'Delete selected permanently?'
+    return t('dialog.deleteSelectedTitle')
   }
 
   if (confirmation?.kind === 'all') {
-    return 'Delete all permanently?'
+    return t('dialog.deleteAllTitle')
   }
 
-  return 'Delete permanently?'
+  return t('dialog.deleteTitle')
 }
 
 function formatAccountTrashDescription(
   confirmation: AccountTrashConfirmation | undefined,
+  t: Translator,
 ) {
   if (!confirmation) {
     return ''
   }
 
   const { account } = confirmation
-  const pulls = account.totalPulls === 1 ? '1 pull' : `${account.totalPulls} pulls`
+  const pulls = formatLocalizedPullCount(t, account.totalPulls)
 
   if (confirmation.kind === 'restore') {
-    return `UID ${account.uid} and its ${pulls} will return to Accounts and Dashboard.`
+    return t('dialog.accountRestoreDescription', {
+      uid: account.uid,
+      pulls,
+    })
   }
 
-  return `UID ${account.uid} and its ${pulls} will be permanently deleted. This action cannot be undone.`
+  return t('dialog.accountDeleteDescription', {
+    uid: account.uid,
+    pulls,
+  })
 }
 
 function formatAccountTrashTitle(
   confirmation: AccountTrashConfirmation | undefined,
+  t: Translator,
 ) {
   if (!confirmation) {
     return ''
   }
 
   return confirmation.kind === 'restore'
-    ? 'Restore this account?'
-    : 'Delete this account permanently?'
+    ? t('dialog.accountRestoreTitle')
+    : t('dialog.accountDeleteTitle')
 }
 
 function formatBackupTrashDescription(
   confirmation: BackupTrashConfirmation | undefined,
+  t: Translator,
 ) {
   if (!confirmation) {
     return ''
@@ -3660,26 +3780,31 @@ function formatBackupTrashDescription(
 
   if ('snapshot' in confirmation) {
     return confirmation.kind === 'restore'
-      ? `${confirmation.snapshot.fileName} will return to Local backup. It can be restored from the Backup page afterward.`
-      : `${confirmation.snapshot.fileName} will be permanently deleted from Trash. This action cannot be undone.`
+      ? t('dialog.backupTrashRestore', {
+          file: confirmation.snapshot.fileName,
+        })
+      : t('dialog.backupTrashDelete', {
+          file: confirmation.snapshot.fileName,
+        })
   }
 
   if (confirmation.kind === 'restore_selected') {
-    return `${confirmation.totalBackups} selected backups will return to Local backup. They can be restored from the Backup page afterward.`
+    return t('dialog.backupsRestore', { count: confirmation.totalBackups })
   }
 
   if (confirmation.kind === 'delete_selected') {
-    return `${confirmation.totalBackups} selected backups will be permanently deleted from Trash. This action cannot be undone.`
+    return t('dialog.backupsDelete', { count: confirmation.totalBackups })
   }
 
   if (confirmation.kind === 'delete_all') {
-    return `All ${confirmation.totalBackups} backups in Trash will be permanently deleted. This action cannot be undone.`
+    return t('dialog.backupsDeleteAll', { count: confirmation.totalBackups })
   }
   return ''
 }
 
 function formatBackupTrashTitle(
   confirmation: BackupTrashConfirmation | undefined,
+  t: Translator,
 ) {
   if (!confirmation) {
     return ''
@@ -3687,19 +3812,19 @@ function formatBackupTrashTitle(
 
   if (isBackupTrashRestoreConfirmation(confirmation)) {
     return confirmation.kind === 'restore_selected'
-      ? 'Restore selected backups?'
-      : 'Restore this backup?'
+      ? t('dialog.backupsRestoreTitle')
+      : t('dialog.backupRestoreTitle')
   }
 
   if (confirmation.kind === 'delete_selected') {
-    return 'Delete selected backups permanently?'
+    return t('dialog.backupsDeleteTitle')
   }
 
   if (confirmation.kind === 'delete_all') {
-    return 'Delete all backups permanently?'
+    return t('dialog.backupsDeleteAllTitle')
   }
 
-  return 'Delete backup permanently?'
+  return t('dialog.backupDeleteTitle')
 }
 
 function isBackupTrashRestoreConfirmation(
@@ -3749,13 +3874,17 @@ function getTauriWindow() {
 }
 function formatCloudBackupUploadDetail(
   result: UploadCloudBackupSnapshotResult,
+  t: Translator,
 ) {
   return [
-    `${result.fileName} uploaded to Google Drive app data.`,
-    `${result.bytesUploaded} bytes uploaded. Remote file id: ${result.remoteFileId}.`,
+    t('detail.cloudUploaded', { file: result.fileName }),
+    t('detail.cloudBytes', {
+      bytes: result.bytesUploaded,
+      id: result.remoteFileId,
+    }),
     result.remoteModifiedTime
-      ? `Modified at ${result.remoteModifiedTime}.`
-      : `Local file: ${result.localBackupPath}`,
+      ? t('detail.modifiedAt', { date: result.remoteModifiedTime })
+      : t('detail.localFile', { path: result.localBackupPath }),
   ].join('\n')
 }
 
@@ -3818,5 +3947,5 @@ function getErrorMessage(error: unknown) {
     return error
   }
 
-  return 'Unexpected import error.'
+  return translate(loadLanguagePreference(), 'error.unexpected')
 }

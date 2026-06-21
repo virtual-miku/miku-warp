@@ -1,5 +1,9 @@
 import { open } from '@tauri-apps/plugin-dialog'
 import {
+  loadLanguagePreference,
+  translate,
+} from '../../settings/domain/localization'
+import {
   createDesktopRuntimeUnavailableError,
   hasTauriInvoke,
   invokeTauri,
@@ -44,15 +48,18 @@ export function saveGameInstallPath(path: string) {
 }
 
 export async function selectGameInstallPath(currentPath: string) {
+  const language = loadLanguagePreference()
   if (!hasTauriInvoke()) {
-    throw createDesktopRuntimeUnavailableError('Folder browsing')
+    throw createDesktopRuntimeUnavailableError(
+      translate(language, 'desktop.folderBrowsing'),
+    )
   }
 
   const selectedPath = await open({
     defaultPath: currentPath,
     directory: true,
     multiple: false,
-    title: 'Select Honkai: Star Rail game folder',
+    title: translate(language, 'desktop.folderTitle'),
   })
 
   return typeof selectedPath === 'string' ? selectedPath : undefined

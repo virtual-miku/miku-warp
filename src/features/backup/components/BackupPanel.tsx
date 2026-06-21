@@ -15,11 +15,12 @@ import type {
 } from '../../settings/domain/localization'
 import { formatDateTime, formatNumber } from '../../../shared/lib/date-time'
 import {
-  getCloudBackupPolicyDetail,
   type CloudBackupPolicy,
   type CloudBackupStatus,
   type GoogleOAuthClientInput,
 } from '../domain/cloud-backup'
+import { useLocalization } from '../../settings/components/localization-context'
+import type { Translator } from '../../settings/domain/localization'
 
 export type BackupNotice = {
   tone: 'success' | 'error'
@@ -109,6 +110,7 @@ export function BackupPanel({
   onImportBackupJson,
   onRestoreSnapshot,
 }: BackupPanelProps) {
+  const { t } = useLocalization()
   const isGoogleDriveConfigured = cloudBackupStatus.oauthClientConfigured
   const isGoogleDriveConnecting =
     cloudBackupStatus.connectionStatus === 'connecting'
@@ -138,7 +140,7 @@ export function BackupPanel({
     <section
       className="tool-panel"
       id="backup"
-      aria-label="Backup"
+      aria-label={t('backup.ariaLabel')}
     >
       <div className="tool-panel-body">
         <div className="backup-section">
@@ -147,15 +149,15 @@ export function BackupPanel({
               disabled={oauthFormDisabled}
               isConnecting={isCloudConnecting}
               onConnect={onConnectGoogleDrive}
-              statusDetail={cloudBackupStatus.detail}
+              statusDetail={getCloudBackupStatusDetail(cloudBackupStatus, t)}
             />
           ) : (
             <>
               <div className="tool-row">
                 <div>
                   <strong>Google Drive</strong>
-                  <span title={cloudBackupStatus.detail}>
-                    {cloudBackupStatus.label}
+                  <span title={getCloudBackupStatusDetail(cloudBackupStatus, t)}>
+                    {getCloudBackupStatusLabel(cloudBackupStatus, t)}
                   </span>
                 </div>
                 <div className="backup-action-group">
@@ -166,7 +168,7 @@ export function BackupPanel({
                       onClick={onUploadGoogleDriveBackup}
                       variant="ghost"
                     >
-                      {isCloudUploading ? 'Backing up' : 'Back up now'}
+                      {isCloudUploading ? t('backup.backingUp') : t('backup.backUpNow')}
                     </AppButton>
                   ) : null}
                   {!isGoogleDriveConnected && !isGoogleDriveConnecting ? (
@@ -177,8 +179,8 @@ export function BackupPanel({
                       variant="ghost"
                     >
                       {isCloudDisconnecting
-                        ? 'Removing credentials'
-                        : 'Change credentials'}
+                        ? t('backup.removingCredentials')
+                        : t('backup.changeCredentials')}
                     </AppButton>
                   ) : null}
                   <AppButton
@@ -210,28 +212,30 @@ export function BackupPanel({
                       isGoogleDriveConnecting,
                       isCloudCancelling,
                       isCloudDisconnecting,
+                      t,
                     )}
                   </AppButton>
                 </div>
               </div>
-              {!isGoogleDriveConnected && cloudBackupStatus.detail ? (
+              {!isGoogleDriveConnected && getCloudBackupStatusDetail(cloudBackupStatus, t) ? (
                 <p className="backup-status-detail">
-                  {cloudBackupStatus.detail}
+                  {getCloudBackupStatusDetail(cloudBackupStatus, t)}
                 </p>
               ) : null}
               <div className="backup-policy-row">
                 <div>
-                  <strong>Auto backup</strong>
+                  <strong>{t('backup.auto')}</strong>
                   <span>
-                    {getCloudBackupPolicyDetail(
+                    {getLocalizedCloudBackupPolicyDetail(
                       cloudBackupPolicy,
                       cloudBackupStatus.canUpload,
+                      t,
                     )}
                   </span>
                 </div>
                 <button
                   aria-checked={cloudBackupPolicy.autoBackupEnabled}
-                  aria-label="Auto backup to Google Drive"
+                  aria-label={t('backup.autoAria')}
                   className={`switch-control${
                     cloudBackupPolicy.autoBackupEnabled
                       ? ' switch-control-on'
@@ -250,7 +254,7 @@ export function BackupPanel({
                 </button>
               </div>
               {isGoogleDriveConnected ? (
-                <div className="backup-snapshot-list" aria-label="Cloud backups">
+                <div className="backup-snapshot-list" aria-label={t('backup.cloudAria')}>
                   {visibleCloudSnapshots.length > 0 ? (
                     visibleCloudSnapshots.map((snapshot) => (
                       <div
@@ -260,11 +264,13 @@ export function BackupPanel({
                         <div>
                           <strong>
                             {snapshot.remoteModifiedTime
-                              ? `Backup ${formatSnapshotTime(snapshot.remoteModifiedTime, language, timeZone)}`
-                              : 'Time unavailable'}
+                              ? t('backup.snapshotAt', {
+                                  date: formatSnapshotTime(snapshot.remoteModifiedTime, language, timeZone),
+                                })
+                              : t('backup.timeUnavailable')}
                           </strong>
                           <span title={snapshot.fileName}>
-                            {formatBackupSizeKilobytes(snapshot.size, language)}
+                            {formatBackupSizeKilobytes(snapshot.size, language, t)}
                           </span>
                         </div>
                         <div className="backup-snapshot-actions">
@@ -275,8 +281,8 @@ export function BackupPanel({
                             variant="ghost"
                           >
                             {restoringCloudFileId === snapshot.remoteFileId
-                              ? 'Restoring'
-                              : 'Restore'}
+                              ? t('common.restoring')
+                              : t('common.restore')}
                           </AppButton>
                         </div>
                       </div>
@@ -284,8 +290,8 @@ export function BackupPanel({
                   ) : (
                     <div className="backup-snapshot-row">
                       <div>
-                        <strong>No cloud autosave yet</strong>
-                        <span>It will upload after the next saved change</span>
+                        <strong>{t('backup.cloudEmpty')}</strong>
+                        <span>{t('backup.cloudEmptyDetail')}</span>
                       </div>
                     </div>
                   )}
@@ -298,7 +304,7 @@ export function BackupPanel({
         <div className="backup-section">
           <div className="tool-row">
             <div>
-              <strong>Local backup</strong>
+              <strong>{t('backup.local')}</strong>
             </div>
             <div className="backup-action-group">
               <AppButton
@@ -307,7 +313,7 @@ export function BackupPanel({
                 onClick={onExportBackup}
                 variant="ghost"
               >
-                {isExporting ? 'Backing up' : 'Back up now'}
+                {isExporting ? t('backup.backingUp') : t('backup.backUpNow')}
               </AppButton>
               <AppButton
                 disabled={isBusy}
@@ -315,20 +321,22 @@ export function BackupPanel({
                 onClick={onImportBackupJson}
                 variant="ghost"
               >
-                {isImporting ? 'Importing' : 'Import'}
+                {isImporting ? t('common.importing') : t('common.import')}
               </AppButton>
             </div>
           </div>
           {visibleSnapshots.length > 0 ? (
-            <div className="backup-snapshot-list" aria-label="Recent backups">
+            <div className="backup-snapshot-list" aria-label={t('backup.recentAria')}>
               {visibleSnapshots.map((snapshot) => (
                 <div className="backup-snapshot-row" key={snapshot.fileName}>
                   <div>
                     <strong>
-                      Backup {formatSnapshotTime(snapshot.exportedAt, language, timeZone)}
+                      {t('backup.snapshotAt', {
+                        date: formatSnapshotTime(snapshot.exportedAt, language, timeZone),
+                      })}
                     </strong>
                     <span title={snapshot.fileName}>
-                      {formatBackupSizeKilobytes(snapshot.sizeBytes, language)}
+                      {formatBackupSizeKilobytes(snapshot.sizeBytes, language, t)}
                     </span>
                   </div>
                   <div className="backup-snapshot-actions">
@@ -339,8 +347,8 @@ export function BackupPanel({
                       variant="ghost"
                     >
                       {restoringFileName === snapshot.fileName
-                        ? 'Restoring'
-                        : 'Restore'}
+                        ? t('common.restoring')
+                        : t('common.restore')}
                     </AppButton>
                     {!snapshot.isAutoSave ? (
                       <AppButton
@@ -350,8 +358,8 @@ export function BackupPanel({
                         variant="ghost"
                       >
                         {deletingFileName === snapshot.fileName
-                          ? 'Deleting'
-                          : 'Delete'}
+                          ? t('common.deleting')
+                          : t('common.delete')}
                       </AppButton>
                     ) : null}
                   </div>
@@ -387,6 +395,7 @@ function GoogleOAuthSetupForm({
   onConnect,
   statusDetail,
 }: GoogleOAuthSetupFormProps) {
+  const { t } = useLocalization()
   const [clientId, setClientId] = useState('')
   const [clientSecret, setClientSecret] = useState('')
   const canSubmit = !disabled && clientId.trim().length > 0
@@ -409,12 +418,12 @@ function GoogleOAuthSetupForm({
       <div className="tool-row">
         <div>
           <strong>Google Drive</strong>
-          <span>Secure OAuth setup</span>
+          <span>{t('backup.oauthSetup')}</span>
         </div>
       </div>
       <form className="backup-oauth-form" onSubmit={handleSubmit}>
         <label className="backup-oauth-field">
-          <span>Desktop Client ID</span>
+          <span>{t('backup.clientId')}</span>
           <input
             autoComplete="off"
             disabled={disabled}
@@ -428,13 +437,13 @@ function GoogleOAuthSetupForm({
           />
         </label>
         <label className="backup-oauth-field">
-          <span>Desktop Client Secret (optional)</span>
+          <span>{t('backup.clientSecret')}</span>
           <input
             autoComplete="new-password"
             disabled={disabled}
             maxLength={1024}
             onChange={(event) => setClientSecret(event.target.value)}
-            placeholder="Enter the client secret when Google provides one"
+            placeholder={t('backup.clientSecretPlaceholder')}
             spellCheck={false}
             type="password"
             value={clientSecret}
@@ -442,7 +451,7 @@ function GoogleOAuthSetupForm({
         </label>
         <div className="backup-oauth-actions">
           <AppButton disabled={!canSubmit} icon={KeyRound} type="submit">
-            {isConnecting ? 'Connecting' : 'Save & connect'}
+            {isConnecting ? t('backup.connecting') : t('backup.saveConnect')}
           </AppButton>
         </div>
       </form>
@@ -458,36 +467,37 @@ function getGoogleDriveActionLabel(
   isConnecting: boolean,
   isCancelling: boolean,
   isDisconnecting: boolean,
+  t: Translator,
 ) {
   if (isCancelling) {
-    return 'Cancelling'
+    return t('backup.cancelling')
   }
 
   if (status.connectionStatus === 'connecting') {
-    return 'Cancel'
+    return t('common.cancel')
   }
 
   if (isDisconnecting) {
-    return 'Disconnecting'
+    return t('backup.disconnecting')
   }
 
   if (status.connectionStatus === 'connected') {
-    return 'Disconnect'
+    return t('backup.disconnect')
   }
 
   if (status.connectionStatus === 'connection_failed') {
-    return 'Retry'
+    return t('backup.retry')
   }
 
   if (status.connectionStatus === 'needs_reauth') {
-    return 'Re-login'
+    return t('backup.relogin')
   }
 
   if (isConnecting) {
-    return 'Connecting'
+    return t('backup.connecting')
   }
 
-  return 'Connect'
+  return t('backup.connect')
 }
 
 function formatSnapshotTime(
@@ -501,15 +511,58 @@ function formatSnapshotTime(
 function formatBackupSizeKilobytes(
   size: number | string | undefined,
   language: AppLanguage,
+  t: Translator,
 ) {
   const parsedSize =
     typeof size === 'number' ? size : Number.parseInt(size ?? '', 10)
 
   if (!Number.isFinite(parsedSize) || parsedSize < 0) {
-    return 'Size unavailable'
+    return t('backup.sizeUnavailable')
   }
 
   const kilobytes = Math.max(1, Math.round(parsedSize / 1024))
 
   return `${formatNumber(kilobytes, language)} KB`
+}
+
+function getLocalizedCloudBackupPolicyDetail(
+  policy: CloudBackupPolicy,
+  canUpload: boolean,
+  t: Translator,
+) {
+  if (policy.autoBackupEnabled && canUpload) {
+    return t('backup.policyEveryChange')
+  }
+  if (policy.autoBackupEnabled) {
+    return t('backup.policyDrivePending')
+  }
+  return canUpload ? t('backup.policyLocalOnly') : t('backup.policyLocalOn')
+}
+
+function getCloudBackupStatusLabel(status: CloudBackupStatus, t: Translator) {
+  const keys = {
+    not_configured: 'backup.status.notConfigured',
+    storage_unavailable: 'backup.status.storageUnavailable',
+    disconnected: 'backup.status.disconnected',
+    connecting: 'backup.status.connecting',
+    connection_failed: 'backup.status.failed',
+    connected: 'backup.status.connected',
+    needs_reauth: 'backup.status.needsReauth',
+  } as const
+
+  return t(keys[status.connectionStatus])
+}
+
+function getCloudBackupStatusDetail(status: CloudBackupStatus, t: Translator) {
+  if (status.connectionStatus === 'not_configured') {
+    return t('backup.detail.notConfigured')
+  }
+  if (status.connectionStatus === 'connecting') {
+    return t('backup.detail.connecting')
+  }
+  if (status.connectionStatus === 'connected') {
+    return t('backup.detail.connected')
+  }
+
+  return status.detail
 }

@@ -1,9 +1,9 @@
 import type { PitySummary } from '../domain/pity'
 import { getFiveStarHardPity, type BannerType } from '../domain/banner'
+import { useLocalization } from '../../settings/components/localization-context'
+import { formatNumber } from '../../../shared/lib/date-time'
 
 const STELLAR_JADE_ICON_PATH = '/icon/item/900001.png'
-const STAR_SYMBOL = '\u2605'
-const MULTIPLY_SYMBOL = '\u00d7'
 
 type PityOverviewProps = {
   bannerType: BannerType
@@ -15,34 +15,35 @@ type StellarJadeOverviewProps = {
 }
 
 export function PityOverview({ bannerType, summary }: PityOverviewProps) {
+  const { language, t } = useLocalization()
   const fiveStarHardPity = getFiveStarHardPity(bannerType)
 
   return (
-    <section className="pity-grid" aria-label="Pity overview">
+    <section className="pity-grid" aria-label={t('pity.overviewAria')}>
       <article className="pity-card pity-accent-teal">
-        <span>Stellar Jade spent</span>
-        <StellarJadeValue value={summary.totalPulls * 160} />
-        <span>{`${summary.totalPulls} pulls ${MULTIPLY_SYMBOL} 160`}</span>
+        <span>{t('pity.stellarJadeSpent')}</span>
+        <StellarJadeValue language={language} value={summary.totalPulls * 160} />
+        <span>{t('pity.pullCalculation', { count: summary.totalPulls })}</span>
       </article>
       <article className="pity-card pity-accent-gold">
-        <span>{`5${STAR_SYMBOL} pity`}</span>
+        <span>{t('pity.fiveStar')}</span>
         <strong>
           {summary.currentFiveStarPity}/{fiveStarHardPity}
         </strong>
         <span>
-          Last:{' '}
+          {t('pity.last')}{' '}
           <b className="pity-last-five">
-            {summary.lastFiveStarName ?? 'None'}
+            {summary.lastFiveStarName ?? t('common.none')}
           </b>
         </span>
       </article>
       <article className="pity-card pity-accent-purple">
-        <span>{`4${STAR_SYMBOL} pity`}</span>
+        <span>{t('pity.fourStar')}</span>
         <strong>{summary.currentFourStarPity}/10</strong>
         <span>
-          Last:{' '}
+          {t('pity.last')}{' '}
           <b className="pity-last-four">
-            {summary.lastFourStarName ?? 'None'}
+            {summary.lastFourStarName ?? t('common.none')}
           </b>
         </span>
       </article>
@@ -51,29 +52,26 @@ export function PityOverview({ bannerType, summary }: PityOverviewProps) {
 }
 
 export function StellarJadeOverview({ totalPulls }: StellarJadeOverviewProps) {
+  const { language, t } = useLocalization()
   return (
     <section
       className="pity-grid stellar-jade-overview"
-      aria-label="Stellar Jade overview"
+      aria-label={t('pity.stellarJadeAria')}
     >
       <article className="pity-card pity-accent-teal">
-        <span>Stellar Jade spent</span>
-        <StellarJadeValue value={totalPulls * 160} />
-        <span>{`${totalPulls} pulls ${MULTIPLY_SYMBOL} 160`}</span>
+        <span>{t('pity.stellarJadeSpent')}</span>
+        <StellarJadeValue language={language} value={totalPulls * 160} />
+        <span>{t('pity.pullCalculation', { count: totalPulls })}</span>
       </article>
     </section>
   )
 }
 
-function StellarJadeValue({ value }: { value: number }) {
+function StellarJadeValue({ language, value }: { language: 'en' | 'id'; value: number }) {
   return (
     <strong className="stellar-jade-value">
-      {formatStellarJade(value)}
+      {formatNumber(value, language)}
       <img src={STELLAR_JADE_ICON_PATH} alt="" aria-hidden="true" />
     </strong>
   )
-}
-
-function formatStellarJade(value: number) {
-  return new Intl.NumberFormat('en-US').format(value)
 }

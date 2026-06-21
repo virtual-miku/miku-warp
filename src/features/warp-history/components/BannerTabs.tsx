@@ -3,6 +3,8 @@ import {
   type BannerFilterType,
 } from '../domain/banner'
 import type { WarpBannerSummary } from '../../persistence/data/warp-pull-history'
+import { useLocalization } from '../../settings/components/localization-context'
+import { getLocalizedBannerLabel } from '../../settings/domain/localized-labels'
 
 type BannerTabsProps = {
   activeBannerType: BannerFilterType
@@ -15,10 +17,11 @@ export function BannerTabs({
   summaries,
   onBannerTypeChange,
 }: BannerTabsProps) {
+  const { t } = useLocalization()
   const visibleBanners = visibleBannerDefinitions(summaries, activeBannerType)
 
   return (
-    <div className="banner-tabs" role="tablist" aria-label="Warp banners">
+    <div className="banner-tabs" role="tablist" aria-label={t('banner.tabsAria')}>
       <button
         className={
           activeBannerType === 'all'
@@ -30,7 +33,7 @@ export function BannerTabs({
         aria-selected={activeBannerType === 'all'}
         onClick={() => onBannerTypeChange('all')}
       >
-        All
+        {t('common.all')}
       </button>
       {visibleBanners.map((banner) => (
         <button
@@ -45,7 +48,7 @@ export function BannerTabs({
           aria-selected={banner.type === activeBannerType}
           onClick={() => onBannerTypeChange(banner.type)}
         >
-          {banner.label}
+          {getLocalizedBannerLabel(t, banner.type)}
         </button>
       ))}
     </div>

@@ -12,6 +12,8 @@ import {
   getRateUpWinRateTone,
   type NextRateUpChance,
 } from '../domain/rate-up'
+import { useLocalization } from '../../settings/components/localization-context'
+import type { Translator } from '../../settings/domain/localization'
 
 type BannerStatsPanelProps = {
   bannerType: BannerType
@@ -22,6 +24,7 @@ export function BannerStatsPanel({
   bannerType,
   summary,
 }: BannerStatsPanelProps) {
+  const { t } = useLocalization()
   const nextRateUp = getNextRateUpChance(
     bannerType,
     summary?.lastFiveStarName,
@@ -34,10 +37,10 @@ export function BannerStatsPanel({
   const showRateUpStats = isRateUpBanner(bannerType)
 
   return (
-    <section className="banner-detail-panel" aria-label="Banner statistics">
+    <section className="banner-detail-panel" aria-label={t('stats.ariaLabel')}>
       <div className="banner-detail-grid">
         <StatItem
-          label="Average pity"
+          label={t('stats.averagePity')}
           value={formatAveragePity(averagePity)}
           valueClassName={
             averagePity === undefined
@@ -49,7 +52,7 @@ export function BannerStatsPanel({
           }
           detail={
             <>
-              Total 5★ obtained:{' '}
+              {t('stats.totalFiveStar')}{' '}
               <span className="banner-detail-gold">
                 {summary?.fiveStarCount ?? 0}
               </span>
@@ -58,13 +61,13 @@ export function BannerStatsPanel({
         />
         {showRateUpStats ? (
           <StatItem
-            label="Next 5★ rate-up"
+            label={t('stats.nextRateUp')}
             value={
               nextRateUp.chance === undefined
-                ? 'Unknown'
+                ? t('stats.unknown')
                 : `${nextRateUp.chance}%`
             }
-            detail={<RateUpDetail nextRateUp={nextRateUp} />}
+            detail={<RateUpDetail nextRateUp={nextRateUp} t={t} />}
           />
         ) : null}
         {showRateUpStats ? (
@@ -99,6 +102,7 @@ function RateUpWinRateItem({
   bannerType: BannerType
   summary?: WarpBannerSummary
 }) {
+  const { t } = useLocalization()
   const wins = summary?.rateUpWins ?? 0
   const losses = summary?.rateUpLosses ?? 0
   const standardLosses = summary?.rateUpStandardLosses ?? 0
@@ -108,7 +112,7 @@ function RateUpWinRateItem({
 
   return (
     <StatItem
-      label="Rate-up win rate"
+      label={t('stats.winRate')}
       value={winRate === undefined ? '-' : `${winRate}%`}
       valueClassName={
         winRate === undefined
@@ -125,7 +129,7 @@ function RateUpWinRateItem({
             wins={wins}
           />
         ) : (
-          'No recorded rate-up result yet'
+          t('stats.noResult')
         )
       }
     />
@@ -145,10 +149,11 @@ function RateUpOutcomeDetail({
   standardLosses: number
   wins: number
 }) {
+  const { t } = useLocalization()
   return (
     <>
       <span className="rate-up-wins">
-        {wins} {wins === 1 ? 'Win' : 'Wins'}
+        {t(wins === 1 ? 'stats.win' : 'stats.wins', { count: wins })}
       </span>
       {' · '}
       {showLossBreakdown ? (
@@ -159,7 +164,7 @@ function RateUpOutcomeDetail({
         />
       ) : (
         <span className="rate-up-losses">
-          {losses} {losses === 1 ? 'Loss' : 'Losses'}
+          {t(losses === 1 ? 'stats.loss' : 'stats.losses', { count: losses })}
         </span>
       )}
     </>
@@ -175,6 +180,7 @@ function RateUpLossBreakdown({
   losses: number
   standardLosses: number
 }) {
+  const { t } = useLocalization()
   const tooltipId = useId()
   const [isOpen, setIsOpen] = useState(false)
   const [isPinned, setIsPinned] = useState(false)
@@ -209,7 +215,11 @@ function RateUpLossBreakdown({
       <button
         aria-describedby={isOpen ? tooltipId : undefined}
         aria-expanded={isOpen}
-        aria-label={`${losses} ${losses === 1 ? 'loss' : 'losses'}. Show loss breakdown`}
+        aria-label={t('stats.lossBreakdownAria', {
+          losses: t(losses === 1 ? 'stats.lossLower' : 'stats.lossesLower', {
+            count: losses,
+          }),
+        })}
         className="rate-up-loss-trigger"
         onBlur={() => {
           if (!isPinned) {
@@ -221,7 +231,7 @@ function RateUpLossBreakdown({
         onKeyDown={handleKeyDown}
         type="button"
       >
-        {losses} {losses === 1 ? 'Loss' : 'Losses'}
+        {t(losses === 1 ? 'stats.loss' : 'stats.losses', { count: losses })}
         <Info aria-hidden="true" size={12} strokeWidth={2.4} />
       </button>
       <span
@@ -231,14 +241,22 @@ function RateUpLossBreakdown({
         role="tooltip"
       >
         <span className="rate-up-standard-losses">
-          <b>{standardLosses}</b> Standard{' '}
-          {standardLosses === 1 ? 'character' : 'characters'}
+          <b>{standardLosses}</b>{' '}
+          {t(
+            standardLosses === 1
+              ? 'stats.standardCharacterLabel'
+              : 'stats.standardCharactersLabel',
+          )}
         </span>
         <span className="rate-up-celestial-losses">
-          <b>{celestialLosses}</b> Celestial Invitation{' '}
-          {celestialLosses === 1 ? 'character' : 'characters'}
+          <b>{celestialLosses}</b>{' '}
+          {t(
+            celestialLosses === 1
+              ? 'stats.celestialCharacterLabel'
+              : 'stats.celestialCharactersLabel',
+          )}
         </span>
-        <small>Click Losses to keep this open</small>
+        <small>{t('stats.pinHint')}</small>
       </span>
     </span>
   )
@@ -251,14 +269,21 @@ function isCharacterRateUpBanner(bannerType: BannerType) {
   )
 }
 
-function RateUpDetail({ nextRateUp }: { nextRateUp: NextRateUpChance }) {
+function RateUpDetail({
+  nextRateUp,
+  t,
+}: {
+  nextRateUp: NextRateUpChance
+  t: Translator
+}) {
+  const detail = translateRateUpDetail(t, nextRateUp.detail)
   if (!nextRateUp.itemName) {
-    return nextRateUp.detail
+    return detail
   }
 
   return (
     <>
-      {nextRateUp.detail}{' '}
+      {detail}{' '}
       <span className="banner-detail-gold">{nextRateUp.itemName}</span>
     </>
   )
@@ -278,3 +303,23 @@ function calculateAveragePity(
 function formatAveragePity(averagePity: number | undefined) {
   return averagePity === undefined ? '-' : averagePity
 }
+
+function translateRateUpDetail(t: Translator, detail: string) {
+  const match = legacyRateUpDetailMessages.find(([pattern]) =>
+    pattern.test(detail),
+  )
+
+  return match ? t(match[1]) : detail
+}
+
+const legacyRateUpDetailMessages = [
+  [/^Celestial Invitation result after$/, 'stats.celestialAfter'],
+  [
+    /^Celestial Invitation prevents an exact rate-up prediction$/,
+    'stats.celestialUnknown',
+  ],
+  [/^Guaranteed after$/, 'stats.guaranteedAfter'],
+  [/^Guaranteed after an off-rate 5/, 'stats.guaranteedOffRate'],
+  [/^Base chance after$/, 'stats.baseAfter'],
+  [/^Base chance before the first recorded 5/, 'stats.baseBeforeFirst'],
+] as const satisfies readonly [RegExp, Parameters<Translator>[0]][]

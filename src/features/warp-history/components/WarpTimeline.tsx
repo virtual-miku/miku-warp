@@ -10,7 +10,7 @@ import {
 import { AppButton } from '../../../shared/ui/AppButton'
 import { getCatalogAssetUrl } from '../data/catalog-assets'
 import { itemCatalog } from '../data/item-catalog'
-import { getBannerLabel, getFiveStarHardPity } from '../domain/banner'
+import { getFiveStarHardPity } from '../domain/banner'
 import { getPityLevelClass } from '../domain/pity-level'
 import type { WarpPull } from '../domain/warp-pull'
 import type {
@@ -18,6 +18,11 @@ import type {
   TimeZonePreference,
 } from '../../settings/domain/localization'
 import { formatDateTime } from '../../../shared/lib/date-time'
+import { useLocalization } from '../../settings/components/localization-context'
+import {
+  getLocalizedBannerLabel,
+  getLocalizedItemType,
+} from '../../settings/domain/localized-labels'
 
 type WarpTimelineProps = {
   pulls: WarpPull[]
@@ -72,12 +77,13 @@ export function WarpTimeline({
   onSearchQueryChange,
   onTogglePullSelection,
 }: WarpTimelineProps) {
+  const { t } = useLocalization()
   const pageCount = Math.max(1, Math.ceil(totalPulls / pageSize))
   const isDeleting = isDeletingAll || isDeletingSelected
   return (
-    <section className="history-panel" aria-label="Warp history">
+    <section className="history-panel" aria-label={t('history.ariaLabel')}>
       <header className="panel-header">
-        <h2>Warp history</h2>
+        <h2>{t('history.title')}</h2>
         <div className="history-header-actions">
           {isSelecting ? (
             <>
@@ -89,8 +95,8 @@ export function WarpTimeline({
               >
                 <Trash2 size={14} aria-hidden="true" />
                 {isDeletingSelected
-                  ? 'Deleting'
-                  : `Delete selected (${selectedPullIds.size})`}
+                  ? t('common.deleting')
+                  : t('common.deleteSelected', { count: selectedPullIds.size })}
               </button>
               <button
                 className="history-delete-all-button"
@@ -99,7 +105,7 @@ export function WarpTimeline({
                 type="button"
               >
                 <Trash2 size={14} aria-hidden="true" />
-                {isDeletingAll ? 'Deleting' : 'Delete all'}
+                {isDeletingAll ? t('common.deleting') : t('common.deleteAll')}
               </button>
               <button
                 className="history-select-button"
@@ -108,7 +114,7 @@ export function WarpTimeline({
                 type="button"
               >
                 <X size={14} aria-hidden="true" />
-                Cancel
+                {t('common.cancel')}
               </button>
             </>
           ) : (
@@ -119,21 +125,21 @@ export function WarpTimeline({
               type="button"
             >
               <CheckSquare size={14} aria-hidden="true" />
-              Select
+              {t('common.select')}
             </button>
           )}
         </div>
       </header>
       <div className="history-toolbar">
         <input
-          aria-label="Search warp item"
+          aria-label={t('history.searchAria')}
           className="history-search"
           onChange={(event) => onSearchQueryChange(event.target.value)}
-          placeholder="Search item"
+          placeholder={t('history.searchPlaceholder')}
           type="search"
           value={searchQuery}
         />
-        <div className="history-filter-group" aria-label="Rarity filter">
+        <div className="history-filter-group" aria-label={t('history.rarityFilter')}>
           {(['all', 5, 4, 3] as const).map((filter) => (
             <button
               aria-pressed={rarityFilter === filter}
@@ -148,7 +154,7 @@ export function WarpTimeline({
               onClick={() => onRarityFilterChange(filter)}
               type="button"
             >
-              {filter === 'all' ? 'All' : `${filter}★`}
+              {filter === 'all' ? t('common.all') : `${filter}★`}
             </button>
           ))}
         </div>
@@ -170,25 +176,25 @@ export function WarpTimeline({
         ) : (
           <div className="warp-empty">
             <strong>
-              {totalPulls > 0 ? 'No matching pulls' : 'No game history imported yet'}
+              {totalPulls > 0 ? t('history.emptyFiltered') : t('history.empty')}
             </strong>
             {totalPulls > 0 ? (
-              <span>Adjust search or rarity filters.</span>
+              <span>{t('history.adjustFilters')}</span>
             ) : (
               <AppButton icon={FileInput} onClick={onOpenImport}>
-                Import
+                {t('common.import')}
               </AppButton>
             )}
           </div>
         )}
       </div>
-      <footer className="history-pagination" aria-label="History pagination">
+      <footer className="history-pagination" aria-label={t('history.pagination')}>
         <span>
-          Page {page}/{pageCount}
+          {t('common.page', { page, pages: pageCount })}
         </span>
         <div className="manual-pagination-controls">
           <button
-            aria-label="Previous history page"
+            aria-label={t('history.previousPage')}
             className="icon-button"
             disabled={page <= 1 || isLoading}
             onClick={() => onPageChange(page - 1)}
@@ -197,7 +203,7 @@ export function WarpTimeline({
             <ChevronLeft size={16} aria-hidden="true" />
           </button>
           <button
-            aria-label="Next history page"
+            aria-label={t('history.nextPage')}
             className="icon-button"
             disabled={page >= pageCount || isLoading}
             onClick={() => onPageChange(page + 1)}
@@ -228,6 +234,7 @@ function WarpHistoryRow({
   showBannerLabel: boolean
   timeZone: TimeZonePreference
 }) {
+  const { t } = useLocalization()
   const catalogItem = useMemo(
     () =>
       itemCatalog.find(
@@ -244,7 +251,7 @@ function WarpHistoryRow({
     <article className={isSelecting ? 'warp-row warp-row-selecting' : 'warp-row'}>
       {isSelecting ? (
         <input
-          aria-label={`Select ${pull.itemName}`}
+          aria-label={t('history.selectItem', { item: pull.itemName })}
           checked={selected}
           className="history-select-checkbox"
           onChange={() => onToggleSelection(pull.id)}
@@ -261,8 +268,8 @@ function WarpHistoryRow({
         </span>
         <span className="warp-item-meta">
           {showBannerLabel
-            ? `${getBannerLabel(pull.bannerType)} - ${formatItemType(pull.itemType)}`
-            : formatItemType(pull.itemType)}
+            ? `${getLocalizedBannerLabel(t, pull.bannerType)} - ${getLocalizedItemType(t, pull.itemType)}`
+            : getLocalizedItemType(t, pull.itemType)}
         </span>
       </div>
       <time className="warp-time" dateTime={pull.pulledAt}>
@@ -281,7 +288,7 @@ function WarpHistoryRow({
               : undefined
           }
         >
-          {pity ? `Pity ${pity.value}` : '-'}
+          {pity ? t('history.pity', { value: pity.value }) : '-'}
         </strong>
       </div>
     </article>
@@ -320,10 +327,6 @@ function formatPullTime(
   timeZone: TimeZonePreference,
 ) {
   return formatDateTime(value, { language, timeZone }) ?? value
-}
-
-function formatItemType(value: WarpPull['itemType']) {
-  return value === 'light_cone' ? 'Light Cone' : 'Character'
 }
 
 function getPityAtPull(pull: WarpPull) {

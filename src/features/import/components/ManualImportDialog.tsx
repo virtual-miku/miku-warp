@@ -25,12 +25,16 @@ import {
   buildManualItemSelectorPreview,
   type ManualItemSelection,
 } from '../domain/manual-item-selector'
-import {
-  getBannerLabel,
-  type BannerType,
-} from '../../warp-history/domain/banner'
+import { type BannerType } from '../../warp-history/domain/banner'
 import type { Rarity } from '../../warp-history/domain/warp-pull'
 import type { TimeZonePreference } from '../../settings/domain/localization'
+import type { Translator } from '../../settings/domain/localization'
+import { useLocalization } from '../../settings/components/localization-context'
+import {
+  formatLocalizedPullCount,
+  getLocalizedBannerLabel,
+  getLocalizedItemType,
+} from '../../settings/domain/localized-labels'
 
 const previewPageSize = 25
 type RarityFilter = Rarity | 'all'
@@ -83,6 +87,7 @@ export function ManualImportDialog({
   targetAccountId,
   timeZone,
 }: ManualImportDialogProps) {
+  const { t } = useLocalization()
   const [importMode, setImportMode] = useState<ManualImportMode>('text')
   const [selectorSelections, setSelectorSelections] = useState<
     ManualItemSelection[]
@@ -166,16 +171,16 @@ export function ManualImportDialog({
       >
         <header className="modal-header">
           <div>
-            <span className="eyebrow">Manual import</span>
-            <h2 id="manual-import-title">Warp note</h2>
+            <span className="eyebrow">{t('import.manual')}</span>
+            <h2 id="manual-import-title">{t('manual.title')}</h2>
           </div>
-          <button className="icon-button" type="button" aria-label="Close" onClick={onClose}>
+          <button className="icon-button" type="button" aria-label={t('common.close')} onClick={onClose}>
             <X size={18} aria-hidden="true" />
           </button>
         </header>
 
         <div
-          aria-label="Manual import method"
+          aria-label={t('manual.methodAria')}
           className="manual-import-mode-tabs"
           role="tablist"
         >
@@ -190,7 +195,7 @@ export function ManualImportDialog({
             role="tab"
             type="button"
           >
-            Text
+            {t('manual.text')}
           </button>
           <button
             aria-selected={importMode === 'selector'}
@@ -203,7 +208,7 @@ export function ManualImportDialog({
             role="tab"
             type="button"
           >
-            Item selector
+            {t('manual.selector')}
           </button>
         </div>
 
@@ -211,10 +216,10 @@ export function ManualImportDialog({
           {importMode === 'text' ? (
             <section
               className="manual-import-editor"
-              aria-label="Manual note input"
+              aria-label={t('manual.noteInputAria')}
             >
               <label className="field-label" htmlFor="manual-note-input">
-                Note
+                {t('manual.note')}
               </label>
               <textarea
                 className="manual-note-input"
@@ -228,14 +233,14 @@ export function ManualImportDialog({
                   icon={Clipboard}
                   onClick={() => onNoteChange(manualNoteSample)}
                 >
-                  Sample
+                  {t('manual.sample')}
                 </AppButton>
                 <AppButton
                   icon={Eraser}
                   variant="ghost"
                   onClick={() => onNoteChange('')}
                 >
-                  Clear
+                  {t('manual.clear')}
                 </AppButton>
               </div>
             </section>
@@ -248,10 +253,10 @@ export function ManualImportDialog({
             />
           )}
 
-          <section className="manual-import-preview" aria-label="Manual import preview">
+          <section className="manual-import-preview" aria-label={t('manual.previewAria')}>
             <div className="manual-target-account-field">
               <label htmlFor="manual-import-target-account">
-                Import to UID
+                {t('manual.importToUid')}
               </label>
               <select
                 id="manual-import-target-account"
@@ -260,16 +265,18 @@ export function ManualImportDialog({
               >
                 {accounts.map((account) => (
                   <option key={account.id} value={account.id}>
-                    UID {account.uid} - {formatTargetAccountMeta(account)}
+                    UID {account.uid} - {formatTargetAccountMeta(account, t)}
                   </option>
                 ))}
               </select>
               <span>
-                {formatManualPullCount(activePreview.totalPulls)} will be added to this UID.
+                {t('manual.willBeAdded', {
+                  pulls: formatLocalizedPullCount(t, activePreview.totalPulls),
+                })}
               </span>
             </div>
 
-            <div className="manual-category-tabs" role="tablist" aria-label="Preview categories">
+            <div className="manual-category-tabs" role="tablist" aria-label={t('manual.previewCategories')}>
               <button
                 className={
                   selectedCategoryKey === 'all'
@@ -281,7 +288,7 @@ export function ManualImportDialog({
                 aria-selected={selectedCategoryKey === 'all'}
                 onClick={() => handleCategoryChange('all')}
               >
-                All {activePreview.totalPulls}
+                {t('common.all')} {activePreview.totalPulls}
               </button>
               {categories.map((category) => (
                 <button
@@ -296,12 +303,12 @@ export function ManualImportDialog({
                   aria-selected={selectedCategoryKey === category.key}
                   onClick={() => handleCategoryChange(category.key)}
                 >
-                  {formatPreviewCategory(category.bannerType)} {category.totalPulls}
+                  {formatPreviewCategory(category.bannerType, t)} {category.totalPulls}
                 </button>
               ))}
             </div>
 
-            <div className="manual-rarity-strip" aria-label="Rarity filters">
+            <div className="manual-rarity-strip" aria-label={t('manual.rarityFilters')}>
               <button
                 className={getRarityChipClass(5, activeRarityFilter)}
                 type="button"
@@ -329,17 +336,19 @@ export function ManualImportDialog({
             </div>
 
             {activePreview.issues.length > 0 ? (
-              <div className="manual-issue-list" aria-label="Manual import issues">
+              <div className="manual-issue-list" aria-label={t('manual.issuesAria')}>
                 {activePreview.issues.slice(0, 4).map((issue) => (
                   <div className="manual-issue-row" key={`${issue.lineNumber}-${issue.value}`}>
-                    <span>Line {issue.lineNumber}</span>
-                    <strong>{issue.value || issue.message}</strong>
+                    <span>{t('manual.line', { line: issue.lineNumber })}</span>
+                    <strong>
+                      {issue.value || translateManualIssue(issue.message, t)}
+                    </strong>
                   </div>
                 ))}
               </div>
             ) : null}
 
-            <div className="manual-preview-table" aria-label="Recognized pull rows">
+            <div className="manual-preview-table" aria-label={t('manual.rowsAria')}>
               {previewRows.length > 0 ? (
                 previewRows.map((pull) => (
                   <div
@@ -350,7 +359,7 @@ export function ManualImportDialog({
                     <div>
                       <div className="manual-preview-title">
                         <span className="manual-preview-pity">
-                          {formatPreviewPity(pull)}
+                          {formatPreviewPity(pull, t)}
                         </span>
                         <strong
                           className={`manual-preview-name manual-preview-name-${pull.item?.rarity ?? 3}`}
@@ -360,31 +369,39 @@ export function ManualImportDialog({
                       </div>
                       <span className="manual-preview-meta">
                         {pull.groupTimestamp} -{' '}
-                        {formatPreviewCategory(pull.effectiveBannerType)}
+                        {formatPreviewCategory(pull.effectiveBannerType, t)}
                       </span>
                     </div>
                     <div className="manual-preview-side">
-                      <span>{formatItemType(pull.item?.itemType)}</span>
+                      <span>{formatItemType(pull.item?.itemType, t)}</span>
                     </div>
                   </div>
                 ))
               ) : (
-                <div className="manual-preview-empty">No rows</div>
+                <div className="manual-preview-empty">{t('manual.noRows')}</div>
               )}
             </div>
 
             <footer className="manual-import-footer">
               <div className="manual-import-meta">
-                <span>{itemCatalogMetadata.source.version ?? 'Catalog'} catalog</span>
                 <span>
-                  {firstVisibleRow}-{lastVisibleRow} of {selectedTotalPulls}
+                  {t('manual.catalogLabel', {
+                    version: itemCatalogMetadata.source.version ?? t('manual.catalog'),
+                  })}
+                </span>
+                <span>
+                  {t('manual.range', {
+                    first: firstVisibleRow,
+                    last: lastVisibleRow,
+                    total: selectedTotalPulls,
+                  })}
                 </span>
               </div>
-              <div className="manual-pagination-controls" aria-label="Preview pagination">
+              <div className="manual-pagination-controls" aria-label={t('manual.pagination')}>
                 <button
                   className="icon-button"
                   type="button"
-                  aria-label="Previous preview page"
+                  aria-label={t('manual.previousPage')}
                   disabled={activePage <= 1}
                   onClick={() => setPreviewPage(activePage - 1)}
                 >
@@ -396,7 +413,7 @@ export function ManualImportDialog({
                 <button
                   className="icon-button"
                   type="button"
-                  aria-label="Next preview page"
+                  aria-label={t('manual.nextPage')}
                   disabled={activePage >= pageCount}
                   onClick={() => setPreviewPage(activePage + 1)}
                 >
@@ -408,7 +425,7 @@ export function ManualImportDialog({
                 disabled={!canSave}
                 onClick={() => onSave(selectedTargetAccountId, activePreview)}
               >
-                {isSaving ? 'Saving' : 'Import'}
+                {isSaving ? t('common.saving') : t('common.import')}
               </AppButton>
             </footer>
           </section>
@@ -432,6 +449,7 @@ function ManualImportSavePopup({
   notice: ManualImportSaveNotice
   onClose: () => void
 }) {
+  const { t } = useLocalization()
   return (
     <aside
       className={`manual-save-popup manual-save-popup-${notice.tone}`}
@@ -445,7 +463,7 @@ function ManualImportSavePopup({
       <button
         className="icon-button"
         type="button"
-        aria-label="Close save message"
+        aria-label={t('manual.closeMessage')}
         onClick={onClose}
       >
         <X size={16} aria-hidden="true" />
@@ -454,8 +472,8 @@ function ManualImportSavePopup({
   )
 }
 
-function formatPreviewCategory(bannerType?: BannerType) {
-  return bannerType ? getBannerLabel(bannerType) : 'Unassigned'
+function formatPreviewCategory(bannerType: BannerType | undefined, t: Translator) {
+  return bannerType ? getLocalizedBannerLabel(t, bannerType) : t('manual.unassigned')
 }
 
 function ManualPreviewItemIcon({ pull }: { pull: ManualImportPreviewRow }) {
@@ -479,28 +497,23 @@ function ManualPreviewItemIcon({ pull }: { pull: ManualImportPreviewRow }) {
   )
 }
 
-function formatPreviewPity(pull: ManualImportPreviewRow) {
+function formatPreviewPity(pull: ManualImportPreviewRow, t: Translator) {
   if (pull.item?.rarity === 5 && pull.pityFiveAtPull) {
-    return `Pity ${pull.pityFiveAtPull}`
+    return t('history.pity', { value: pull.pityFiveAtPull })
   }
 
   if (pull.item?.rarity === 4 && pull.pityFourAtPull) {
-    return `Pity ${pull.pityFourAtPull}`
+    return t('history.pity', { value: pull.pityFourAtPull })
   }
 
   return '-'
 }
 
-function formatItemType(itemType?: 'character' | 'light_cone') {
-  if (itemType === 'light_cone') {
-    return 'Light Cone'
-  }
-
-  if (itemType === 'character') {
-    return 'Character'
-  }
-
-  return 'Unknown'
+function formatItemType(
+  itemType: 'character' | 'light_cone' | undefined,
+  t: Translator,
+) {
+  return itemType ? getLocalizedItemType(t, itemType) : t('manual.unknown')
 }
 
 function getRarityChipClass(rarity: Rarity, activeRarityFilter: RarityFilter) {
@@ -525,18 +538,27 @@ function filterRowsByRarity(
   return rows.filter((row) => row.item?.rarity === rarityFilter)
 }
 
-function formatTargetAccountMeta(account: ManualImportTargetAccount) {
+function formatTargetAccountMeta(account: ManualImportTargetAccount, t: Translator) {
   const pulls =
     account.totalPulls === undefined
-      ? 'current account'
-      : account.totalPulls === 1
-        ? '1 pull'
-        : `${account.totalPulls} pulls`
+      ? t('manual.currentAccount')
+      : formatLocalizedPullCount(t, account.totalPulls)
   const region = account.region ?? 'asia'
 
   return `${pulls}, ${region.toUpperCase()}`
 }
 
-function formatManualPullCount(totalPulls: number) {
-  return `${totalPulls} ${totalPulls === 1 ? 'pull' : 'pulls'}`
+function translateManualIssue(message: string, t: Translator) {
+  const keys = {
+    'Time appears without a date.': 'manual.issue.timeWithoutDate',
+    'Section heading is not mapped to a banner type.':
+      'manual.issue.unknownSection',
+    'Item appears before the first timestamp.': 'manual.issue.beforeTimestamp',
+    'Item is not available in the local catalog yet.':
+      'manual.issue.missingCatalog',
+    'Manual note is empty.': 'manual.issue.empty',
+  } as const
+  const key = keys[message as keyof typeof keys]
+
+  return key ? t(key) : message
 }

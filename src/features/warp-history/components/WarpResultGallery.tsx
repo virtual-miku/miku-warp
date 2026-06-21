@@ -9,6 +9,7 @@ import {
 } from '../domain/banner'
 import { getPityLevelClass } from '../domain/pity-level'
 import type { WarpPull } from '../domain/warp-pull'
+import { useLocalization } from '../../settings/components/localization-context'
 
 const resultColumnMinWidth = 62
 const resultColumnGap = 10
@@ -34,13 +35,14 @@ export function WarpResultGallery({
   bannerType,
   refreshKey,
 }: WarpResultGalleryProps) {
+  const { t } = useLocalization()
   const [rarity, setRarity] = useState<ResultRarity>(5)
 
   return (
-    <section className="warp-result-gallery" aria-label="Warp result gallery">
+    <section className="warp-result-gallery" aria-label={t('results.ariaLabel')}>
       <header className="panel-header">
-        <h2>Warp results</h2>
-        <div className="history-filter-group" aria-label="Result rarity filter">
+        <h2>{t('results.title')}</h2>
+        <div className="history-filter-group" aria-label={t('results.rarityFilter')}>
           {([5, 4, 3] as const).map((filterRarity) => (
             <button
               aria-pressed={rarity === filterRarity}
@@ -84,6 +86,7 @@ function WarpResultList({
   bannerType,
   rarity,
 }: WarpResultListProps) {
+  const { t } = useLocalization()
   const galleryBodyRef = useRef<HTMLDivElement>(null)
   const [columnCount, setColumnCount] = useState(0)
   const [visibleRows, setVisibleRows] = useState(initialResultRows)
@@ -181,10 +184,10 @@ function WarpResultList({
   const hasMore = pulls.length < totalPulls
   const visiblePulls = getVisiblePulls(pulls, columnCount, totalPulls)
   const expandLabel = isLoading
-    ? 'Loading more results'
+    ? t('results.loadingMore')
     : hasError
-      ? 'Try loading results again'
-      : 'Show more results'
+      ? t('results.retryAria')
+      : t('results.showMoreAria')
 
   return (
     <div className="warp-result-gallery-body" ref={galleryBodyRef}>
@@ -197,10 +200,10 @@ function WarpResultList({
       ) : (
         <div className="warp-result-empty">
           {isLoading
-            ? 'Loading results'
+            ? t('results.loading')
             : hasError
-              ? 'Could not load warp results'
-              : `No ${rarity}★ results for this banner`}
+              ? t('results.loadFailed')
+              : t('results.empty', { rarity })}
         </div>
       )}
 
@@ -213,7 +216,7 @@ function WarpResultList({
           title={expandLabel}
           type="button"
         >
-          <span>{hasError ? 'Try again' : 'Show more'}</span>
+          <span>{hasError ? t('common.tryAgain') : t('results.showMore')}</span>
           <ChevronDown size={16} aria-hidden="true" />
         </button>
       ) : null}
@@ -222,6 +225,7 @@ function WarpResultList({
 }
 
 function WarpResultItem({ pull }: { pull: WarpPull }) {
+  const { t } = useLocalization()
   const [hasImageError, setHasImageError] = useState(false)
   const catalogIconPath = catalogIconByIdentity.get(
     createCatalogItemKey(pull.itemName, pull.itemType, pull.rarity),
@@ -238,11 +242,17 @@ function WarpResultItem({ pull }: { pull: WarpPull }) {
   return (
     <article
       aria-label={
-        pity ? `${pull.itemName}, obtained at pity ${pity}` : pull.itemName
+        pity
+          ? t('results.obtainedAtPity', { item: pull.itemName, pity })
+          : pull.itemName
       }
       className={`warp-result-item warp-result-item-${pull.rarity}`}
       role="listitem"
-      title={pity ? `${pull.itemName} · Pity ${pity}` : pull.itemName}
+      title={
+        pity
+          ? t('results.pityTitle', { item: pull.itemName, pity })
+          : pull.itemName
+      }
     >
       {iconUrl && !hasImageError ? (
         <img

@@ -6,6 +6,8 @@ import type {
   ImportGameHistoryResult,
 } from '../../persistence/data/game-history-source'
 import type { GameInstallPathCandidate } from '../../persistence/data/game-install-path'
+import { useLocalization } from '../../settings/components/localization-context'
+import type { Translator } from '../../settings/domain/localization'
 
 export type ImportPanelProps = {
   gameHistoryImportError?: string
@@ -33,8 +35,9 @@ type ImportDialogProps = ImportPanelProps & {
 }
 
 export function ImportPanel(props: ImportPanelProps) {
+  const { t } = useLocalization()
   return (
-    <section className="tool-panel" id="import" aria-label="Import sources">
+    <section className="tool-panel" id="import" aria-label={t('import.sourcesAria')}>
       <ImportControls {...props} />
     </section>
   )
@@ -45,6 +48,7 @@ export function ImportDialog({
   onClose,
   ...importProps
 }: ImportDialogProps) {
+  const { t } = useLocalization()
   const closeButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
@@ -85,11 +89,11 @@ export function ImportDialog({
       >
         <header className="modal-header">
           <div>
-            <span className="eyebrow">Warp records</span>
-            <h2 id="import-dialog-title">Import</h2>
+            <span className="eyebrow">{t('import.records')}</span>
+            <h2 id="import-dialog-title">{t('common.import')}</h2>
           </div>
           <button
-            aria-label="Close import"
+            aria-label={t('import.close')}
             className="icon-button"
             onClick={onClose}
             ref={closeButtonRef}
@@ -125,6 +129,7 @@ function ImportControls({
   onUseGamePathCandidate,
   onOpenManualImport,
 }: ImportPanelProps) {
+  const { t } = useLocalization()
   const gameHistoryTitle =
     gameHistoryScan?.matchedCachePath ?? gameHistoryScan?.urlPreview
   const gameHistorySourceFound = gameHistoryScan?.status === 'found'
@@ -136,7 +141,7 @@ function ImportControls({
     <div className="tool-panel-body">
       <div className="game-path-field">
           <div className="game-path-heading">
-            <strong>Game folder</strong>
+            <strong>{t('import.gameFolder')}</strong>
             <div className="game-path-actions">
               <AppButton
                 disabled={
@@ -154,7 +159,7 @@ function ImportControls({
                 onClick={onFindGamePath}
                 variant="ghost"
               >
-                {isGamePathScanning ? 'Scanning' : 'Scan'}
+                {isGamePathScanning ? t('import.scanning') : t('import.scan')}
               </AppButton>
               <AppButton
                 disabled={
@@ -167,7 +172,7 @@ function ImportControls({
                 onClick={onSelectGamePath}
                 variant="ghost"
               >
-                {isGamePathSelecting ? 'Opening' : 'Browse'}
+                {isGamePathSelecting ? t('import.opening') : t('import.browse')}
               </AppButton>
             </div>
           </div>
@@ -175,12 +180,12 @@ function ImportControls({
             {gameInstallPath}
           </span>
           {!gameInstallPathReady ? (
-            <small>Choose the folder containing StarRail_Data.</small>
+            <small>{t('import.folderHint')}</small>
           ) : null}
           {gamePathCandidates.length > 1 ? (
             <div
               className="game-path-candidate-list"
-              aria-label="Detected game folders"
+              aria-label={t('import.detectedFolders')}
             >
               {gamePathCandidates.map((candidate) => (
                 <button
@@ -197,7 +202,7 @@ function ImportControls({
           ) : null}
           {gameHistoryPathError ? (
             <div className="backup-message backup-message-error">
-              <strong>Folder selection failed</strong>
+              <strong>{t('import.folderFailed')}</strong>
               <p>{gameHistoryPathError}</p>
             </div>
           ) : null}
@@ -205,11 +210,12 @@ function ImportControls({
         {gameInstallPathReady ? (
           <div className="tool-row">
             <div>
-              <strong>Scan warp records</strong>
+              <strong>{t('import.scanRecords')}</strong>
               <span title={gameHistoryTitle}>
                 {formatGameHistoryScanDetail(
                   gameHistoryScan,
                   isGameHistoryScanning,
+                  t,
                 )}
               </span>
             </div>
@@ -224,7 +230,7 @@ function ImportControls({
               onClick={onScanGameHistory}
               variant="ghost"
             >
-              {isGameHistoryScanning ? 'Scanning' : 'Scan'}
+              {isGameHistoryScanning ? t('import.scanning') : t('import.scan')}
             </AppButton>
           </div>
         ) : null}
@@ -232,22 +238,23 @@ function ImportControls({
           <>
             <div className="tool-row">
               <div>
-                <strong>Game source</strong>
-                <span>{formatGameHistorySourceMeta(gameHistoryScan)}</span>
+                <strong>{t('import.gameSource')}</strong>
+                <span>{formatGameHistorySourceMeta(gameHistoryScan, t)}</span>
               </div>
               <span
                 className={getGameHistoryScanStatusClass(gameHistoryScan)}
               >
-                {getGameHistoryScanStatusLabel(gameHistoryScan)}
+                {getGameHistoryScanStatusLabel(gameHistoryScan, t)}
               </span>
             </div>
             <div className="tool-row">
               <div>
-                <strong>Game import</strong>
+                <strong>{t('import.gameImport')}</strong>
                 <span>
                   {formatGameHistoryImportMeta(
                     gameHistoryImportResult,
                     isGameHistoryImporting,
+                    t,
                   )}
                 </span>
               </div>
@@ -257,7 +264,7 @@ function ImportControls({
                 icon={History}
                 onClick={onImportGameHistory}
               >
-                {isGameHistoryImporting ? 'Importing' : 'Import'}
+                {isGameHistoryImporting ? t('common.importing') : t('common.import')}
               </AppButton>
             </div>
           </>
@@ -273,22 +280,22 @@ function ImportControls({
           >
             <strong>
               {gameHistoryImportError
-                ? 'Game import failed'
-                : 'Game import saved'}
+                ? t('import.gameImportFailed')
+                : t('import.gameImportSaved')}
             </strong>
             <p>
               {gameHistoryImportError ??
-                formatGameHistoryImportDetail(gameHistoryImportResult)}
+                formatGameHistoryImportDetail(gameHistoryImportResult, t)}
             </p>
           </div>
         ) : null}
         <div className="tool-row manual-import-row">
-          <span className="manual-import-divider-label">Or</span>
+          <span className="manual-import-divider-label">{t('import.or')}</span>
           <div>
-            <strong>Manual import</strong>
+            <strong>{t('import.manual')}</strong>
           </div>
           <AppButton icon={FileInput} onClick={onOpenManualImport}>
-            Open
+            {t('common.open')}
           </AppButton>
         </div>
     </div>
@@ -298,35 +305,43 @@ function ImportControls({
 function formatGameHistoryScanDetail(
   scan: GameHistorySourceScanResult | undefined,
   isScanning: boolean,
+  t: Translator,
 ): ReactNode {
   if (isScanning) {
-    return 'Scanning local cache'
+    return t('import.scanningCache')
   }
 
   if (!scan) {
     return (
       <>
-        Open{' '}
+        {t('import.scanInstructionBefore')}{' '}
         <strong className="game-history-scan">
-          Warp -&gt; View Details -&gt; Records
+          {t('import.gameMenuPath')}
         </strong>{' '}
-        in Honkai: Star Rail, then press the <strong className="game-history-scan">Scan</strong> button on the right -&gt;
+        {t('import.scanInstructionMiddle')}{' '}
+        <strong className="game-history-scan">
+          {t('import.scanInstructionButton')}
+        </strong>{' '}
+        {t('import.scanInstructionEnd')}
       </>
     )
   }
 
   if (scan.status === 'found') {
-    return 'History source found. Press Import below to fetch warp records.'
+    return t('import.scanFound')
   }
 
-  return scan.detail
+  return scan.status === 'needs_history_opened'
+    ? t('import.scanNeedsHistory')
+    : t('import.scanNotFound')
 }
 
 function formatGameHistorySourceMeta(
   scan: GameHistorySourceScanResult | undefined,
+  t: Translator,
 ) {
   if (!scan) {
-    return 'Not scanned'
+    return t('import.notScanned')
   }
 
   if (scan.endpointHost) {
@@ -334,28 +349,29 @@ function formatGameHistorySourceMeta(
   }
 
   if (scan.cacheFilesChecked > 0) {
-    return `${scan.cacheFilesChecked} cache files checked`
+    return t('import.cacheFilesChecked', { count: scan.cacheFilesChecked })
   }
 
-  return `${scan.candidateRoots.length} candidate roots`
+  return t('import.candidateRoots', { count: scan.candidateRoots.length })
 }
 
 function getGameHistoryScanStatusLabel(
   scan: GameHistorySourceScanResult | undefined,
+  t: Translator,
 ) {
   if (!scan) {
-    return 'Not scanned'
+    return t('import.notScanned')
   }
 
   if (scan.status === 'found') {
-    return 'Found'
+    return t('import.found')
   }
 
   if (scan.status === 'needs_history_opened') {
-    return 'Open history'
+    return t('import.openHistory')
   }
 
-  return 'Not found'
+  return t('import.notFound')
 }
 
 function getGameHistoryScanStatusClass(
@@ -369,35 +385,46 @@ function getGameHistoryScanStatusClass(
 function formatGameHistoryImportMeta(
   result: ImportGameHistoryResult | undefined,
   isImporting: boolean,
+  t: Translator,
 ) {
   if (isImporting) {
-    return 'Fetching game history'
+    return t('import.fetching')
   }
 
   if (!result) {
-    return 'Not imported'
+    return t('import.notImported')
   }
 
-  return `${result.recordsInserted} new, ${result.recordsRestored} restored, ${result.duplicateRecords} duplicates`
+  return t('import.meta', {
+    inserted: result.recordsInserted,
+    restored: result.recordsRestored,
+    duplicates: result.duplicateRecords,
+  })
 }
 
 function formatGameHistoryImportDetail(
   result: ImportGameHistoryResult | undefined,
+  t: Translator,
 ) {
   if (!result) {
     return ''
   }
 
   return [
-    `${result.recordsInserted} inserted, ${result.recordsRestored} restored, ${result.recordsSkipped} skipped, ${result.duplicateRecords} duplicates.`,
+    t('import.detail', {
+      inserted: result.recordsInserted,
+      restored: result.recordsRestored,
+      skipped: result.recordsSkipped,
+      duplicates: result.duplicateRecords,
+    }),
     result.manualRecordsMerged > 0
-      ? `${result.manualRecordsMerged} manual records moved to UID ${result.uid}.`
+      ? t('import.manualMoved', { count: result.manualRecordsMerged, uid: result.uid })
       : undefined,
     result.manualRecordsMatched > 0
-      ? `${result.manualRecordsMatched} manual records matched with game history.`
+      ? t('import.manualMatched', { count: result.manualRecordsMatched })
       : undefined,
-    `${result.pagesFetched} pages fetched for UID ${result.uid}.`,
-    result.endpointHost ? `Endpoint: ${result.endpointHost}` : undefined,
+    t('import.pagesFetched', { count: result.pagesFetched, uid: result.uid }),
+    result.endpointHost ? t('import.endpoint', { host: result.endpointHost }) : undefined,
   ]
     .filter(Boolean)
     .join('\n')

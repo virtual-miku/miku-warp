@@ -4,6 +4,7 @@ import type { WarpAccount } from '../../persistence/data/warp-pull-history'
 import { AppButton } from '../../../shared/ui/AppButton'
 import { AccountAvatar } from './AccountAvatar'
 import type { AccountAvatarOption } from '../data/account-avatar-options'
+import { useLocalization } from '../../settings/components/localization-context'
 
 type AccountAvatarDialogProps = {
   account?: WarpAccount
@@ -24,6 +25,7 @@ export function AccountAvatarDialog({
   onClose,
   onSelectAvatar,
 }: AccountAvatarDialogProps) {
+  const { t } = useLocalization()
   const closeButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
@@ -65,10 +67,10 @@ export function AccountAvatarDialog({
         <header className="modal-header">
           <div>
             <span className="eyebrow">UID {account.uid}</span>
-            <h2 id="account-avatar-dialog-title">Choose avatar</h2>
+            <h2 id="account-avatar-dialog-title">{t('avatar.choose')}</h2>
           </div>
           <button
-            aria-label="Close avatar picker"
+            aria-label={t('avatar.closePicker')}
             className="icon-button"
             onClick={onClose}
             ref={closeButtonRef}
@@ -84,12 +86,12 @@ export function AccountAvatarDialog({
               onClick={() => onSelectAvatar(undefined)}
               variant="ghost"
             >
-              Use default
+              {t('avatar.useDefault')}
             </AppButton>
           </div>
           {error ? (
             <div className="backup-message backup-message-error" role="alert">
-              <strong>Avatar update failed</strong>
+              <strong>{t('avatar.error')}</strong>
               <p>{error}</p>
             </div>
           ) : null}
@@ -120,8 +122,8 @@ export function AccountAvatarDialog({
             </div>
           ) : (
             <div className="account-management-empty">
-              <strong>No avatars synced</strong>
-              <span>Run the StarRailRes asset sync to load avatar icons.</span>
+              <strong>{t('avatar.empty.title')}</strong>
+              <span>{t('avatar.empty.detail')}</span>
             </div>
           )}
         </div>

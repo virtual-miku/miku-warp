@@ -2,9 +2,13 @@ import {
   bannerDefinitions,
   type BannerFilterType,
   type BannerType,
-  getBannerLabel,
 } from '../domain/banner'
 import type { WarpBannerSummary } from '../../persistence/data/warp-pull-history'
+import { useLocalization } from '../../settings/components/localization-context'
+import {
+  formatLocalizedPullCount,
+  getLocalizedBannerLabel,
+} from '../../settings/domain/localized-labels'
 
 const STAR_RAIL_PASS_ICON_PATH = '/icon/item/101.png'
 const STAR_RAIL_SPECIAL_PASS_ICON_PATH = '/icon/item/102.png'
@@ -20,6 +24,7 @@ export function BannerSummaryGrid({
   summaries,
   onBannerTypeChange,
 }: BannerSummaryGridProps) {
+  const { t } = useLocalization()
   const summaryByBanner = new Map(
     summaries.map((summary) => [summary.bannerType, summary]),
   )
@@ -35,13 +40,15 @@ export function BannerSummaryGrid({
   })
 
   return (
-    <section className="banner-summary-panel" aria-label="Banner summary">
+    <section className="banner-summary-panel" aria-label={t('banner.summaryAria')}>
       <header className="panel-header">
-        <h2>Banner progress</h2>
+        <h2>{t('banner.progress')}</h2>
       </header>
       <div className="banner-summary-grid">
         <button
-          aria-label={`All banners: ${formatPullCount(allSummary.totalPulls)}`}
+          aria-label={t('banner.allAria', {
+            pulls: formatLocalizedPullCount(t, allSummary.totalPulls),
+          })}
           aria-pressed={activeBannerType === 'all'}
           className={
             activeBannerType === 'all'
@@ -51,10 +58,10 @@ export function BannerSummaryGrid({
           onClick={() => onBannerTypeChange('all')}
           type="button"
         >
-          <span>All</span>
+          <span>{t('common.all')}</span>
           <strong>
             {allSummary.totalPulls}{' '}
-            <small>{getPullNoun(allSummary.totalPulls)}</small>
+            <small>{formatLocalizedPullCount(t, allSummary.totalPulls).replace(/^\d+\s*/, '')}</small>
           </strong>
         </button>
         {visibleBanners.map((banner) => {
@@ -63,7 +70,7 @@ export function BannerSummaryGrid({
 
           return (
             <button
-              aria-label={`${getBannerLabel(banner.type)}: ${formatPullCount(summary?.totalPulls ?? 0)}`}
+              aria-label={`${getLocalizedBannerLabel(t, banner.type)}: ${formatLocalizedPullCount(t, summary?.totalPulls ?? 0)}`}
               aria-pressed={isActive}
               className={
                 isActive
@@ -74,7 +81,7 @@ export function BannerSummaryGrid({
               onClick={() => onBannerTypeChange(banner.type)}
               type="button"
             >
-              <span>{getBannerLabel(banner.type)}</span>
+              <span>{getLocalizedBannerLabel(t, banner.type)}</span>
               <strong className="banner-pull-value">
                 {summary?.totalPulls ?? 0}
                 <img
@@ -89,14 +96,6 @@ export function BannerSummaryGrid({
       </div>
     </section>
   )
-}
-
-function getPullNoun(totalPulls: number) {
-  return totalPulls === 1 ? 'pull' : 'pulls'
-}
-
-function formatPullCount(totalPulls: number) {
-  return `${totalPulls} ${getPullNoun(totalPulls)}`
 }
 
 function getBannerPassIconPath(bannerType: BannerType) {

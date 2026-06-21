@@ -19,6 +19,8 @@ import { getPityLevelClass } from '../../warp-history/domain/pity-level'
 import { type ManualItemSelection } from '../domain/manual-item-selector'
 import type { TimeZonePreference } from '../../settings/domain/localization'
 import { formatDateTimeLocalInput } from '../../../shared/lib/date-time'
+import { useLocalization } from '../../settings/components/localization-context'
+import { getLocalizedBannerLabel } from '../../settings/domain/localized-labels'
 
 type CatalogItemTypeFilter = WarpItem['itemType'] | 'all'
 type CatalogMode = 'add' | 'edit'
@@ -43,6 +45,7 @@ export function ManualItemSelector({
   selections,
   timeZone,
 }: ManualItemSelectorProps) {
+  const { t } = useLocalization()
   const [catalogMode, setCatalogMode] = useState<CatalogMode>()
   const [editingSelection, setEditingSelection] =
     useState<ManualItemSelection>()
@@ -109,33 +112,37 @@ export function ManualItemSelector({
   return (
     <>
       <section
-        aria-label="Manual item selector"
+        aria-label={t('selector.ariaLabel')}
         className="manual-selector-editor"
       >
         <header className="manual-selector-header">
           <div>
-            <strong>Selected pulls</strong>
-            <span>
-              Add a result, then click it to edit its details.
-            </span>
+            <strong>{t('selector.selectedPulls')}</strong>
+            <span>{t('selector.selectedHint')}</span>
           </div>
           <AppButton icon={Plus} onClick={() => setCatalogMode('add')}>
-            Add item
+            {t('selector.addItem')}
           </AppButton>
         </header>
 
         {selections.length > 0 ? (
           <div
-            aria-label="Selected warp results"
+            aria-label={t('selector.galleryAria')}
             className="manual-selector-gallery"
           >
             {selections.map((selection) => (
               <button
-                aria-label={`Edit ${selection.item.name}, pity ${selection.pity}`}
+                aria-label={t('selector.editAria', {
+                  item: selection.item.name,
+                  pity: selection.pity,
+                })}
                 className={`manual-selector-result manual-selector-result-${selection.item.rarity}`}
                 key={selection.id}
                 onClick={() => setEditingSelection({ ...selection })}
-                title={`${selection.item.name} - Pity ${selection.pity}`}
+                title={t('results.pityTitle', {
+                  item: selection.item.name,
+                  pity: selection.pity,
+                })}
                 type="button"
               >
                 <CatalogItemIcon item={selection.item} />
@@ -152,8 +159,8 @@ export function ManualItemSelector({
           </div>
         ) : (
           <div className="manual-selector-empty">
-            <strong>No selected pulls</strong>
-            <span>Press Add item to build this manual import.</span>
+            <strong>{t('selector.emptyTitle')}</strong>
+            <span>{t('selector.emptyDetail')}</span>
           </div>
         )}
       </section>
@@ -186,6 +193,7 @@ function ManualCatalogDialog({
   onClose: () => void
   onSelect: (item: WarpItem) => void
 }) {
+  const { t } = useLocalization()
   const [itemTypeFilter, setItemTypeFilter] =
     useState<CatalogItemTypeFilter>('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -217,11 +225,11 @@ function ManualCatalogDialog({
       >
         <header className="modal-header">
           <div>
-            <span className="eyebrow">Item selector</span>
-            <h2 id="manual-catalog-title">Choose an item</h2>
+            <span className="eyebrow">{t('manual.selector')}</span>
+            <h2 id="manual-catalog-title">{t('selector.chooseItem')}</h2>
           </div>
           <button
-            aria-label="Close item selector"
+            aria-label={t('selector.close')}
             className="icon-button"
             onClick={onClose}
             type="button"
@@ -236,17 +244,17 @@ function ManualCatalogDialog({
             <input
               autoFocus
               onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search item"
+              placeholder={t('selector.search')}
               type="search"
               value={searchQuery}
             />
           </label>
-          <div aria-label="Item type filter" className="manual-catalog-filters">
+          <div aria-label={t('selector.typeFilter')} className="manual-catalog-filters">
             {(
               [
-                ['all', 'All'],
-                ['character', 'Characters'],
-                ['light_cone', 'Light Cones'],
+                ['all', t('common.all')],
+                ['character', t('selector.characters')],
+                ['light_cone', t('selector.lightCones')],
               ] as const
             ).map(([value, label]) => (
               <button
@@ -267,12 +275,12 @@ function ManualCatalogDialog({
         </div>
 
         <div
-          aria-label="Warp item catalog"
+          aria-label={t('selector.catalogAria')}
           className="manual-catalog-grid"
         >
           {filteredItems.map((item) => (
             <button
-              aria-label={`Add ${item.name}`}
+              aria-label={t('selector.addAria', { item: item.name })}
               className={`manual-catalog-option manual-catalog-option-${item.rarity}`}
               data-tooltip={item.name}
               key={item.id}
@@ -304,6 +312,7 @@ function ManualSelectionEditDialog({
   onSave: () => void
   selection: ManualItemSelection
 }) {
+  const { t } = useLocalization()
   const maxPity = getSelectionMaxPity(selection)
   const hasValidDate = !Number.isNaN(new Date(selection.pulledAt).getTime())
   const canSave =
@@ -326,11 +335,11 @@ function ManualSelectionEditDialog({
       >
         <header className="modal-header">
           <div>
-            <span className="eyebrow">Selected pull</span>
-            <h2 id="manual-selection-edit-title">Edit result</h2>
+            <span className="eyebrow">{t('selector.selectedPull')}</span>
+            <h2 id="manual-selection-edit-title">{t('selector.editResult')}</h2>
           </div>
           <button
-            aria-label="Close result editor"
+            aria-label={t('selector.closeEditor')}
             className="icon-button"
             onClick={onClose}
             type="button"
@@ -348,12 +357,12 @@ function ManualSelectionEditDialog({
             <CatalogItemIcon item={selection.item} />
             <span>
               <strong>{selection.item.name}</strong>
-              <small>Click to choose another item</small>
+              <small>{t('selector.chooseAnother')}</small>
             </span>
           </button>
 
           <label>
-            <span>Banner</span>
+            <span>{t('selector.banner')}</span>
             <select
               onChange={(event) =>
                 onChange({
@@ -365,14 +374,14 @@ function ManualSelectionEditDialog({
             >
               {getCompatibleBannerDefinitions(selection.item).map((banner) => (
                 <option key={banner.type} value={banner.type}>
-                  {banner.label}
+                  {getLocalizedBannerLabel(t, banner.type)}
                 </option>
               ))}
             </select>
           </label>
 
           <label>
-            <span>Date and time</span>
+            <span>{t('selector.dateTime')}</span>
             <input
               onChange={(event) =>
                 onChange({ ...selection, pulledAt: event.target.value })
@@ -384,7 +393,7 @@ function ManualSelectionEditDialog({
           </label>
 
           <label>
-            <span>Pity</span>
+            <span>{t('selector.pity')}</span>
             <input
               max={maxPity}
               min="1"
@@ -399,22 +408,22 @@ function ManualSelectionEditDialog({
             />
             <small>
               {selection.item.rarity >= 4
-                ? `Allowed range: 1-${maxPity}`
-                : 'Pity is displayed only for 4-star and 5-star results.'}
+                ? t('selector.allowedRange', { max: maxPity })
+                : t('selector.pityVisibility')}
             </small>
           </label>
         </div>
 
         <footer className="manual-selection-edit-actions">
           <AppButton icon={Trash2} onClick={onDelete} variant="ghost">
-            Remove
+            {t('selector.remove')}
           </AppButton>
           <div>
             <AppButton onClick={onClose} variant="ghost">
-              Cancel
+              {t('common.cancel')}
             </AppButton>
             <AppButton disabled={!canSave} icon={Save} onClick={onSave}>
-              Save changes
+              {t('selector.saveChanges')}
             </AppButton>
           </div>
         </footer>

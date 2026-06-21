@@ -1,5 +1,9 @@
 import { open } from '@tauri-apps/plugin-dialog'
 import {
+  loadLanguagePreference,
+  translate,
+} from '../../settings/domain/localization'
+import {
   createDesktopRuntimeUnavailableError,
   hasTauriInvoke,
   invokeTauri,
@@ -87,14 +91,17 @@ export function restoreBackupSnapshot(fileName: string) {
 }
 
 export async function selectBackupJsonFile() {
+  const language = loadLanguagePreference()
   if (!hasTauriInvoke()) {
-    throw createDesktopRuntimeUnavailableError('Backup file browsing')
+    throw createDesktopRuntimeUnavailableError(
+      translate(language, 'desktop.backupBrowsing'),
+    )
   }
 
   const selectedPath = await open({
-    filters: [{ name: 'Miku Warp backup JSON', extensions: ['json'] }],
+    filters: [{ name: translate(language, 'desktop.backupFilter'), extensions: ['json'] }],
     multiple: false,
-    title: 'Select Miku Warp backup JSON',
+    title: translate(language, 'desktop.backupTitle'),
   })
 
   return typeof selectedPath === 'string' ? selectedPath : undefined

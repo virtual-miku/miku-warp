@@ -11,13 +11,12 @@ import {
 import type { TrashedBackupSnapshotSummary } from '../../persistence/data/backup-export'
 import { AccountAvatar } from '../../accounts/components/AccountAvatar'
 import { getCatalogAssetUrl } from '../../warp-history/data/catalog-assets'
-import { getBannerLabel } from '../../warp-history/domain/banner'
 import { AppButton } from '../../../shared/ui/AppButton'
 import type { TrashedAccount, TrashedWarpPull } from '../data/trash-history'
 import {
   formatRetentionLabel,
-  translate,
   type AppLanguage,
+  type Translator,
   type TimeZonePreference,
 } from '../../settings/domain/localization'
 import {
@@ -25,6 +24,11 @@ import {
   formatNumber,
   type DateTimePreferences,
 } from '../../../shared/lib/date-time'
+import { useLocalization } from '../../settings/components/localization-context'
+import {
+  formatLocalizedPullCount,
+  getLocalizedBannerLabel,
+} from '../../settings/domain/localized-labels'
 
 export type TrashTab = 'history' | 'accounts' | 'backups'
 
@@ -117,6 +121,7 @@ export function TrashPanel({
   onToggleBackupSelection,
   onTogglePullSelection,
 }: TrashPanelProps) {
+  const { t } = useLocalization()
   const dateTimePreferences = { language, timeZone }
   const retentionLabel = formatRetentionLabel(language, trashRetentionDays)
   const pageCount = Math.max(1, Math.ceil(totalPulls / pageSize))
@@ -128,20 +133,20 @@ export function TrashPanel({
     deletingBackupFileName !== undefined || restoringBackupFileName !== undefined
   const isMutating = isHistoryMutating || isAccountMutating || isBackupMutating
   const titleByTab: Record<TrashTab, string> = {
-    history: 'Deleted history',
-    accounts: 'Deleted accounts',
-    backups: 'Deleted backups',
+    history: t('trash.deletedHistory'),
+    accounts: t('trash.deletedAccounts'),
+    backups: t('trash.deletedBackups'),
   }
 
   return (
-    <section className="history-panel trash-panel" aria-label="Trash history">
+    <section className="history-panel trash-panel" aria-label={t('trash.ariaLabel')}>
       <header className="panel-header">
         <div>
           <h2>{titleByTab[activeTab]}</h2>
           <span>
             {trashRetentionDays === 0
-              ? translate(language, 'trash.summary.never')
-              : translate(language, 'trash.summary', {
+              ? t('trash.summary.never')
+              : t('trash.summary', {
                   retention: retentionLabel,
                 })}
           </span>
@@ -174,7 +179,7 @@ export function TrashPanel({
           />
         ) : null}
       </header>
-      <div className="banner-tabs trash-tabs" role="tablist" aria-label="Trash categories">
+      <div className="banner-tabs trash-tabs" role="tablist" aria-label={t('trash.categories')}>
         <button
           aria-selected={activeTab === 'history'}
           className={activeTab === 'history' ? 'banner-tab banner-tab-active' : 'banner-tab'}
@@ -182,7 +187,7 @@ export function TrashPanel({
           role="tab"
           type="button"
         >
-          History {totalPulls}
+          {t('trash.tabHistory', { count: totalPulls })}
         </button>
         <button
           aria-selected={activeTab === 'accounts'}
@@ -191,7 +196,7 @@ export function TrashPanel({
           role="tab"
           type="button"
         >
-          Accounts {accounts.length}
+          {t('trash.tabAccounts', { count: accounts.length })}
         </button>
         <button
           aria-selected={activeTab === 'backups'}
@@ -200,7 +205,7 @@ export function TrashPanel({
           role="tab"
           type="button"
         >
-          Backups {backupSnapshots.length}
+          {t('trash.tabBackups', { count: backupSnapshots.length })}
         </button>
       </div>
 
@@ -230,11 +235,11 @@ export function TrashPanel({
             ))
           ) : (
             <div className="warp-empty">
-              <strong>{isHistoryLoading ? 'Loading Trash' : 'Trash is empty'}</strong>
+              <strong>{isHistoryLoading ? t('trash.loading') : t('trash.empty')}</strong>
               <span>
                 {trashRetentionDays === 0
-                  ? translate(language, 'trash.summary.never')
-                  : translate(language, 'trash.history.empty', {
+                  ? t('trash.summary.never')
+                  : t('trash.history.empty', {
                       retention: retentionLabel,
                     })}
               </span>
@@ -257,12 +262,12 @@ export function TrashPanel({
           ) : (
             <div className="warp-empty">
               <strong>
-                {isAccountLoading ? 'Loading account Trash' : 'No deleted accounts'}
+                {isAccountLoading ? t('trash.loadingAccounts') : t('trash.noAccounts')}
               </strong>
               <span>
                 {trashRetentionDays === 0
-                  ? translate(language, 'trash.summary.never')
-                  : translate(language, 'trash.accounts.empty', {
+                  ? t('trash.summary.never')
+                  : t('trash.accounts.empty', {
                       retention: retentionLabel,
                     })}
               </span>
@@ -287,12 +292,12 @@ export function TrashPanel({
         ) : (
           <div className="warp-empty">
             <strong>
-              {isBackupLoading ? 'Loading backup Trash' : 'No deleted backups'}
+              {isBackupLoading ? t('trash.loadingBackups') : t('trash.noBackups')}
             </strong>
             <span>
               {trashRetentionDays === 0
-                ? translate(language, 'trash.summary.never')
-                : translate(language, 'trash.backups.empty', {
+                ? t('trash.summary.never')
+                : t('trash.backups.empty', {
                     retention: retentionLabel,
                   })}
             </span>
@@ -301,11 +306,11 @@ export function TrashPanel({
       </div>
 
       {activeTab === 'history' ? (
-        <footer className="history-pagination" aria-label="Trash pagination">
-          <span>Page {page}/{pageCount}</span>
+        <footer className="history-pagination" aria-label={t('trash.pagination')}>
+          <span>{t('common.page', { page, pages: pageCount })}</span>
           <div className="manual-pagination-controls">
             <button
-              aria-label="Previous Trash page"
+              aria-label={t('trash.previousPage')}
               className="icon-button"
               disabled={page <= 1 || isHistoryLoading || isMutating}
               onClick={() => onPageChange(page - 1)}
@@ -314,7 +319,7 @@ export function TrashPanel({
               <ChevronLeft size={16} aria-hidden="true" />
             </button>
             <button
-              aria-label="Next Trash page"
+              aria-label={t('trash.nextPage')}
               className="icon-button"
               disabled={page >= pageCount || isHistoryLoading || isMutating}
               onClick={() => onPageChange(page + 1)}
@@ -352,6 +357,7 @@ function TrashHistoryActions({
   onRestoreSelected: () => void
   onSelectionModeChange: (isSelecting: boolean) => void
 }) {
+  const { t } = useLocalization()
   const isMutating = isDeleting || isRestoring
 
   if (isSelecting) {
@@ -364,7 +370,7 @@ function TrashHistoryActions({
           type="button"
         >
           <RotateCcw size={14} aria-hidden="true" />
-          Restore selected ({selectedCount})
+          {t('trash.restoreSelected', { count: selectedCount })}
         </button>
         <button
           className="history-delete-all-button"
@@ -373,7 +379,7 @@ function TrashHistoryActions({
           type="button"
         >
           <Trash2 size={14} aria-hidden="true" />
-          Delete selected ({selectedCount})
+          {t('common.deleteSelected', { count: selectedCount })}
         </button>
         <button
           className="history-delete-all-button"
@@ -382,7 +388,7 @@ function TrashHistoryActions({
           type="button"
         >
           <Trash2 size={14} aria-hidden="true" />
-          Delete all
+          {t('common.deleteAll')}
         </button>
         <button
           className="history-select-button"
@@ -391,7 +397,7 @@ function TrashHistoryActions({
           type="button"
         >
           <X size={14} aria-hidden="true" />
-          Cancel
+          {t('common.cancel')}
         </button>
       </div>
     )
@@ -405,7 +411,7 @@ function TrashHistoryActions({
       type="button"
     >
       <CheckSquare size={14} aria-hidden="true" />
-      Select
+      {t('common.select')}
     </button>
   )
 }
@@ -433,6 +439,7 @@ function TrashBackupActions({
   onRestoreSelected: () => void
   onSelectionModeChange: (isSelecting: boolean) => void
 }) {
+  const { t } = useLocalization()
   const isMutating = isDeleting || isRestoring
 
   if (isSelecting) {
@@ -445,7 +452,7 @@ function TrashBackupActions({
           type="button"
         >
           <RotateCcw size={14} aria-hidden="true" />
-          Restore selected ({selectedCount})
+          {t('trash.restoreSelected', { count: selectedCount })}
         </button>
         <button
           className="history-delete-all-button"
@@ -454,7 +461,7 @@ function TrashBackupActions({
           type="button"
         >
           <Trash2 size={14} aria-hidden="true" />
-          Delete selected ({selectedCount})
+          {t('common.deleteSelected', { count: selectedCount })}
         </button>
         <button
           className="history-delete-all-button"
@@ -463,7 +470,7 @@ function TrashBackupActions({
           type="button"
         >
           <Trash2 size={14} aria-hidden="true" />
-          Delete all
+          {t('common.deleteAll')}
         </button>
         <button
           className="history-select-button"
@@ -472,7 +479,7 @@ function TrashBackupActions({
           type="button"
         >
           <X size={14} aria-hidden="true" />
-          Cancel
+          {t('common.cancel')}
         </button>
       </div>
     )
@@ -486,7 +493,7 @@ function TrashBackupActions({
       type="button"
     >
       <CheckSquare size={14} aria-hidden="true" />
-      Select
+      {t('common.select')}
     </button>
   )
 }
@@ -514,11 +521,12 @@ function TrashRow({
   pull: TrashedWarpPull
   selected: boolean
 }) {
+  const { t } = useLocalization()
   return (
     <article className={isSelecting ? 'trash-row trash-row-selecting' : 'trash-row'}>
       {isSelecting ? (
         <input
-          aria-label={`Select ${pull.itemName}`}
+          aria-label={t('history.selectItem', { item: pull.itemName })}
           checked={selected}
           className="history-select-checkbox"
           disabled={isDisabled}
@@ -531,12 +539,21 @@ function TrashRow({
         <strong className={`warp-item-name warp-item-name-${pull.rarity}`}>
           {pull.itemName}
         </strong>
-        <span>{getBannerLabel(pull.bannerType)}</span>
+        <span>{getLocalizedBannerLabel(t, pull.bannerType)}</span>
       </div>
       <div className="trash-date">
-        <span>Warped {formatDateTimeValue(pull.pulledAt, dateTimePreferences)}</span>
         <span>
-          Deleted {formatDateTimeValue(pull.deletedAt, dateTimePreferences, { assumeUtc: true })}
+          {t('trash.warpedAt', {
+            date: formatDateTimeValue(pull.pulledAt, dateTimePreferences) ?? '',
+          })}
+        </span>
+        <span>
+          {t('trash.deletedAt', {
+            date:
+              formatDateTimeValue(pull.deletedAt, dateTimePreferences, {
+                assumeUtc: true,
+              }) ?? '',
+          })}
         </span>
       </div>
       <div className="trash-actions">
@@ -546,18 +563,18 @@ function TrashRow({
           onClick={() => onRestore(pull)}
           variant="ghost"
         >
-          {isRestoring ? 'Restoring' : 'Restore'}
+          {isRestoring ? t('common.restoring') : t('common.restore')}
         </AppButton>
         <button
           aria-label={
             isDeleting
-              ? `Deleting ${pull.itemName}`
-              : `Permanently delete ${pull.itemName}`
+              ? t('trash.deletingItem', { item: pull.itemName })
+              : t('trash.permanentlyDeleteItem', { item: pull.itemName })
           }
           className="icon-button trash-permanent-button"
           disabled={isDisabled}
           onClick={() => onPermanentlyDelete(pull)}
-          title="Delete permanently"
+          title={t('common.deletePermanently')}
           type="button"
         >
           <Trash2 size={16} aria-hidden="true" />
@@ -590,6 +607,7 @@ function TrashBackupRow({
   selected: boolean
   snapshot: TrashedBackupSnapshotSummary
 }) {
+  const { t } = useLocalization()
   return (
     <article
       className={
@@ -600,7 +618,7 @@ function TrashBackupRow({
     >
       {isSelecting ? (
         <input
-          aria-label={`Select ${snapshot.fileName}`}
+          aria-label={t('trash.selectBackup', { file: snapshot.fileName })}
           checked={selected}
           className="history-select-checkbox"
           disabled={isDisabled}
@@ -612,12 +630,27 @@ function TrashBackupRow({
         <FileJson size={19} />
       </div>
       <div className="trash-item-copy">
-        <strong>Backup {formatDateTimeValue(snapshot.exportedAt, dateTimePreferences)}</strong>
+        <strong>
+          {t('backup.snapshotAt', {
+            date: formatDateTimeValue(snapshot.exportedAt, dateTimePreferences) ?? '',
+          })}
+        </strong>
         <span title={snapshot.fileName}>{snapshot.fileName}</span>
       </div>
       <div className="trash-date">
-        <span>{formatBackupSizeKilobytes(snapshot.sizeBytes, dateTimePreferences)}</span>
-        <span>Deleted {formatDateTimeValue(snapshot.deletedAtUnixMs, dateTimePreferences)}</span>
+        <span>
+          {formatBackupSizeKilobytes(
+            snapshot.sizeBytes,
+            dateTimePreferences,
+            t,
+          )}
+        </span>
+        <span>
+          {t('trash.deletedAt', {
+            date:
+              formatDateTimeValue(snapshot.deletedAtUnixMs, dateTimePreferences) ?? '',
+          })}
+        </span>
       </div>
       <div className="trash-actions">
         <AppButton
@@ -626,18 +659,18 @@ function TrashBackupRow({
           onClick={() => onRestore(snapshot)}
           variant="ghost"
         >
-          {isRestoring ? 'Restoring' : 'Restore'}
+          {isRestoring ? t('common.restoring') : t('common.restore')}
         </AppButton>
         <button
           aria-label={
             isDeleting
-              ? `Deleting ${snapshot.fileName}`
-              : `Permanently delete ${snapshot.fileName}`
+              ? t('trash.deletingBackup', { file: snapshot.fileName })
+              : t('trash.permanentlyDeleteBackup', { file: snapshot.fileName })
           }
           className="icon-button trash-permanent-button"
           disabled={isDisabled}
           onClick={() => onPermanentlyDelete(snapshot)}
-          title="Delete permanently"
+          title={t('common.deletePermanently')}
           type="button"
         >
           <Trash2 size={16} aria-hidden="true" />
@@ -664,6 +697,7 @@ function TrashAccountRow({
   onPermanentlyDelete: (account: TrashedAccount) => void
   onRestore: (account: TrashedAccount) => void
 }) {
+  const { t } = useLocalization()
   return (
     <article className="trash-row trash-account-row">
       <div className="trash-account-avatar" aria-hidden="true">
@@ -671,12 +705,17 @@ function TrashAccountRow({
       </div>
       <div className="trash-item-copy">
         <strong>UID {account.uid}</strong>
-        <span>{formatAccountMeta(account)}</span>
+        <span>{formatAccountMeta(account, t)}</span>
       </div>
       <div className="trash-date">
-        <span>{formatLastPull(account.lastPullAt, dateTimePreferences)}</span>
+        <span>{formatLastPull(account.lastPullAt, dateTimePreferences, t)}</span>
         <span>
-          Deleted {formatDateTimeValue(account.deletedAt, dateTimePreferences, { assumeUtc: true })}
+          {t('trash.deletedAt', {
+            date:
+              formatDateTimeValue(account.deletedAt, dateTimePreferences, {
+                assumeUtc: true,
+              }) ?? '',
+          })}
         </span>
       </div>
       <div className="trash-actions">
@@ -686,18 +725,18 @@ function TrashAccountRow({
           onClick={() => onRestore(account)}
           variant="ghost"
         >
-          {isRestoring ? 'Restoring' : 'Restore'}
+          {isRestoring ? t('common.restoring') : t('common.restore')}
         </AppButton>
         <button
           aria-label={
             isDeleting
-              ? `Deleting UID ${account.uid}`
-              : `Permanently delete UID ${account.uid}`
+              ? t('trash.deletingAccount', { uid: account.uid })
+              : t('trash.permanentlyDeleteAccount', { uid: account.uid })
           }
           className="icon-button trash-permanent-button"
           disabled={isDisabled}
           onClick={() => onPermanentlyDelete(account)}
-          title="Delete permanently"
+          title={t('common.deletePermanently')}
           type="button"
         >
           <Trash2 size={16} aria-hidden="true" />
@@ -733,9 +772,8 @@ function TrashItemIcon({
   )
 }
 
-function formatAccountMeta(account: TrashedAccount) {
-  const pulls =
-    account.totalPulls === 1 ? '1 pull' : `${account.totalPulls} pulls`
+function formatAccountMeta(account: TrashedAccount, t: Translator) {
+  const pulls = formatLocalizedPullCount(t, account.totalPulls)
   const region = account.region ?? 'asia'
 
   return `${pulls} - ${region.toUpperCase()}`
@@ -744,18 +782,22 @@ function formatAccountMeta(account: TrashedAccount) {
 function formatLastPull(
   value: string | undefined,
   preferences: DateTimePreferences,
+  t: Translator,
 ) {
   return value
-    ? `Last pull ${formatDateTimeValue(value, preferences)}`
-    : 'No saved pulls'
+    ? t('accounts.lastPull', {
+        date: formatDateTimeValue(value, preferences) ?? '',
+      })
+    : t('accounts.noSavedPulls')
 }
 
 function formatBackupSizeKilobytes(
   size: number,
   preferences: DateTimePreferences,
+  t: Translator,
 ) {
   if (!Number.isFinite(size) || size < 0) {
-    return 'Size unavailable'
+    return t('backup.sizeUnavailable')
   }
 
   const kilobytes = Math.max(1, Math.round(size / 1024))

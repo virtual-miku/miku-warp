@@ -29,6 +29,14 @@ type SettingsPanelProps = {
   theme: ThemePreference
 }
 
+const themeTranslationKeys = {
+  system: ['settings.theme.system', 'settings.theme.systemDetail'],
+  dark: ['settings.theme.dark', 'settings.theme.darkDetail'],
+  light: ['settings.theme.light', 'settings.theme.lightDetail'],
+  vampire: ['settings.theme.vampire', 'settings.theme.vampireDetail'],
+  cyber: ['settings.theme.cyber', 'settings.theme.cyberDetail'],
+} as const
+
 export function SettingsPanel({
   language,
   onLanguageChange,
@@ -41,7 +49,7 @@ export function SettingsPanel({
   theme,
 }: SettingsPanelProps) {
   return (
-    <section className="settings-panel" aria-label="Settings">
+    <section className="settings-panel" aria-label={translate(language, 'settings.title')}>
       <article className="settings-card">
         <header className="settings-card-header">
           <div className="settings-card-icon" aria-hidden="true">
@@ -54,12 +62,13 @@ export function SettingsPanel({
         </header>
 
         <div
-          aria-label="Application theme"
+          aria-label={translate(language, 'settings.theme.aria')}
           className="theme-option-grid"
           role="radiogroup"
         >
           {themeOptions.map((option) => {
             const isActive = theme === option.value
+            const [labelKey, detailKey] = themeTranslationKeys[option.value]
 
             return (
               <button
@@ -83,8 +92,12 @@ export function SettingsPanel({
                   <i />
                 </span>
                 <span className="theme-option-copy">
-                  <strong>{option.label}</strong>
-                  <small>{option.description}</small>
+                  <strong>
+                    {translate(language, labelKey)}
+                  </strong>
+                  <small>
+                    {translate(language, detailKey)}
+                  </small>
                 </span>
                 <span
                   aria-hidden="true"

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { AlertTriangle, Trash2, X, type LucideIcon } from 'lucide-react'
 import { AppButton } from './AppButton'
+import { useLocalization } from '../../features/settings/components/localization-context'
 
 type ConfirmDialogProps = {
   confirmLabel: string
@@ -27,6 +28,7 @@ export function ConfirmDialog({
   onCancel,
   onConfirm,
 }: ConfirmDialogProps) {
+  const { t } = useLocalization()
   const cancelButtonRef = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
@@ -71,7 +73,7 @@ export function ConfirmDialog({
             <AlertTriangle size={20} />
           </div>
           <button
-            aria-label="Close confirmation"
+            aria-label={t('accessibility.closeConfirmation')}
             className="icon-button"
             disabled={isPending}
             onClick={onCancel}
@@ -93,7 +95,7 @@ export function ConfirmDialog({
             ref={cancelButtonRef}
             variant="ghost"
           >
-            Cancel
+            {t('common.cancel')}
           </AppButton>
           <AppButton
             className={danger ? 'app-button-danger' : undefined}
@@ -101,7 +103,7 @@ export function ConfirmDialog({
             icon={ConfirmIcon}
             onClick={onConfirm}
           >
-            {isPending ? (pendingLabel ?? 'Working') : confirmLabel}
+            {isPending ? (pendingLabel ?? t('common.working')) : confirmLabel}
           </AppButton>
         </footer>
       </section>
