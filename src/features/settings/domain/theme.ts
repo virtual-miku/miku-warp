@@ -32,7 +32,7 @@ export const themeOptions = [
   {
     value: 'celestial',
     label: 'Celestial',
-    description: 'Sacred deep surfaces with warm gold accents.',
+    description: 'Sacred ivory surfaces with warm gold accents.',
   },
 ] as const
 

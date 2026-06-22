@@ -185,37 +185,37 @@
 }
 
 :root[data-theme='celestial'] {
-  color-scheme: dark;
-  --app-bg: #120d16;
-  --panel-bg: #1c1422;
-  --surface: #271d2f;
-  --soft-bg: #362842;
-  --border: #4b3a5c;
-  --border-strong: #6b5480;
-  --text: #efe4f4;
-  --text-strong: #fffaf2;
-  --text-muted: #c8b3cf;
-  --accent: #f6d47b;
-  --brand-bg: #f6d47b;
-  --brand-text: #1b120d;
-  --button-bg: #30233a;
-  --button-border: #6b5480;
-  --button-text: #fffaf2;
-  --warning: #f6d47b;
-  --warning-bg: #3f3016;
-  --danger: #ff8fa3;
-  --status-good: #98e6b8;
-  --status-average: #f6d47b;
-  --status-poor: #ff8fa3;
-  --status-good-bg: #2d7d59;
-  --status-average-bg: #8b681a;
-  --status-poor-bg: #a9445b;
-  --rarity-3: #cdbdd2;
-  --rarity-3-bg: #33283c;
-  --rarity-4: #d3a2ff;
-  --rarity-4-bg: #432c58;
-  --rarity-5: #f6d47b;
-  --rarity-5-bg: #4a3715;
+  color-scheme: light;
+  --app-bg: #fffaf0;
+  --panel-bg: #fff4d8;
+  --surface: #ffffff;
+  --soft-bg: #f8ebc9;
+  --border: #ead8a5;
+  --border-strong: #d0b465;
+  --text: #4f3f25;
+  --text-strong: #21170b;
+  --text-muted: #7b6a4a;
+  --accent: #b9820f;
+  --brand-bg: #d7a62d;
+  --brand-text: #21170b;
+  --button-bg: #fffdf8;
+  --button-border: #d0b465;
+  --button-text: #21170b;
+  --warning: #9a6500;
+  --warning-bg: #fff0c1;
+  --danger: #b42318;
+  --status-good: #18764d;
+  --status-average: #805c0a;
+  --status-poor: #b42318;
+  --status-good-bg: #23845a;
+  --status-average-bg: #8c6510;
+  --status-poor-bg: #ae4343;
+  --rarity-3: #746a58;
+  --rarity-3-bg: #f3ead7;
+  --rarity-4: #7b3bb0;
+  --rarity-4-bg: #f2e7ff;
+  --rarity-5: #b9820f;
+  --rarity-5-bg: #ffefbd;
 }
 
 * {
