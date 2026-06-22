@@ -455,6 +455,20 @@
   --theme-preview-accent: #00dff5;
 }
 
+.theme-option-preview-punk {
+  --theme-preview-bg: #0d0711;
+  --theme-preview-panel: #160b1d;
+  --theme-preview-surface: #211027;
+  --theme-preview-accent: #ff4fd8;
+}
+
+.theme-option-preview-celestial {
+  --theme-preview-bg: #080d1d;
+  --theme-preview-panel: #10172f;
+  --theme-preview-surface: #151f3d;
+  --theme-preview-accent: #f2c766;
+}
+
 .theme-option-copy {
   min-width: 0;
   display: grid;

@@ -150,6 +150,74 @@
   --rarity-5-bg: #493a12;
 }
 
+:root[data-theme='punk'] {
+  color-scheme: dark;
+  --app-bg: #0d0711;
+  --panel-bg: #160b1d;
+  --surface: #211027;
+  --soft-bg: #31153a;
+  --border: #4b2158;
+  --border-strong: #74317f;
+  --text: #f2d8ef;
+  --text-strong: #fff5ff;
+  --text-muted: #c390bd;
+  --accent: #ff4fd8;
+  --brand-bg: #ff4fd8;
+  --brand-text: #150514;
+  --button-bg: #2b1233;
+  --button-border: #74317f;
+  --button-text: #fff5ff;
+  --warning: #ffd166;
+  --warning-bg: #3e2d13;
+  --danger: #ff6e9f;
+  --status-good: #b8ff5b;
+  --status-average: #ffd166;
+  --status-poor: #ff6e9f;
+  --status-good-bg: #4f7d16;
+  --status-average-bg: #8d6816;
+  --status-poor-bg: #b73565;
+  --rarity-3: #c9b6cf;
+  --rarity-3-bg: #37223f;
+  --rarity-4: #f18cff;
+  --rarity-4-bg: #4a1d59;
+  --rarity-5: #ffd166;
+  --rarity-5-bg: #4b3712;
+}
+
+:root[data-theme='celestial'] {
+  color-scheme: dark;
+  --app-bg: #080d1d;
+  --panel-bg: #10172f;
+  --surface: #151f3d;
+  --soft-bg: #202b52;
+  --border: #2f3e68;
+  --border-strong: #465a8a;
+  --text: #d8e3ff;
+  --text-strong: #f8fbff;
+  --text-muted: #9facd5;
+  --accent: #f2c766;
+  --brand-bg: #f2c766;
+  --brand-text: #0b1021;
+  --button-bg: #1d294d;
+  --button-border: #465a8a;
+  --button-text: #f8fbff;
+  --warning: #f2c766;
+  --warning-bg: #3c3118;
+  --danger: #ff8c9f;
+  --status-good: #8ee6c4;
+  --status-average: #f2c766;
+  --status-poor: #ff8c9f;
+  --status-good-bg: #247a64;
+  --status-average-bg: #8a6417;
+  --status-poor-bg: #a6425a;
+  --rarity-3: #b7c7eb;
+  --rarity-3-bg: #263153;
+  --rarity-4: #c7a0ff;
+  --rarity-4-bg: #382b61;
+  --rarity-5: #f2c766;
+  --rarity-5-bg: #473815;
+}
+
 * {
   box-sizing: border-box;
 }

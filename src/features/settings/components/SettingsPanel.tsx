@@ -35,6 +35,8 @@ const themeTranslationKeys = {
   light: ['settings.theme.light', 'settings.theme.lightDetail'],
   vampire: ['settings.theme.vampire', 'settings.theme.vampireDetail'],
   cyber: ['settings.theme.cyber', 'settings.theme.cyberDetail'],
+  punk: ['settings.theme.punk', 'settings.theme.punkDetail'],
+  celestial: ['settings.theme.celestial', 'settings.theme.celestialDetail'],
 } as const
 
 export function SettingsPanel({

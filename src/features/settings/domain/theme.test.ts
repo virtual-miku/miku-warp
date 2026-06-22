@@ -24,15 +24,15 @@ describe('theme preference', () => {
   it('loads and saves supported themes', () => {
     const setItem = vi.fn()
     const storage = {
-      getItem: () => 'vampire',
+      getItem: () => 'celestial',
       setItem,
     }
 
-    expect(loadThemePreference(storage)).toBe('vampire')
+    expect(loadThemePreference(storage)).toBe('celestial')
 
-    saveThemePreference('cyber', storage)
+    saveThemePreference('punk', storage)
 
-    expect(setItem).toHaveBeenCalledWith('miku-warp.theme', 'cyber')
+    expect(setItem).toHaveBeenCalledWith('miku-warp.theme', 'punk')
   })
 
   it('applies the theme through a document data attribute', () => {

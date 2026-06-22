@@ -24,6 +24,16 @@ export const themeOptions = [
     label: 'Cyber',
     description: 'Midnight blue surfaces with neon cyan accents.',
   },
+  {
+    value: 'punk',
+    label: 'Punk',
+    description: 'High-contrast ink surfaces with hot pink accents.',
+  },
+  {
+    value: 'celestial',
+    label: 'Celestial',
+    description: 'Deep starlit surfaces with warm gold accents.',
+  },
 ] as const
 
 export type ThemePreference = (typeof themeOptions)[number]['value']
