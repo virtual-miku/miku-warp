@@ -463,10 +463,10 @@
 }
 
 .theme-option-preview-celestial {
-  --theme-preview-bg: #080d1d;
-  --theme-preview-panel: #10172f;
-  --theme-preview-surface: #151f3d;
-  --theme-preview-accent: #f2c766;
+  --theme-preview-bg: #120d16;
+  --theme-preview-panel: #1c1422;
+  --theme-preview-surface: #271d2f;
+  --theme-preview-accent: #f6d47b;
 }
 
 .theme-option-copy {
