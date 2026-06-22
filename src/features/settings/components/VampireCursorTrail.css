@@ -1,0 +1,55 @@
+.vampire-cursor-trail-layer {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  pointer-events: none;
+  z-index: 999999;
+  overflow: hidden;
+  transform: translateZ(0);
+}
+
+.vampire-cursor-trail {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  opacity: 0.95;
+  animation: vampireCursorTrailFade 700ms ease-out forwards;
+  transform:
+    translate3d(var(--x), var(--y), 0)
+    translate(-50%, -50%)
+    rotate(var(--rot))
+    scale(var(--scale));
+  will-change: transform, opacity;
+}
+
+.vampire-cursor-trail img {
+  display: block;
+  width: 400%;
+  height: 400%;
+  max-width: none;
+  filter:
+    brightness(0)
+    drop-shadow(0 0 2px #ff0000)
+    drop-shadow(0 0 5px #ff0000)
+    drop-shadow(0 0 9px #ff0000);
+  transform: translate(-37.5%, -37.5%);
+}
+
+@keyframes vampireCursorTrailFade {
+  to {
+    opacity: 0;
+    transform:
+      translate3d(
+        calc(var(--x) + var(--dx)),
+        calc(var(--y) + var(--dy)),
+        0
+      )
+      translate(-50%, -50%)
+      rotate(calc(var(--rot) + 45deg))
+      scale(0.2);
+  }
+}

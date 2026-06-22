@@ -442,10 +442,10 @@
 }
 
 .theme-option-preview-vampire {
-  --theme-preview-bg: #100a0e;
-  --theme-preview-panel: #190f15;
-  --theme-preview-surface: #24141d;
-  --theme-preview-accent: #e45179;
+  --theme-preview-bg: #320000;
+  --theme-preview-panel: #4a1111;
+  --theme-preview-surface: #170000;
+  --theme-preview-accent: #ff0000;
 }
 
 .theme-option-preview-cyber {

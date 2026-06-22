@@ -142,6 +142,7 @@ import {
 } from '../features/trash/data/trash-history'
 import { SettingsPanel } from '../features/settings/components/SettingsPanel'
 import { LocalizationProvider } from '../features/settings/components/LocalizationProvider'
+import { VampireCursorTrail } from '../features/settings/components/VampireCursorTrail'
 import {
   getTrashRetentionPolicy,
   updateTrashRetentionPolicy,
@@ -2841,6 +2842,7 @@ export function App() {
 
   return (
     <LocalizationProvider language={languagePreference}>
+      {themePreference === 'vampire' ? <VampireCursorTrail /> : null}
       <main className="app-shell">
         <aside className="sidebar" aria-label={t('accessibility.workspace')}>
           <div className="brand">

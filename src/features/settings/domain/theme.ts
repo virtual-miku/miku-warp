@@ -17,7 +17,7 @@ export const themeOptions = [
   {
     value: 'vampire',
     label: 'Vampire',
-    description: 'Deep burgundy surfaces with crimson accents.',
+    description: 'Black-red surfaces with white text and red glow.',
   },
   {
     value: 'cyber',
