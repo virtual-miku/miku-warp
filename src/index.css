@@ -85,9 +85,9 @@
 :root[data-theme='vampire'] {
   color-scheme: dark;
   --app-bg: #320000;
-  --panel-bg: rgba(255, 255, 255, 0.075);
-  --surface: rgba(0, 0, 0, 0.28);
-  --soft-bg: rgba(255, 255, 255, 0.11);
+  --panel-bg: #3a0808;
+  --surface: #220303;
+  --soft-bg: #4a1010;
   --border: rgba(250, 159, 159, 0.25);
   --border-strong: rgba(255, 255, 255, 0.28);
   --text: #f4ffff;
@@ -96,7 +96,7 @@
   --accent: #ff0000;
   --brand-bg: #ff0000;
   --brand-text: #ffffff;
-  --button-bg: rgba(0, 0, 0, 0.25);
+  --button-bg: #360707;
   --button-border: rgba(255, 255, 255, 0.18);
   --button-text: #ffffff;
   --warning: #ffcb6b;
@@ -237,6 +237,16 @@ input,
 textarea,
 select {
   font: inherit;
+}
+
+:root[data-theme='vampire'] select,
+:root[data-theme='vampire'] select option {
+  color: var(--text-strong);
+  background-color: var(--panel-bg);
+}
+
+:root[data-theme='vampire'] select option:checked {
+  background-color: var(--soft-bg);
 }
 
 button {

@@ -271,6 +271,8 @@ type ManualImportConfirmation = {
   uid: string
 }
 
+type DashboardActivityTab = 'results' | 'history'
+
 export function App() {
   const [activeView, setActiveView] = useState<AppView>('dashboard')
   const [themePreference, setThemePreference] =
@@ -289,6 +291,8 @@ export function App() {
   )
   const [activeBannerType, setActiveBannerType] =
     useState<BannerFilterType>(defaultBannerType)
+  const [dashboardActivityTab, setDashboardActivityTab] =
+    useState<DashboardActivityTab>('results')
   const [manualImportOpen, setManualImportOpen] = useState(false)
   const [importDialogOpen, setImportDialogOpen] = useState(false)
   const [manualImportSaving, setManualImportSaving] = useState(false)
@@ -3018,50 +3022,109 @@ export function App() {
                           />
                         </>
                       )}
-                      <WarpTimeline
-                        pulls={timelinePulls}
-                        page={historyPage}
-                        pageSize={historyPageSize}
-                        rarityFilter={historyRarityFilter}
-                        searchQuery={historySearchQuery}
-                        totalPulls={historyTotalPulls}
-                        isLoading={historyLoading}
-                        canDeleteAll={activeAccountPullCount > 0}
-                        isDeletingAll={deletingAllHistory}
-                        isDeletingSelected={deletingSelectedHistory}
-                        isSelecting={historySelecting}
-                        language={languagePreference}
-                        selectedPullIds={selectedHistoryPullIds}
-                        showBannerLabel={activeBannerType === 'all'}
-                        timeZone={timeZonePreference}
-                        onDeleteAll={handleDeleteAllHistory}
-                        onDeleteSelected={handleDeleteSelectedHistory}
-                        onOpenImport={() => setImportDialogOpen(true)}
-                        onPageChange={(page) => {
-                          setHistoryLoading(true)
-                          setHistoryPage(page)
-                          setSelectedHistoryPullIds(new Set())
-                        }}
-                        onRarityFilterChange={(rarityFilter) => {
-                          setHistoryLoading(true)
-                          setHistoryRarityFilter(rarityFilter)
-                          setHistoryPage(1)
-                          setSelectedHistoryPullIds(new Set())
-                        }}
-                        onSelectionModeChange={handleHistorySelectionModeChange}
-                        onSearchQueryChange={(searchQuery) => {
-                          setHistoryLoading(true)
-                          setHistorySearchQuery(searchQuery)
-                          setHistoryPage(1)
-                          setSelectedHistoryPullIds(new Set())
-                        }}
-                        onTogglePullSelection={handleToggleHistoryPullSelection}
-                      />
-                      <WarpResultGallery
-                        accountId={activeAccount.id}
-                        bannerType={activeBannerType}
-                        refreshKey={warpResultRefreshKey}
-                      />
+                      <section
+                        className="dashboard-activity-panel"
+                        aria-label={`${t('results.title')} / ${t('history.title')}`}
+                      >
+                        <div
+                          className="banner-tabs dashboard-activity-tabs"
+                          role="tablist"
+                          aria-label={`${t('results.title')} / ${t('history.title')}`}
+                        >
+                          <button
+                            id="dashboard-results-tab"
+                            className={
+                              dashboardActivityTab === 'results'
+                                ? 'banner-tab banner-tab-active'
+                                : 'banner-tab'
+                            }
+                            type="button"
+                            role="tab"
+                            aria-controls="dashboard-activity-tab-panel"
+                            aria-selected={dashboardActivityTab === 'results'}
+                            onClick={() => setDashboardActivityTab('results')}
+                          >
+                            {t('results.title')}
+                          </button>
+                          <button
+                            id="dashboard-history-tab"
+                            className={
+                              dashboardActivityTab === 'history'
+                                ? 'banner-tab banner-tab-active'
+                                : 'banner-tab'
+                            }
+                            type="button"
+                            role="tab"
+                            aria-controls="dashboard-activity-tab-panel"
+                            aria-selected={dashboardActivityTab === 'history'}
+                            onClick={() => setDashboardActivityTab('history')}
+                          >
+                            {t('history.title')}
+                          </button>
+                        </div>
+                        <div
+                          id="dashboard-activity-tab-panel"
+                          className="dashboard-activity-tab-panel"
+                          role="tabpanel"
+                          aria-labelledby={
+                            dashboardActivityTab === 'results'
+                              ? 'dashboard-results-tab'
+                              : 'dashboard-history-tab'
+                          }
+                        >
+                          {dashboardActivityTab === 'results' ? (
+                            <WarpResultGallery
+                              accountId={activeAccount.id}
+                              bannerType={activeBannerType}
+                              refreshKey={warpResultRefreshKey}
+                            />
+                          ) : (
+                            <WarpTimeline
+                              pulls={timelinePulls}
+                              page={historyPage}
+                              pageSize={historyPageSize}
+                              rarityFilter={historyRarityFilter}
+                              searchQuery={historySearchQuery}
+                              totalPulls={historyTotalPulls}
+                              isLoading={historyLoading}
+                              canDeleteAll={activeAccountPullCount > 0}
+                              isDeletingAll={deletingAllHistory}
+                              isDeletingSelected={deletingSelectedHistory}
+                              isSelecting={historySelecting}
+                              language={languagePreference}
+                              selectedPullIds={selectedHistoryPullIds}
+                              showBannerLabel={activeBannerType === 'all'}
+                              timeZone={timeZonePreference}
+                              onDeleteAll={handleDeleteAllHistory}
+                              onDeleteSelected={handleDeleteSelectedHistory}
+                              onOpenImport={() => setImportDialogOpen(true)}
+                              onPageChange={(page) => {
+                                setHistoryLoading(true)
+                                setHistoryPage(page)
+                                setSelectedHistoryPullIds(new Set())
+                              }}
+                              onRarityFilterChange={(rarityFilter) => {
+                                setHistoryLoading(true)
+                                setHistoryRarityFilter(rarityFilter)
+                                setHistoryPage(1)
+                                setSelectedHistoryPullIds(new Set())
+                              }}
+                              onSelectionModeChange={
+                                handleHistorySelectionModeChange
+                              }
+                              onSearchQueryChange={(searchQuery) => {
+                                setHistoryLoading(true)
+                                setHistorySearchQuery(searchQuery)
+                                setHistoryPage(1)
+                                setSelectedHistoryPullIds(new Set())
+                              }}
+                              onTogglePullSelection={
+                                handleToggleHistoryPullSelection
+                              }
+                            />
+                          )}
+                        </div>
+                      </section>
                     </>
                   )}
                 </div>
