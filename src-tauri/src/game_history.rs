@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashSet,
+    collections::{BTreeMap, HashSet},
     env, fs,
     path::{Path, PathBuf},
     thread,
@@ -8,6 +8,7 @@ use std::{
 };
 
 const HISTORY_URL_MARKER: &str = "getGachaLog";
+const HISTORY_COLLAB_URL_MARKER: &str = "getLdGachaLog";
 const AUTHKEY_MARKER: &str = "authkey=";
 const CACHE_FILE_NAME: &str = "data_2";
 const MAX_CACHE_BYTES: u64 = 16 * 1024 * 1024;
@@ -19,14 +20,17 @@ const ACTIVE_CACHE_FILES_TO_CHECK: usize = 1;
 const DEFAULT_MAX_PAGES_PER_BANNER: usize = 50;
 const MAX_PAGES_PER_BANNER: usize = 200;
 const GAME_HISTORY_PAGE_SIZE: usize = 20;
-const GAME_HISTORY_REQUEST_INTERVAL_MS: u64 = 500;
-const GAME_HISTORY_GACHA_TYPES: [(&str, &str); 6] = [
+const GAME_HISTORY_REQUEST_INTERVAL_MS: u64 = 1500;
+const GAME_HISTORY_RATE_LIMIT_RETRY_MS: u64 = 5000;
+const GAME_HISTORY_GACHA_TYPES: [(&str, &str); 8] = [
     ("2", "departure"),
     ("1", "standard"),
     ("11", "character_event"),
     ("12", "light_cone_event"),
     ("21", "collaboration_character"),
     ("22", "collaboration_light_cone"),
+    ("31", "collaboration_character"),
+    ("32", "collaboration_light_cone"),
 ];
 
 #[derive(Debug, Deserialize)]
@@ -391,40 +395,94 @@ fn fetch_game_history(
     let max_pages_per_banner = max_pages_per_banner(max_pages_per_banner_input);
     let mut pages_fetched = 0;
     let mut records = Vec::new();
+    let mut seen_gacha_types: HashSet<String> = HashSet::new();
 
-    for (gacha_type, banner_type) in GAME_HISTORY_GACHA_TYPES {
+    log::info!(
+        "Fetching game history from endpoint: {}",
+        source.endpoint_host.as_deref().unwrap_or("unknown")
+    );
+
+    // Build a lookup from gacha_type to banner_type
+    let gacha_type_map: BTreeMap<&str, &str> = GAME_HISTORY_GACHA_TYPES.iter().cloned().collect();
+
+    for (banner_index, (gacha_type, default_banner_type)) in
+        GAME_HISTORY_GACHA_TYPES.iter().enumerate()
+    {
+        if banner_index > 0 {
+            thread::sleep(Duration::from_millis(GAME_HISTORY_RATE_LIMIT_RETRY_MS));
+        }
+
+        // Skip gacha_types that were already covered by a previous fetch
+        // (API may return all types regardless of the requested gacha_type)
+        if seen_gacha_types.contains(*gacha_type) {
+            log::info!("Skipping gacha_type={gacha_type}: already fetched via another request");
+            continue;
+        }
+
+        log::info!("Fetching gacha_type={gacha_type} as banner_type={default_banner_type}");
         let mut end_id: Option<String> = None;
 
-        for _ in 0..max_pages_per_banner {
+        for page_index in 0..max_pages_per_banner {
             let url = build_gacha_log_url(
                 &source.history_url,
                 gacha_type,
                 GAME_HISTORY_PAGE_SIZE,
                 end_id.as_deref(),
             )?;
-            let page = fetch_gacha_log_page(&url)?;
+
+            let page = fetch_gacha_log_page_with_retry(&url)?;
             pages_fetched += 1;
 
             if page.is_empty() {
+                log::info!("gacha_type={gacha_type}: empty page at index {page_index}, stopping");
                 break;
+            }
+
+            if page_index == 0 {
+                log::info!(
+                    "gacha_type={gacha_type}: got {} records on first page",
+                    page.len()
+                );
             }
 
             let page_len = page.len();
             end_id = page.last().map(|record| record.id.clone());
             let next_end_id_is_empty = end_id.as_deref().unwrap_or_default().is_empty();
-            records.extend(
-                page.into_iter()
-                    .filter(|record| record.gacha_type == gacha_type)
-                    .map(|record| (banner_type.to_string(), record)),
-            );
+
+            for record in page {
+                let record_gacha_type = record.gacha_type.clone();
+                seen_gacha_types.insert(record_gacha_type.clone());
+                let banner_type = gacha_type_map
+                    .get(record_gacha_type.as_str())
+                    .copied()
+                    .unwrap_or_else(|| {
+                        log::warn!(
+                            "Unknown gacha_type=\"{}\" in response, falling back to \"{}\"",
+                            record_gacha_type,
+                            default_banner_type
+                        );
+                        default_banner_type
+                    });
+                records.push((banner_type.to_string(), record));
+            }
 
             if next_end_id_is_empty || page_len < GAME_HISTORY_PAGE_SIZE {
+                log::info!(
+                    "gacha_type={gacha_type}: last page ({} records), stopping",
+                    page_len
+                );
                 break;
             }
 
             thread::sleep(Duration::from_millis(GAME_HISTORY_REQUEST_INTERVAL_MS));
         }
     }
+
+    log::info!(
+        "Game history fetch complete: {} pages, {} records total",
+        pages_fetched,
+        records.len()
+    );
 
     let detected_uid = records
         .iter()
@@ -443,6 +501,9 @@ fn fetch_game_history(
 }
 
 fn fetch_gacha_log_page(url: &str) -> Result<Vec<GachaLogRecord>, String> {
+    let redacted = redact_history_url(url);
+    log::debug!("Fetching: {redacted}");
+
     let response = ureq::get(url)
         .set("Accept", "application/json")
         .call()
@@ -452,10 +513,44 @@ fn fetch_gacha_log_page(url: &str) -> Result<Vec<GachaLogRecord>, String> {
         .map_err(|error| format!("Failed to decode game history response: {error}"))?;
 
     if payload.retcode != 0 {
+        log::warn!(
+            "API returned retcode={} message=\"{}\"",
+            payload.retcode,
+            payload.message
+        );
         return Err(format_gacha_log_error(payload.retcode, &payload.message));
     }
 
     Ok(payload.data.map(|data| data.list).unwrap_or_default())
+}
+
+fn fetch_gacha_log_page_with_retry(url: &str) -> Result<Vec<GachaLogRecord>, String> {
+    const MAX_RATE_LIMIT_RETRIES: usize = 3;
+
+    for attempt in 0..=MAX_RATE_LIMIT_RETRIES {
+        match fetch_gacha_log_page(url) {
+            Ok(page) => return Ok(page),
+            Err(error) => {
+                let is_rate_limited = error.to_ascii_lowercase().contains("visit too frequently");
+
+                if is_rate_limited && attempt < MAX_RATE_LIMIT_RETRIES {
+                    let wait_ms = GAME_HISTORY_RATE_LIMIT_RETRY_MS * (attempt as u64 + 1);
+                    log::warn!(
+                        "Rate limited, retrying in {}ms (attempt {}/{})",
+                        wait_ms,
+                        attempt + 1,
+                        MAX_RATE_LIMIT_RETRIES
+                    );
+                    thread::sleep(Duration::from_millis(wait_ms));
+                    continue;
+                }
+
+                return Err(error);
+            }
+        }
+    }
+
+    unreachable!()
 }
 
 fn format_gacha_log_error(retcode: i64, message: &str) -> String {
@@ -473,7 +568,14 @@ fn build_gacha_log_url(
     size: usize,
     end_id: Option<&str>,
 ) -> Result<String, String> {
-    let mut parsed_url = url::Url::parse(source_url)
+    let is_collab = matches!(gacha_type, "21" | "22" | "31" | "32");
+    let url = if is_collab {
+        source_url.replace("getGachaLog", "getLdGachaLog")
+    } else {
+        source_url.replace("getLdGachaLog", "getGachaLog")
+    };
+
+    let mut parsed_url = url::Url::parse(&url)
         .map_err(|error| format!("Failed to parse game history URL: {error}"))?;
     let mut query_pairs = parsed_url
         .query_pairs()
@@ -839,16 +941,18 @@ fn is_scan_safe_cache_file(path: &Path) -> bool {
 fn extract_history_url(text: &str) -> Option<String> {
     let mut latest_url = None;
 
-    for (marker_index, _) in text.match_indices(HISTORY_URL_MARKER) {
-        let Some(start) = text[..marker_index].rfind("https://") else {
-            continue;
-        };
-        let tail = &text[start..];
-        let end = tail.find(is_url_delimiter).unwrap_or(tail.len());
-        let url = &tail[..end];
+    for marker in [HISTORY_URL_MARKER, HISTORY_COLLAB_URL_MARKER] {
+        for (marker_index, _) in text.match_indices(marker) {
+            let Some(start) = text[..marker_index].rfind("https://") else {
+                continue;
+            };
+            let tail = &text[start..];
+            let end = tail.find(is_url_delimiter).unwrap_or(tail.len());
+            let url = &tail[..end];
 
-        if url.contains(AUTHKEY_MARKER) {
-            latest_url = Some(url.to_string());
+            if url.contains(AUTHKEY_MARKER) {
+                latest_url = Some(url.to_string());
+            }
         }
     }
 

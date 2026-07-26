@@ -6,7 +6,7 @@
     "branch": "master",
     "path": "icon/avatar"
   },
-  "generatedAt": "2026-06-20T23:09:34.596Z",
+  "generatedAt": "2026-07-26T01:06:49.433Z",
   "avatars": [
     {
       "id": "1001",
@@ -419,6 +419,21 @@
       "path": "icon/avatar/1507.png"
     },
     {
+      "id": "1508",
+      "label": "Avatar 1508",
+      "path": "icon/avatar/1508.png"
+    },
+    {
+      "id": "1509",
+      "label": "Avatar 1509",
+      "path": "icon/avatar/1509.png"
+    },
+    {
+      "id": "1510",
+      "label": "Avatar 1510",
+      "path": "icon/avatar/1510.png"
+    },
+    {
       "id": "8001",
       "label": "Avatar 8001",
       "path": "icon/avatar/8001.png"
@@ -739,6 +754,16 @@
       "path": "icon/avatar/IconHead_200158.png"
     },
     {
+      "id": "IconHead_200159",
+      "label": "Avatar IconHead_200159",
+      "path": "icon/avatar/IconHead_200159.png"
+    },
+    {
+      "id": "IconHead_200160",
+      "label": "Avatar IconHead_200160",
+      "path": "icon/avatar/IconHead_200160.png"
+    },
+    {
       "id": "IconHead_202001",
       "label": "Avatar IconHead_202001",
       "path": "icon/avatar/IconHead_202001.png"
@@ -974,9 +999,24 @@
       "path": "icon/avatar/IconHead_202051.png"
     },
     {
+      "id": "IconHead_202053",
+      "label": "Avatar IconHead_202053",
+      "path": "icon/avatar/IconHead_202053.png"
+    },
+    {
+      "id": "IconHead_202054",
+      "label": "Avatar IconHead_202054",
+      "path": "icon/avatar/IconHead_202054.png"
+    },
+    {
       "id": "IconHead_202060",
       "label": "Avatar IconHead_202060",
       "path": "icon/avatar/IconHead_202060.png"
+    },
+    {
+      "id": "IconHead_202061",
+      "label": "Avatar IconHead_202061",
+      "path": "icon/avatar/IconHead_202061.png"
     },
     {
       "id": "IconHeadS1_1001",
@@ -1219,6 +1259,11 @@
       "path": "icon/avatar/UI_Message_Contacts_Liangmu.png"
     },
     {
+      "id": "UI_Message_Contacts_LongJie",
+      "label": "Avatar UI_Message_Contacts_LongJie",
+      "path": "icon/avatar/UI_Message_Contacts_LongJie.png"
+    },
+    {
       "id": "UI_Message_Contacts_Luhui",
       "label": "Avatar UI_Message_Contacts_Luhui",
       "path": "icon/avatar/UI_Message_Contacts_Luhui.png"
@@ -1277,6 +1322,11 @@
       "id": "UI_Message_Contacts_Pamela",
       "label": "Avatar UI_Message_Contacts_Pamela",
       "path": "icon/avatar/UI_Message_Contacts_Pamela.png"
+    },
+    {
+      "id": "UI_Message_Contacts_Pearl",
+      "label": "Avatar UI_Message_Contacts_Pearl",
+      "path": "icon/avatar/UI_Message_Contacts_Pearl.png"
     },
     {
       "id": "UI_Message_Contacts_Qingni",

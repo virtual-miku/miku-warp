@@ -5,10 +5,10 @@
     "repository": "https://github.com/Mar-7th/StarRailRes",
     "branch": "master",
     "license": "AGPL-3.0",
-    "version": "4.3.0",
-    "timestamp": 1780275330
+    "version": "4.4.0",
+    "timestamp": 1784393558
   },
-  "generatedAt": "2026-06-03T08:55:59.436Z",
+  "generatedAt": "2026-07-26T00:32:18.649Z",
   "items": [
     {
       "id": "character-1308",
@@ -321,6 +321,16 @@
       "portraitPath": "image/character_portrait/1104.png"
     },
     {
+      "id": "character-1509",
+      "sourceId": "1509",
+      "name": "Gilgamesh",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1509.png",
+      "previewPath": "image/character_preview/1509.png",
+      "portraitPath": "image/character_portrait/1509.png"
+    },
+    {
       "id": "character-1210",
       "sourceId": "1210",
       "name": "Guinaifen",
@@ -359,6 +369,16 @@
       "iconPath": "icon/character/1003.png",
       "previewPath": "image/character_preview/1003.png",
       "portraitPath": "image/character_portrait/1003.png"
+    },
+    {
+      "id": "character-1510",
+      "sourceId": "1510",
+      "name": "Himeko • Nova",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1510.png",
+      "previewPath": "image/character_preview/1510.png",
+      "portraitPath": "image/character_portrait/1510.png"
     },
     {
       "id": "character-1109",
@@ -599,6 +619,16 @@
       "iconPath": "icon/character/1317.png",
       "previewPath": "image/character_preview/1317.png",
       "portraitPath": "image/character_portrait/1317.png"
+    },
+    {
+      "id": "character-1508",
+      "sourceId": "1508",
+      "name": "Rin Tohsaka",
+      "itemType": "character",
+      "rarity": 5,
+      "iconPath": "icon/character/1508.png",
+      "previewPath": "image/character_preview/1508.png",
+      "portraitPath": "image/character_portrait/1508.png"
     },
     {
       "id": "character-1309",
@@ -859,6 +889,16 @@
       "iconPath": "icon/light_cone/21012.png",
       "previewPath": "image/light_cone_preview/21012.png",
       "portraitPath": "image/light_cone_portrait/21012.png"
+    },
+    {
+      "id": "light-cone-23060",
+      "sourceId": "23060",
+      "name": "A Star That Lights the Night",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23060.png",
+      "previewPath": "image/light_cone_preview/23060.png",
+      "portraitPath": "image/light_cone_portrait/23060.png"
     },
     {
       "id": "light-cone-23045",
@@ -1271,6 +1311,16 @@
       "portraitPath": "image/light_cone_portrait/21038.png"
     },
     {
+      "id": "light-cone-23061",
+      "sourceId": "23061",
+      "name": "Flickering Stars",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23061.png",
+      "previewPath": "image/light_cone_preview/23061.png",
+      "portraitPath": "image/light_cone_portrait/23061.png"
+    },
+    {
       "id": "light-cone-23026",
       "sourceId": "23026",
       "name": "Flowing Nightglow",
@@ -1359,6 +1409,16 @@
       "iconPath": "icon/light_cone/21061.png",
       "previewPath": "image/light_cone_preview/21061.png",
       "portraitPath": "image/light_cone_portrait/21061.png"
+    },
+    {
+      "id": "light-cone-23062",
+      "sourceId": "23062",
+      "name": "I Am As You Behold",
+      "itemType": "light_cone",
+      "rarity": 5,
+      "iconPath": "icon/light_cone/23062.png",
+      "previewPath": "image/light_cone_preview/23062.png",
+      "portraitPath": "image/light_cone_portrait/23062.png"
     },
     {
       "id": "light-cone-23014",

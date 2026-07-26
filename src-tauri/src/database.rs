@@ -3198,9 +3198,8 @@ fn restore_backup_accounts(
                id, uid, region, nickname, avatar_path, created_at, updated_at, deleted_at
              )
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-             ON CONFLICT(id) DO UPDATE SET
-               uid = excluded.uid,
-               region = excluded.region,
+             ON CONFLICT(uid, COALESCE(region, '')) DO UPDATE SET
+               id = excluded.id,
                nickname = excluded.nickname,
                avatar_path = excluded.avatar_path,
                created_at = excluded.created_at,
@@ -3240,10 +3239,8 @@ fn restore_backup_banners(
                id, banner_type, name, version, started_at, ended_at, created_at, updated_at
              )
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
-             ON CONFLICT(id) DO UPDATE SET
-               banner_type = excluded.banner_type,
-               name = excluded.name,
-               version = excluded.version,
+             ON CONFLICT(banner_type, name, COALESCE(version, '')) DO UPDATE SET
+               id = excluded.id,
                started_at = excluded.started_at,
                ended_at = excluded.ended_at,
                created_at = excluded.created_at,
@@ -3372,10 +3369,67 @@ fn restore_backup_warp_pulls(
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
         )
         .map_err(|error| format!("Failed to prepare warp pull restore statement: {error}"))?;
+
+    let valid_account_ids: HashSet<String> = {
+        let mut stmt = transaction
+            .prepare("SELECT id FROM accounts")
+            .map_err(|error| format!("Failed to query account ids: {error}"))?;
+        let rows = stmt
+            .query_map([], |row| row.get(0))
+            .map_err(|error| format!("Failed to read account ids: {error}"))?;
+        rows.collect::<Result<HashSet<_>, _>>()
+            .map_err(|error| format!("Failed to collect account ids: {error}"))?
+    };
+
+    let valid_banner_ids: HashSet<String> = {
+        let mut stmt = transaction
+            .prepare("SELECT id FROM banners")
+            .map_err(|error| format!("Failed to query banner ids: {error}"))?;
+        let rows = stmt
+            .query_map([], |row| row.get(0))
+            .map_err(|error| format!("Failed to read banner ids: {error}"))?;
+        rows.collect::<Result<HashSet<_>, _>>()
+            .map_err(|error| format!("Failed to collect banner ids: {error}"))?
+    };
+
+    let valid_item_ids: HashSet<String> = {
+        let mut stmt = transaction
+            .prepare("SELECT id FROM warp_items")
+            .map_err(|error| format!("Failed to query warp item ids: {error}"))?;
+        let rows = stmt
+            .query_map([], |row| row.get(0))
+            .map_err(|error| format!("Failed to read warp item ids: {error}"))?;
+        rows.collect::<Result<HashSet<_>, _>>()
+            .map_err(|error| format!("Failed to collect warp item ids: {error}"))?
+    };
+
+    let valid_import_batch_ids: HashSet<String> = {
+        let mut stmt = transaction
+            .prepare("SELECT id FROM import_batches")
+            .map_err(|error| format!("Failed to query import batch ids: {error}"))?;
+        let rows = stmt
+            .query_map([], |row| row.get(0))
+            .map_err(|error| format!("Failed to read import batch ids: {error}"))?;
+        rows.collect::<Result<HashSet<_>, _>>()
+            .map_err(|error| format!("Failed to collect import batch ids: {error}"))?
+    };
+
     let mut inserted = 0;
     let mut duplicate = 0;
 
     for pull in warp_pulls {
+        if !valid_account_ids.contains(&pull.account_id)
+            || !valid_banner_ids.contains(&pull.banner_id)
+            || !valid_item_ids.contains(&pull.warp_item_id)
+            || pull
+                .source_import_id
+                .as_deref()
+                .is_some_and(|id| !valid_import_batch_ids.contains(id))
+        {
+            duplicate += 1;
+            continue;
+        }
+
         let affected_rows = statement
             .execute(params![
                 &pull.id,
