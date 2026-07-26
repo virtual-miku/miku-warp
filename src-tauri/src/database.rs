@@ -12,7 +12,7 @@ use tauri::{AppHandle, Manager};
 const DATABASE_FILE_NAME: &str = "warp-tracker.sqlite";
 const BACKUP_DIRECTORY_NAME: &str = "backups";
 const BACKUP_TRASH_DIRECTORY_NAME: &str = "backup-trash";
-const AUTO_BACKUP_FILE_NAME: &str = "miku-warp-autosave.json";
+const AUTO_BACKUP_FILE_NAME: &str = "miku-warp-backup.json";
 const BACKUP_SCHEMA_VERSION: i64 = 1;
 const DEFAULT_TRASH_RETENTION_DAYS: i64 = 183;
 const ALLOWED_TRASH_RETENTION_DAYS: [i64; 5] = [0, 30, 90, 183, 365];

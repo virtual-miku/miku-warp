@@ -175,7 +175,7 @@ import {
 import { ConfirmDialog } from '../shared/ui/ConfirmDialog'
 import './App.css'
 
-const defaultBannerType = 'character_event' satisfies BannerFilterType
+const defaultBannerType = 'all' satisfies BannerFilterType
 const defaultManualFallbackBannerType = 'character_event' satisfies BannerType
 const historyPageSize = 5
 const trashPageSize = 5

@@ -24,7 +24,7 @@ const GOOGLE_DRIVE_UPLOAD_ENDPOINT: &str = "https://www.googleapis.com/upload/dr
 const OAUTH_CALLBACK_TIMEOUT: Duration = Duration::from_secs(180);
 const OAUTH_RANDOM_TOKEN_BYTES: usize = 64;
 const DRIVE_MULTIPART_BOUNDARY_PREFIX: &str = "warp-tracker-backup";
-const CLOUD_BACKUP_AUTOSAVE_FILE_NAME: &str = "miku-warp-autosave.json";
+const CLOUD_BACKUP_AUTOSAVE_FILE_NAME: &str = "miku-warp-backup.json";
 const CLOUD_BACKUP_LIST_PAGE_SIZE: &str = "20";
 
 #[derive(Debug, PartialEq, Eq, Serialize)]
@@ -1700,7 +1700,7 @@ mod tests {
         );
         assert_eq!(
             query_pairs.get("q"),
-            Some(&"name = 'miku-warp-autosave.json'".to_string())
+            Some(&"name = 'miku-warp-backup.json'".to_string())
         );
         assert_eq!(
             query_pairs.get("orderBy"),
@@ -1712,7 +1712,7 @@ mod tests {
     fn maps_google_drive_files_to_cloud_snapshot_summaries() {
         let summary = to_cloud_backup_snapshot_summary(GoogleDriveFileResponse {
             id: Some("remote-1".to_string()),
-            name: Some("miku-warp-autosave.json".to_string()),
+            name: Some("miku-warp-backup.json".to_string()),
             md5_checksum: Some("checksum".to_string()),
             modified_time: Some("2026-06-06T14:00:00.000Z".to_string()),
             size: Some("1234".to_string()),
@@ -1720,7 +1720,7 @@ mod tests {
         .expect("file can be mapped");
 
         assert_eq!(summary.remote_file_id, "remote-1");
-        assert_eq!(summary.file_name, "miku-warp-autosave.json");
+        assert_eq!(summary.file_name, "miku-warp-backup.json");
         assert_eq!(summary.remote_md5_checksum, Some("checksum".to_string()));
         assert_eq!(summary.size, Some("1234".to_string()));
     }
@@ -1754,7 +1754,7 @@ mod tests {
     #[test]
     fn builds_drive_multipart_body_with_app_data_parent_and_snapshot_bytes() {
         let body = build_drive_multipart_upload_body(
-            "miku-warp-autosave.json",
+            "miku-warp-backup.json",
             br#"{"schemaVersion":1}"#,
             "boundary-token",
             true,
@@ -1772,7 +1772,7 @@ mod tests {
     #[test]
     fn builds_drive_multipart_body_without_parent_for_update() {
         let body = build_drive_multipart_upload_body(
-            "miku-warp-autosave.json",
+            "miku-warp-backup.json",
             br#"{"schemaVersion":1}"#,
             "boundary-token",
             false,
