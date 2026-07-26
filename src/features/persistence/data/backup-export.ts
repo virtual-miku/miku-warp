@@ -1,4 +1,4 @@
-import { open } from '@tauri-apps/plugin-dialog'
+import { open, save } from '@tauri-apps/plugin-dialog'
 import {
   loadLanguagePreference,
   translate,
@@ -42,8 +42,54 @@ export type RestoreBackupSnapshotResult = ExportBackupSnapshotResult & {
   recomputedBanners: number
 }
 
-export function exportBackupSnapshot() {
-  return invokeTauri<ExportBackupSnapshotResult>('export_backup_snapshot')
+export function exportBackupSnapshot(outputDirectory?: string) {
+  return invokeTauri<ExportBackupSnapshotResult>('export_backup_snapshot', {
+    input: outputDirectory ? { outputDirectory } : undefined,
+  })
+}
+
+export async function exportBackupSnapshotToUserFile() {
+  const language = loadLanguagePreference()
+  if (!hasTauriInvoke()) {
+    throw createDesktopRuntimeUnavailableError(
+      translate(language, 'desktop.folderBrowsing'),
+    )
+  }
+
+  const selectedPath = await save({
+    defaultPath: 'miku-warp-backup.json',
+    filters: [{ name: translate(language, 'desktop.backupFilter'), extensions: ['json'] }],
+    title: translate(language, 'desktop.backupSaveTitle'),
+  })
+
+  if (typeof selectedPath !== 'string') {
+    return undefined
+  }
+
+  return invokeTauri<ExportBackupSnapshotResult>('export_backup_snapshot', {
+    input: { outputPath: selectedPath },
+  })
+}
+
+export async function exportBackupSnapshotToUserDirectory() {
+  const language = loadLanguagePreference()
+  if (!hasTauriInvoke()) {
+    throw createDesktopRuntimeUnavailableError(
+      translate(language, 'desktop.folderBrowsing'),
+    )
+  }
+
+  const selectedPath = await open({
+    directory: true,
+    multiple: false,
+    title: translate(language, 'desktop.backupFolderTitle'),
+  })
+
+  if (typeof selectedPath !== 'string') {
+    return undefined
+  }
+
+  return exportBackupSnapshot(selectedPath)
 }
 
 export function listBackupSnapshots() {

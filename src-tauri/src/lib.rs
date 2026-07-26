@@ -536,11 +536,23 @@ fn permanently_delete_trashed_backup_snapshot(
     database::permanently_delete_trashed_backup_snapshot(&app, input)
 }
 
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ExportBackupSnapshotInput {
+    output_directory: Option<String>,
+    output_path: Option<String>,
+}
+
 #[tauri::command]
 fn export_backup_snapshot(
     app: tauri::AppHandle,
+    input: Option<ExportBackupSnapshotInput>,
 ) -> Result<database::ExportBackupSnapshotResult, String> {
-    database::export_backup_snapshot(&app)
+    database::export_backup_snapshot(
+        &app,
+        input.as_ref().and_then(|i| i.output_path.as_deref()),
+        input.as_ref().and_then(|i| i.output_directory.as_deref()),
+    )
 }
 
 #[tauri::command]

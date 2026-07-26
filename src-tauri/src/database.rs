@@ -948,12 +948,25 @@ pub fn permanently_delete_trashed_account(
     permanently_delete_trashed_account_from_database(&mut connection, &input)
 }
 
-pub fn export_backup_snapshot(app: &AppHandle) -> Result<ExportBackupSnapshotResult, String> {
+pub fn export_backup_snapshot(
+    app: &AppHandle,
+    output_path: Option<&str>,
+    output_directory: Option<&str>,
+) -> Result<ExportBackupSnapshotResult, String> {
     let database_path = resolve_database_path(app)?;
     let connection = open_database(&database_path)?;
-    let backup_directory = resolve_backup_directory(app)?;
 
-    export_backup_snapshot_to_directory(&connection, &backup_directory)
+    if let Some(path) = output_path.filter(|p| !p.trim().is_empty()) {
+        let path = PathBuf::from(path);
+        export_backup_snapshot_to_path(&connection, &path)
+    } else {
+        let backup_directory = match output_directory.filter(|p| !p.trim().is_empty()) {
+            Some(custom_path) => PathBuf::from(custom_path),
+            None => resolve_backup_directory(app)?,
+        };
+
+        export_backup_snapshot_to_directory(&connection, &backup_directory)
+    }
 }
 
 pub fn save_auto_backup_snapshot(app: &AppHandle) -> Result<AutoBackupSnapshotFile, String> {
@@ -2471,6 +2484,17 @@ fn export_backup_snapshot_to_directory(
     mark_local_backup_synced(connection, &content_hash, &snapshot.exported_at)?;
 
     Ok(to_export_backup_snapshot_result(&snapshot, &backup_path))
+}
+
+fn export_backup_snapshot_to_path(
+    connection: &Connection,
+    backup_path: &Path,
+) -> Result<ExportBackupSnapshotResult, String> {
+    let snapshot = build_backup_snapshot(connection)?;
+    let parent = backup_path.parent().unwrap_or_else(|| Path::new("."));
+    write_backup_snapshot(&snapshot, parent, backup_path)?;
+
+    Ok(to_export_backup_snapshot_result(&snapshot, backup_path))
 }
 
 fn save_auto_backup_snapshot_to_directory(

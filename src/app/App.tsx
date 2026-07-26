@@ -51,7 +51,7 @@ import {
   listTrashedBackupSnapshots,
   listBackupSnapshots,
   type BackupSnapshotSummary,
-  exportBackupSnapshot,
+  exportBackupSnapshotToUserFile,
   type ExportBackupSnapshotResult,
   permanentlyDeleteTrashedBackupSnapshot,
   replaceDatabaseFromBackupFile,
@@ -2240,7 +2240,10 @@ export function App() {
     setBackupNotice(undefined)
 
     try {
-      const result = await exportBackupSnapshot()
+      const result = await exportBackupSnapshotToUserFile()
+      if (!result) {
+        return
+      }
       await refreshBackupSnapshots()
 
       setBackupNotice({
