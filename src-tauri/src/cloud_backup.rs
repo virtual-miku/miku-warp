@@ -1763,7 +1763,7 @@ mod tests {
         let body_text = String::from_utf8(body).expect("body is utf8 for json snapshot");
 
         assert!(body_text.contains("--boundary-token\r\n"));
-        assert!(body_text.contains(r#""name":"miku-warp-autosave.json""#));
+        assert!(body_text.contains(r#""name":"miku-warp-backup.json""#));
         assert!(body_text.contains(r#""parents":["appDataFolder"]"#));
         assert!(body_text.contains(r#"{"schemaVersion":1}"#));
         assert!(body_text.ends_with("--boundary-token--\r\n"));
@@ -1780,7 +1780,7 @@ mod tests {
         .expect("multipart body can be built");
         let body_text = String::from_utf8(body).expect("body is utf8 for json snapshot");
 
-        assert!(body_text.contains(r#""name":"miku-warp-autosave.json""#));
+        assert!(body_text.contains(r#""name":"miku-warp-backup.json""#));
         assert!(!body_text.contains(r#""parents":["appDataFolder"]"#));
     }
 

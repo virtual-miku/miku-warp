@@ -39,6 +39,8 @@ const MANUAL_PITY_OVERRIDE_SQL: &str = include_str!("../migrations/0009_manual_p
 const TRASH_RETENTION_POLICY_VERSION: &str = "0010_trash_retention_policy";
 const TRASH_RETENTION_POLICY_SQL: &str =
     include_str!("../migrations/0010_trash_retention_policy.sql");
+const CHARACTER_ROSTER_VERSION: &str = "0011_character_rosters";
+const CHARACTER_ROSTER_SQL: &str = include_str!("../migrations/0011_character_rosters.sql");
 const GOOGLE_DRIVE_PROVIDER: &str = "google_drive";
 const DATA_CHANGED_TRIGGER: &str = "data_changed";
 
@@ -276,6 +278,7 @@ pub struct ExportBackupSnapshotResult {
     pub warp_items: usize,
     pub import_batches: usize,
     pub warp_pulls: usize,
+    pub character_rosters: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -446,6 +449,7 @@ pub struct RestoreBackupSnapshotResult {
     pub warp_pulls_inserted: usize,
     pub duplicate_warp_pulls: usize,
     pub recomputed_banners: usize,
+    pub character_rosters: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -625,6 +629,8 @@ struct BackupSnapshot {
     warp_items: Vec<BackupWarpItemRow>,
     import_batches: Vec<BackupImportBatchRow>,
     warp_pulls: Vec<BackupWarpPullRow>,
+    #[serde(default)]
+    character_rosters: Vec<BackupCharacterRosterRow>,
 }
 
 #[derive(Serialize)]
@@ -637,6 +643,7 @@ struct BackupContentHashPayload<'a> {
     warp_items: &'a [BackupWarpItemRow],
     import_batches: &'a [BackupImportBatchRow],
     warp_pulls: &'a [BackupWarpPullRow],
+    character_rosters: &'a [BackupCharacterRosterRow],
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -721,6 +728,15 @@ struct BackupWarpPullRow {
     deleted_at: Option<String>,
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct BackupCharacterRosterRow {
+    account_id: String,
+    payload: String,
+    character_count: i64,
+    updated_at: String,
+}
+
 const MIGRATIONS: &[Migration] = &[
     Migration {
         version: INIT_MIGRATION_VERSION,
@@ -761,6 +777,10 @@ const MIGRATIONS: &[Migration] = &[
     Migration {
         version: TRASH_RETENTION_POLICY_VERSION,
         sql: TRASH_RETENTION_POLICY_SQL,
+    },
+    Migration {
+        version: CHARACTER_ROSTER_VERSION,
+        sql: CHARACTER_ROSTER_SQL,
     },
 ];
 
@@ -839,6 +859,28 @@ pub fn update_account_avatar(
     let connection = open_database(&database_path)?;
 
     update_account_avatar_in_database(&connection, &input)
+}
+
+pub fn save_character_roster(
+    app: &AppHandle,
+    account_id: &str,
+    payload: &str,
+    character_count: usize,
+) -> Result<(), String> {
+    let database_path = resolve_database_path(app)?;
+    let connection = open_database(&database_path)?;
+
+    save_character_roster_to_database(&connection, account_id, payload, character_count)
+}
+
+pub fn get_character_roster_payload(
+    app: &AppHandle,
+    account_id: &str,
+) -> Result<Option<String>, String> {
+    let database_path = resolve_database_path(app)?;
+    let connection = open_database(&database_path)?;
+
+    get_character_roster_payload_from_database(&connection, account_id)
 }
 
 pub fn list_warp_banner_summaries(
@@ -1851,6 +1893,54 @@ fn update_account_avatar_in_database(
     })
 }
 
+fn save_character_roster_to_database(
+    connection: &Connection,
+    account_id: &str,
+    payload: &str,
+    character_count: usize,
+) -> Result<(), String> {
+    validate_account_id(account_id, "Roster account id")?;
+    if payload.trim().is_empty() {
+        return Err("Character roster payload cannot be empty.".to_string());
+    }
+
+    let character_count = i64::try_from(character_count)
+        .map_err(|_| "Character roster count is too large.".to_string())?;
+    let updated_rows = connection
+        .execute(
+            "INSERT INTO character_rosters (account_id, payload, character_count, updated_at)
+             VALUES (?1, ?2, ?3, CURRENT_TIMESTAMP)
+             ON CONFLICT(account_id) DO UPDATE SET
+               payload = excluded.payload,
+               character_count = excluded.character_count,
+               updated_at = CURRENT_TIMESTAMP",
+            params![account_id, payload, character_count],
+        )
+        .map_err(|error| format!("Failed to save character roster: {error}"))?;
+
+    if updated_rows == 0 {
+        return Err(format!("Failed to save character roster for account {account_id}."));
+    }
+
+    Ok(())
+}
+
+fn get_character_roster_payload_from_database(
+    connection: &Connection,
+    account_id: &str,
+) -> Result<Option<String>, String> {
+    validate_account_id(account_id, "Roster account id")?;
+
+    connection
+        .query_row(
+            "SELECT payload FROM character_rosters WHERE account_id = ?1",
+            params![account_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|error| format!("Failed to load character roster: {error}"))
+}
+
 fn list_warp_banner_summaries_from_database(
     connection: &Connection,
     query: &ListWarpBannerSummariesInput,
@@ -2553,6 +2643,7 @@ fn to_export_backup_snapshot_result(
         warp_items: snapshot.warp_items.len(),
         import_batches: snapshot.import_batches.len(),
         warp_pulls: snapshot.warp_pulls.len(),
+        character_rosters: snapshot.character_rosters.len(),
     }
 }
 
@@ -2627,6 +2718,7 @@ fn restore_backup_snapshot_to_database(
     restore_backup_import_batches(&transaction, &snapshot.import_batches)?;
     let (warp_pulls_inserted, duplicate_warp_pulls) =
         restore_backup_warp_pulls(&transaction, &snapshot.warp_pulls)?;
+    restore_backup_character_rosters(&transaction, &snapshot.character_rosters)?;
     let recomputed_banners = recompute_pity_for_snapshot(&transaction, snapshot)?;
 
     transaction
@@ -2644,6 +2736,7 @@ fn restore_backup_snapshot_to_database(
         warp_pulls_inserted,
         duplicate_warp_pulls,
         recomputed_banners,
+        character_rosters: snapshot.character_rosters.len(),
     })
 }
 
@@ -2663,6 +2756,7 @@ fn replace_database_with_backup_snapshot(
     restore_backup_import_batches(&transaction, &snapshot.import_batches)?;
     let (warp_pulls_inserted, duplicate_warp_pulls) =
         restore_backup_warp_pulls(&transaction, &snapshot.warp_pulls)?;
+    restore_backup_character_rosters(&transaction, &snapshot.character_rosters)?;
     let recomputed_banners = recompute_pity_for_snapshot(&transaction, snapshot)?;
 
     transaction
@@ -2680,6 +2774,7 @@ fn replace_database_with_backup_snapshot(
         warp_pulls_inserted,
         duplicate_warp_pulls,
         recomputed_banners,
+        character_rosters: snapshot.character_rosters.len(),
     })
 }
 
@@ -3032,6 +3127,7 @@ fn build_backup_snapshot(connection: &Connection) -> Result<BackupSnapshot, Stri
         warp_items: read_backup_warp_items(connection)?,
         import_batches: read_backup_import_batches(connection)?,
         warp_pulls: read_backup_warp_pulls(connection)?,
+        character_rosters: read_backup_character_rosters(connection)?,
     })
 }
 
@@ -3044,6 +3140,7 @@ fn calculate_backup_content_hash(snapshot: &BackupSnapshot) -> Result<String, St
         warp_items: &snapshot.warp_items,
         import_batches: &snapshot.import_batches,
         warp_pulls: &snapshot.warp_pulls,
+        character_rosters: &snapshot.character_rosters,
     };
     let canonical_payload = serde_json::to_vec(&payload)
         .map_err(|error| format!("Failed to serialize backup content hash payload: {error}"))?;
@@ -3210,6 +3307,30 @@ fn read_backup_warp_pulls(connection: &Connection) -> Result<Vec<BackupWarpPullR
 
     rows.collect::<Result<Vec<_>, _>>()
         .map_err(|error| format!("Failed to decode warp pull backup rows: {error}"))
+}
+
+fn read_backup_character_rosters(connection: &Connection) -> Result<Vec<BackupCharacterRosterRow>, String> {
+    let mut statement = connection
+        .prepare(
+            "SELECT account_id, payload, character_count, updated_at
+             FROM character_rosters
+             ORDER BY account_id",
+        )
+        .map_err(|error| format!("Failed to prepare character roster backup query: {error}"))?;
+
+    let rows = statement
+        .query_map([], |row| {
+            Ok(BackupCharacterRosterRow {
+                account_id: row.get(0)?,
+                payload: row.get(1)?,
+                character_count: row.get(2)?,
+                updated_at: row.get(3)?,
+            })
+        })
+        .map_err(|error| format!("Failed to query character roster backup rows: {error}"))?;
+
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|error| format!("Failed to decode character roster backup rows: {error}"))
 }
 
 fn restore_backup_accounts(
@@ -3484,6 +3605,37 @@ fn restore_backup_warp_pulls(
     }
 
     Ok((inserted, duplicate))
+}
+
+fn restore_backup_character_rosters(
+    transaction: &Transaction<'_>,
+    rosters: &[BackupCharacterRosterRow],
+) -> Result<(), String> {
+    let mut statement = transaction
+        .prepare(
+            "INSERT INTO character_rosters (account_id, payload, character_count, updated_at)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(account_id) DO UPDATE SET
+               payload = excluded.payload,
+               character_count = excluded.character_count,
+               updated_at = excluded.updated_at",
+        )
+        .map_err(|error| format!("Failed to prepare character roster restore statement: {error}"))?;
+
+    for roster in rosters {
+        statement
+            .execute(params![
+                &roster.account_id,
+                &roster.payload,
+                roster.character_count,
+                &roster.updated_at,
+            ])
+            .map_err(|error| {
+                format!("Failed to restore character roster {}: {error}", roster.account_id)
+            })?;
+    }
+
+    Ok(())
 }
 
 fn recompute_pity_for_snapshot(

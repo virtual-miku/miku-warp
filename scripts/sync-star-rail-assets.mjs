@@ -14,6 +14,12 @@ const catalogPath = path.resolve(
 )
 const publicPath = path.resolve(frontendRoot, 'public')
 const avatarDirectory = 'icon/avatar'
+const elementDirectory = 'icon/element'
+const pathDirectory = 'icon/path'
+const characterMetaPath = path.resolve(
+  frontendRoot,
+  'src/features/warp-history/data/generated/star-rail-character-meta.json',
+)
 const avatarCatalogPath = path.resolve(
   frontendRoot,
   'src/features/accounts/data/generated/account-avatar-options.json',
@@ -31,6 +37,8 @@ const sparseDirectories = Array.from(
   new Set([
     ...iconPaths.map((iconPath) => path.posix.dirname(iconPath)),
     avatarDirectory,
+    elementDirectory,
+    pathDirectory,
   ]),
 ).sort()
 
@@ -86,6 +94,83 @@ for (const fileName of avatarFiles.filter((fileName) => fileName.endsWith('.png'
     path: avatarPath,
   })
 }
+
+const elementFiles = await readDirectoryFiles(path.join(cachePath, elementDirectory))
+for (const fileName of elementFiles
+  .filter((fileName) => fileName.endsWith('.png') && !fileName.endsWith('White.png'))
+  .sort(compareFileNames)) {
+  const elementPath = path.posix.join(elementDirectory, fileName)
+  const sourcePath = path.join(cachePath, elementPath)
+  const targetPath = path.join(publicPath, elementPath)
+
+  await mkdir(path.dirname(targetPath), { recursive: true })
+  await cp(sourcePath, targetPath)
+  copied += 1
+}
+
+const pathFiles = await readDirectoryFiles(path.join(cachePath, pathDirectory))
+for (const fileName of pathFiles
+  .filter((fileName) => fileName.endsWith('.png') && !fileName.includes('Middle') && !fileName.includes('Small'))
+  .sort(compareFileNames)) {
+  const pathRel = path.posix.join(pathDirectory, fileName)
+  const sourcePath = path.join(cachePath, pathRel)
+  const targetPath = path.join(publicPath, pathRel)
+
+  await mkdir(path.dirname(targetPath), { recursive: true })
+  await cp(sourcePath, targetPath)
+  copied += 1
+}
+
+// Character metadata (avatar id -> path) so the roster UI can show path icons.
+const charactersResponse = await fetch(
+  'https://raw.githubusercontent.com/Mar-7th/StarRailRes/master/index_new/en/characters.json',
+)
+const pathsResponse = await fetch(
+  'https://raw.githubusercontent.com/Mar-7th/StarRailRes/master/index_new/en/paths.json',
+)
+if (!charactersResponse.ok || !pathsResponse.ok) {
+  throw new Error('Failed to download StarRailRes character metadata.')
+}
+const charactersJson = await charactersResponse.json()
+const pathsJson = await pathsResponse.json()
+
+const characters = {}
+for (const [id, character] of Object.entries(charactersJson)) {
+  if (typeof character?.path === 'string') {
+    characters[id] = character.path
+  }
+}
+const paths = {}
+for (const [id, pathMeta] of Object.entries(pathsJson)) {
+  paths[id] = {
+    name: pathMeta?.name ?? id,
+    icon: pathMeta?.icon ?? '',
+  }
+}
+
+await mkdir(path.dirname(characterMetaPath), { recursive: true })
+await writeFile(
+  characterMetaPath,
+  `${JSON.stringify(
+    {
+      schemaVersion: 1,
+      source: {
+        name: 'Mar-7th/StarRailRes',
+        repository: STAR_RAIL_RES_REPOSITORY.replace(/\.git$/, ''),
+        branch: 'master',
+        path: 'index_new/en',
+      },
+      generatedAt: new Date().toISOString(),
+      characters,
+      paths,
+    },
+    null,
+    2,
+  )}\n`,
+)
+
+console.log(`Synced ${Object.keys(paths).length} StarRailRes path icons into ${path.join(publicPath, pathDirectory)}.`)
+console.log(`Wrote character metadata (${Object.keys(characters).length} characters) into ${path.join('src', 'features', 'warp-history', 'data', 'generated')}.`)
 
 await mkdir(path.dirname(avatarCatalogPath), { recursive: true })
 await writeFile(

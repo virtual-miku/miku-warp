@@ -1,6 +1,7 @@
 pub mod cloud_backup;
 mod database;
 mod game_history;
+mod roster;
 
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -571,6 +572,39 @@ fn restore_backup_snapshot(
 }
 
 #[tauri::command]
+async fn import_character_roster(
+    app: tauri::AppHandle,
+    input: roster::ImportCharacterRosterInput,
+) -> Result<Vec<roster::RosterCharacter>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let characters = roster::parse_roster_payload(&input.payload)?;
+        let characters = roster::cache_roster_images(&app, &input.account_id, characters)?;
+        let normalized = serde_json::to_string(&characters)
+            .map_err(|error| format!("Failed to prepare character roster: {error}"))?;
+        database::save_character_roster(&app, &input.account_id, &normalized, characters.len())?;
+        Ok(characters)
+    })
+    .await
+    .map_err(|error| format!("Character roster task failed: {error}"))?
+}
+
+#[tauri::command]
+async fn get_character_roster(
+    app: tauri::AppHandle,
+    input: roster::GetCharacterRosterInput,
+) -> Result<Vec<roster::RosterCharacter>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let Some(payload) = database::get_character_roster_payload(&app, &input.account_id)? else {
+            return Ok(Vec::new());
+        };
+        serde_json::from_str(&payload)
+            .map_err(|error| format!("Failed to decode character roster: {error}"))
+    })
+    .await
+    .map_err(|error| format!("Character roster task failed: {error}"))?
+}
+
+#[tauri::command]
 fn replace_database_from_backup_file(
     app: tauri::AppHandle,
     input: database::RestoreBackupSnapshotFromFileInput,
@@ -603,10 +637,12 @@ pub fn run() {
             disconnect_google_drive_backup,
             export_backup_snapshot,
             get_auto_backup_sync_status,
+            get_character_roster,
             get_cloud_backup_status,
             get_cloud_backup_policy,
             get_trash_retention_policy,
             get_database_status,
+            import_character_roster,
             import_game_history,
             list_accounts,
             list_trashed_accounts,

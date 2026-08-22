@@ -7,6 +7,7 @@ import {
   RefreshCcw,
   Settings2,
   Trash2,
+  Users,
   UsersRound,
   X,
 } from 'lucide-react'
@@ -111,6 +112,12 @@ import { BannerSummaryGrid } from '../features/warp-history/components/BannerSum
 import { BannerTabs } from '../features/warp-history/components/BannerTabs'
 import { DashboardEmptyState } from '../features/warp-history/components/DashboardEmptyState'
 import {
+  importCharacterRoster,
+  getCharacterRoster,
+  type RosterCharacter,
+} from '../features/persistence/data/character-roster'
+import { CharacterRosterPanel } from '../features/characters/components/CharacterRosterPanel'
+import {
   PityOverview,
   StellarJadeOverview,
 } from '../features/warp-history/components/PityOverview'
@@ -203,6 +210,7 @@ type HistoryDeleteConfirmation =
 
 type AppView =
   | 'dashboard'
+  | 'characters'
   | 'accounts'
   | 'import'
   | 'backup'
@@ -352,6 +360,10 @@ export function App() {
     useState<ManualImportAccountInput>(() => loadActiveAccount(defaultAccount))
   const [manualImportTargetAccountId, setManualImportTargetAccountId] =
     useState(activeAccount.id)
+  const [roster, setRoster] = useState<RosterCharacter[] | undefined>()
+  const [rosterLoading, setRosterLoading] = useState(false)
+  const [rosterImporting, setRosterImporting] = useState(false)
+  const [rosterError, setRosterError] = useState<string>()
   const [manualImportConfirmation, setManualImportConfirmation] =
     useState<ManualImportConfirmation>()
   const [accounts, setAccounts] = useState<WarpAccount[]>([])
@@ -1373,6 +1385,61 @@ export function App() {
     handleAccountChange(accountId)
     setActiveView('dashboard')
   }
+
+  useEffect(() => {
+    if (activeView !== 'characters') {
+      return undefined
+    }
+
+    let cancelled = false
+    setRoster(undefined)
+    setRosterError(undefined)
+    setRosterLoading(true)
+
+    getCharacterRoster(activeAccount.id)
+      .then((result) => {
+        if (!cancelled) {
+          setRoster(result)
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setRosterError(getErrorMessage(error))
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setRosterLoading(false)
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeView, activeAccount.id])
+
+  const handleOpenCharacters = useCallback(() => {
+    setActiveView('characters')
+  }, [])
+
+  const handleImportRoster = useCallback(
+    async (payload: string) => {
+      if (rosterImporting) {
+        return
+      }
+      setRosterImporting(true)
+      setRosterError(undefined)
+      try {
+        const result = await importCharacterRoster(activeAccount.id, payload)
+        setRoster(result)
+      } catch (error) {
+        setRosterError(getErrorMessage(error))
+      } finally {
+        setRosterImporting(false)
+      }
+    },
+    [activeAccount.id, rosterImporting],
+  )
 
   const handleOpenAvatarPicker = useCallback((accountId: string) => {
     setAvatarSaveError(undefined)
@@ -2877,6 +2944,19 @@ export function App() {
               {translate(languagePreference, 'nav.dashboard')}
             </button>
             <button
+              aria-current={activeView === 'characters' ? 'page' : undefined}
+              className={
+                activeView === 'characters'
+                  ? 'sidebar-link sidebar-link-active'
+                  : 'sidebar-link'
+              }
+              onClick={handleOpenCharacters}
+              type="button"
+            >
+              <Users size={18} aria-hidden="true" />
+              {translate(languagePreference, 'nav.characters')}
+            </button>
+            <button
               aria-current={activeView === 'accounts' ? 'page' : undefined}
               className={
                 activeView === 'accounts'
@@ -3133,6 +3213,16 @@ export function App() {
                 </div>
               </section>
             </>
+          ) : null}
+
+          {activeView === 'characters' ? (
+            <CharacterRosterPanel
+              error={rosterError}
+              isImporting={rosterImporting}
+              isLoading={rosterLoading}
+              onImport={handleImportRoster}
+              roster={roster}
+            />
           ) : null}
 
           {activeView === 'accounts' ? (

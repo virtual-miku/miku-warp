@@ -17,6 +17,7 @@ export type ExportBackupSnapshotResult = {
   warpItems: number
   importBatches: number
   warpPulls: number
+  characterRosters: number
 }
 
 export type BackupSnapshotSummary = ExportBackupSnapshotResult & {
